@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,8 +15,14 @@ import (
 	log "github.com/sjqzhang/seelog"
 )
 
+var staticHandler http.Handler
+var util = &Common{}
+var server = &Server{}
+var bind = "0.0.0.0:8080"
+
 const (
-	STORE_DIR    = "files"
+	STORE_DIR = "files"
+
 	logConfigStr = `
 <seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
 	<outputs formatid="common">  
@@ -31,6 +38,9 @@ const (
 )
 
 type Common struct {
+}
+
+type Server struct {
 }
 
 func (this *Common) GetUUID() string {
@@ -51,9 +61,20 @@ func (this *Common) MD5(str string) string {
 	return fmt.Sprintf("%x", md.Sum(nil))
 }
 
-func Upload(w http.ResponseWriter, r *http.Request) {
+func (this *Common) FileExists(fileName string) bool {
+	_, err := os.Stat(fileName)
+	return err == nil
+}
+
+func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
+	log.Info("download:" + r.RequestURI)
+	staticHandler.ServeHTTP(w, r)
+}
+
+func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		name := r.PostFormValue("name")
+		md5sum := r.PostFormValue("md5")
 		file, header, err := r.FormFile("file")
 		if err != nil {
 			log.Error(err)
@@ -70,7 +91,7 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 
 		folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
 
-		if !FileExists(folder) {
+		if !util.FileExists(folder) {
 			os.Mkdir(folder, 0777)
 		}
 
@@ -83,14 +104,22 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 			w.Write([]byte("fail," + err.Error()))
 		}
-		defer outFile.Close()
+
 		io.Copy(outFile, file)
+		if md5sum != "" {
+			outFile.Seek(0, 0)
+			md5h := md5.New()
+			io.Copy(md5h, outFile)
+			sum := fmt.Sprintf("%x", md5h.Sum(nil))
+			if sum != md5sum {
+				outFile.Close()
+				w.Write([]byte("fail,md5sum error"))
+				os.Remove(outPath)
+				return
 
-		//		outFile.Seek(0, 0)
-		//		md5h := md5.New()
-		//		io.Copy(md5h, outFile)
-		//		sum := fmt.Sprintf("%x", md5h.Sum(nil))
-
+			}
+		}
+		defer outFile.Close()
 		outFile.Sync()
 
 		download_url := fmt.Sprintf("http://%s/%s", r.Host, outPath)
@@ -110,7 +139,7 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Index(w http.ResponseWriter, r *http.Request) {
+func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w,
 		`<html>
 	    <head>
@@ -126,12 +155,14 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	</html>`)
 }
 
-func FileExists(fileName string) bool {
-	_, err := os.Stat(fileName)
-	return err == nil
+func init() {
+	flag.StringVar(&bind, "b", bind, "bind")
+	staticHandler = http.StripPrefix("/"+STORE_DIR, http.FileServer(http.Dir(STORE_DIR)))
 }
 
 func main() {
+
+	flag.Parse()
 
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {
 		panic(err)
@@ -140,13 +171,13 @@ func main() {
 		log.ReplaceLogger(logger)
 	}
 
-	if !FileExists(STORE_DIR) {
+	if !util.FileExists(STORE_DIR) {
 		os.Mkdir(STORE_DIR, 0777)
 	}
 
-	http.HandleFunc("/", Index)
-	http.HandleFunc("/upload", Upload)
-	http.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir("files/"))))
-	fmt.Printf("Listen:8080\n")
-	panic(http.ListenAndServe(":8080", nil))
+	http.HandleFunc("/", server.Index)
+	http.HandleFunc("/upload", server.Upload)
+	http.HandleFunc("/"+STORE_DIR+"/", server.Download)
+	fmt.Printf(fmt.Sprintf("Listen:%s\n", bind))
+	panic(http.ListenAndServe(bind, nil))
 }
