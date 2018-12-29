@@ -87,6 +87,16 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			name = header.Filename
 		}
 
+		ns := strings.Split(name, "/")
+		if len(ns) > 1 {
+			if strings.TrimSpace(ns[len(ns)-1]) != "" {
+				name = ns[len(ns)-1]
+			} else {
+				w.Write([]byte("(error) filename is error"))
+				return
+			}
+		}
+
 		folder := time.Now().Format("2006-01-02")
 
 		folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
@@ -102,7 +112,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		outFile, err := os.Create(outPath)
 		if err != nil {
 			log.Error(err)
-			w.Write([]byte("fail," + err.Error()))
+			w.Write([]byte("(error)fail," + err.Error()))
+			return
 		}
 
 		io.Copy(outFile, file)
@@ -113,7 +124,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			sum := fmt.Sprintf("%x", md5h.Sum(nil))
 			if sum != md5sum {
 				outFile.Close()
-				w.Write([]byte("fail,md5sum error"))
+				w.Write([]byte("(error)fail,md5sum error"))
 				os.Remove(outPath)
 				return
 
@@ -126,7 +137,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(download_url))
 
 	} else {
-		w.Write([]byte("fail,please use post method"))
+		w.Write([]byte("(error)fail,please use post method"))
 		return
 	}
 
