@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"runtime/debug"
 
 	"os"
 	"regexp"
@@ -31,6 +32,8 @@ import (
 var staticHandler http.Handler
 var util = &Common{}
 var server = &Server{}
+
+var logacc log.LoggerInterface
 
 var bind = "0.0.0.0:8080"
 
@@ -67,6 +70,19 @@ const (
 	<outputs formatid="common">  
 		<buffered formatid="common" size="1048576" flushperiod="1000">  
 			<rollingfile type="size" filename="./log/fileserver.log" maxsize="104857600" maxrolls="10"/>  
+		</buffered>
+	</outputs>  	  
+	 <formats>
+		 <format id="common" format="%Date %Time [%LEV] [%File:%Line] [%Func] %Msg%n" />  
+	 </formats>  
+</seelog>
+`
+
+	logAccessConfigStr = `
+<seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
+	<outputs formatid="common">  
+		<buffered formatid="common" size="1048576" flushperiod="1000">  
+			<rollingfile type="size" filename="./log/access.log" maxsize="104857600" maxrolls="10"/>  
 		</buffered>
 	</outputs>  	  
 	 <formats>
@@ -184,6 +200,27 @@ func (this *Common) FileExists(fileName string) bool {
 	return err == nil
 }
 
+func (this *Common) GetClientIp(r *http.Request) string {
+
+	client_ip := ""
+	headers := []string{"X_Forwarded_For", "X-Forwarded-For", "X-Real-Ip",
+		"X_Real_Ip", "Remote_Addr", "Remote-Addr"}
+	for _, v := range headers {
+		if _v, ok := r.Header[v]; ok {
+			if len(_v) > 0 {
+				client_ip = _v[0]
+				break
+			}
+		}
+	}
+	if client_ip == "" {
+		clients := strings.Split(r.RemoteAddr, ":")
+		client_ip = clients[0]
+	}
+	return client_ip
+
+}
+
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	log.Info("download:" + r.RequestURI)
 	staticHandler.ServeHTTP(w, r)
@@ -194,6 +231,15 @@ func (this *Server) GetServerURI(r *http.Request) string {
 }
 
 func (this *Server) CheckFileAndSendToPeer(filename string) {
+
+	defer func() {
+		if re := recover(); re != nil {
+			buffer := debug.Stack()
+			log.Error("CheckFileAndSendToPeer")
+			log.Error(re)
+			log.Error(string(buffer))
+		}
+	}()
 
 	if filename == "" {
 		filename = STORE_DIR + "/" + time.Now().Format("20060102") + "/" + Md5_ERROR_FILE_NAME
@@ -421,7 +467,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		var uploadFile *os.File
 		var folder string
 
-		if uploadFile, folder, name, _ = SaveUploadFile(file, header); uploadFile != nil {
+		if uploadFile, folder, name, err = SaveUploadFile(file, header); uploadFile != nil {
 
 			if md5sum == "" {
 
@@ -438,6 +484,11 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				}
 
 			}
+
+		} else {
+			w.Write([]byte("(error)" + err.Error()))
+			log.Error(err)
+			return
 
 		}
 
@@ -529,6 +580,21 @@ func init() {
 
 	flag.Parse()
 
+	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {
+		panic(err)
+
+	} else {
+		log.ReplaceLogger(logger)
+	}
+
+	if _logacc, err := log.LoggerFromConfigAsBytes([]byte(logAccessConfigStr)); err == nil {
+		logacc = _logacc
+		log.Info("succes init log access")
+
+	} else {
+		log.Error(err.Error())
+	}
+
 	staticHandler = http.StripPrefix("/"+STORE_DIR, http.FileServer(http.Dir(STORE_DIR)))
 	initComponent()
 }
@@ -558,14 +624,41 @@ func initComponent() {
 
 }
 
+type HttpHandler struct {
+}
+
+func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	status_code := "200"
+	defer func(t time.Time) {
+		logStr := fmt.Sprintf("[Access] %s | %v | %s | %s | %s | %s |%s",
+			time.Now().Format("2006/01/02 - 15:04:05"),
+			res.Header(),
+			time.Since(t).String(),
+			util.GetClientIp(req),
+			req.Method,
+			status_code,
+			req.RequestURI,
+		)
+
+		logacc.Info(logStr)
+	}(time.Now())
+
+	defer func() {
+		if err := recover(); err != nil {
+			status_code = "500"
+			res.WriteHeader(500)
+			print(err)
+			buff := debug.Stack()
+			log.Error(err)
+			log.Error(string(buff))
+
+		}
+	}()
+
+	http.DefaultServeMux.ServeHTTP(res, req)
+}
+
 func main() {
-
-	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {
-		panic(err)
-
-	} else {
-		log.ReplaceLogger(logger)
-	}
 
 	if !util.FileExists(STORE_DIR) {
 		os.Mkdir(STORE_DIR, 0777)
@@ -585,7 +678,7 @@ func main() {
 	http.HandleFunc("/"+STORE_DIR+"/", server.Download)
 	fmt.Printf(fmt.Sprintf("Listen:%s\n", bind))
 	fmt.Println(fmt.Sprintf("peers:%v", peers))
-	panic(http.ListenAndServe(bind, nil))
+	panic(http.ListenAndServe(bind, new(HttpHandler)))
 
 	//	folder := time.Now().Format("20060102/15/04")
 
