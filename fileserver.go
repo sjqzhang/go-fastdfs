@@ -230,7 +230,7 @@ func (this *Server) GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
 }
 
-func (this *Server) CheckFileAndSendToPeer(filename string) {
+func (this *Server) CheckFileAndSendToPeer(filename string, is_force_upload bool) {
 
 	defer func() {
 		if re := recover(); re != nil {
@@ -245,34 +245,18 @@ func (this *Server) CheckFileAndSendToPeer(filename string) {
 		filename = STORE_DIR + "/" + time.Now().Format("20060102") + "/" + Md5_ERROR_FILE_NAME
 	}
 
-	CheckPeer := func(fileInfo *FileInfo) {
-
-		for _, p := range peers {
-
-			if this.util.Contains(p, fileInfo.Peers) {
-				continue
-			}
-
-			req := httplib.Get(p + fmt.Sprintf("/check_file_exist?md5=%s", fileInfo.Md5))
-
-			req.SetTimeout(time.Second*5, time.Second*5)
-
-			if str, err := req.String(); err == nil && !strings.HasPrefix(str, "http") {
-
-				this.postFileToPeer(fileInfo)
-
-			}
-		}
-
-	}
-
 	if data, err := ioutil.ReadFile(filename); err == nil {
 		content := string(data)
+
 		lines := strings.Split(content, "\n")
 		for _, line := range lines {
 			cols := strings.Split(line, "|")
-			if fileInfo, err := this.GetFileInfoByMd5(cols[0]); err == nil && fileInfo != nil {
-				CheckPeer(fileInfo)
+
+			if fileInfo, _ := this.GetFileInfoByMd5(cols[0]); fileInfo != nil && fileInfo.Md5 != "" {
+				if is_force_upload {
+					fileInfo.Peers = []string{}
+				}
+				this.postFileToPeer(fileInfo, false)
 			}
 		}
 
@@ -280,7 +264,7 @@ func (this *Server) CheckFileAndSendToPeer(filename string) {
 
 }
 
-func (this *Server) postFileToPeer(fileInfo *FileInfo) {
+func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 
 	for _, u := range peers {
 		peer := ""
@@ -297,6 +281,12 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		if !this.util.FileExists(fileInfo.Path + "/" + fileInfo.Name) {
 			continue
 		}
+
+		if info, _ := this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
+
+			continue
+		}
+
 		u = fmt.Sprintf("%s/%s", u, "upload")
 		b := httplib.Post(u)
 		b.SetTimeout(time.Second*5, time.Second*5)
@@ -307,10 +297,12 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		str, err := b.String()
 
 		if !strings.HasPrefix(str, "http://") {
-			msg := fmt.Sprintf("%s|%s\n", fileInfo.Md5, fileInfo.Path+"/"+fileInfo.Name)
-			fd, _ := os.OpenFile(STORE_DIR+"/"+time.Now().Format("20060102")+"/"+Md5_ERROR_FILE_NAME, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-			defer fd.Close()
-			fd.WriteString(msg)
+			if write_log {
+				msg := fmt.Sprintf("%s|%s\n", fileInfo.Md5, fileInfo.Path+"/"+fileInfo.Name)
+				fd, _ := os.OpenFile(STORE_DIR+"/"+time.Now().Format("20060102")+"/"+Md5_ERROR_FILE_NAME, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+				defer fd.Close()
+				fd.WriteString(msg)
+			}
 		} else {
 
 			if !this.util.Contains(peer, fileInfo.Peers) {
@@ -349,8 +341,30 @@ func (this *Server) GetFileInfoByMd5(md5sum string) (*FileInfo, error) {
 	}
 }
 
+func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, error) {
+
+	var (
+		err error
+	)
+
+	req := httplib.Get(peer + fmt.Sprintf("/check_file_exist?md5=%s", md5sum))
+
+	req.SetTimeout(time.Second*5, time.Second*5)
+
+	var fileInfo FileInfo
+
+	if err = req.ToJSON(&fileInfo); err == nil {
+		if fileInfo.Md5 == "" {
+			return &FileInfo{}, nil
+		}
+	}
+	return &FileInfo{}, errors.New("file not found")
+
+}
+
 func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 	var (
+		data     []byte
 		err      error
 		fileInfo *FileInfo
 	)
@@ -363,13 +377,16 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if fileInfo, err = this.GetFileInfoByMd5(md5sum); fileInfo != nil {
-		w.Write([]byte(this.GetServerURI(r) + fileInfo.Path + "/" + fileInfo.Name))
-		return
-	} else {
-		log.Error(err)
-		w.Write([]byte(err.Error()))
-		return
+
+		if data, err = json.Marshal(fileInfo); err == nil {
+			w.Write(data)
+			return
+		}
 	}
+
+	data, _ = json.Marshal(FileInfo{})
+
+	w.Write(data)
 
 }
 
@@ -378,6 +395,17 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
 	date := ""
+
+	force := ""
+	is_force_upload := false
+
+	if len(r.Form["force"]) > 0 {
+		force = r.Form["force"][0]
+	}
+
+	if force != "" {
+		is_force_upload = true
+	}
 
 	if len(r.Form["date"]) > 0 {
 		date = r.Form["date"][0]
@@ -390,13 +418,13 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 
 	if this.util.FileExists(filename) {
 
-		go this.CheckFileAndSendToPeer(filename)
+		go this.CheckFileAndSendToPeer(filename, is_force_upload)
 	}
 	filename = STORE_DIR + "/" + date + "/" + FILE_Md5_FILE_NAME
 
 	if this.util.FileExists(filename) {
 
-		go this.CheckFileAndSendToPeer(filename)
+		go this.CheckFileAndSendToPeer(filename, is_force_upload)
 	}
 	w.Write([]byte("job is running"))
 }
@@ -415,7 +443,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		SaveUploadFile := func(file multipart.File, header *multipart.FileHeader) (*os.File, string, string, error) {
+		SaveUploadFile := func(file multipart.File, header *multipart.FileHeader, path string, name string) (*os.File, string, string, error) {
 
 			if name == "" {
 				name = header.Filename
@@ -434,10 +462,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 			folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
 
-			if len(path) == 14 {
-				if ok, _ := regexp.MatchString("\\d{8}/\\d{2}/\\d{2}", path); ok {
-					folder = path
-				}
+			if path != "" && strings.HasPrefix(path, STORE_DIR) {
+				folder = path
 			}
 
 			if !util.FileExists(folder) {
@@ -467,7 +493,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		var uploadFile *os.File
 		var folder string
 
-		if uploadFile, folder, name, err = SaveUploadFile(file, header); uploadFile != nil {
+		if uploadFile, folder, name, err = SaveUploadFile(file, header, path, name); uploadFile != nil {
 
 			if md5sum == "" {
 
@@ -526,7 +552,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				log.Error(err)
 			}
 
-			go this.postFileToPeer(&fileInfo)
+			go this.postFileToPeer(&fileInfo, true)
 
 		}
 
@@ -666,7 +692,7 @@ func main() {
 
 	go func() {
 		for {
-			server.CheckFileAndSendToPeer("")
+			server.CheckFileAndSendToPeer("", false)
 			time.Sleep(time.Second * 60)
 		}
 	}()
@@ -679,6 +705,8 @@ func main() {
 	fmt.Printf(fmt.Sprintf("Listen:%s\n", bind))
 	fmt.Println(fmt.Sprintf("peers:%v", peers))
 	panic(http.ListenAndServe(bind, new(HttpHandler)))
+
+	fmt.Println(server.GetFileInfoByMd5("ba8b582aecda72f1a6eafb6567efbb6f"))
 
 	//	folder := time.Now().Format("20060102/15/04")
 
