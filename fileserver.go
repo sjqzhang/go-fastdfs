@@ -553,23 +553,23 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		}
 
-		//		CheckFileExist := func(md5sum string) (*FileInfo, error) {
-		//			if md5sum != "" {
-		//				if data, err := this.db.Get([]byte(md5sum), nil); err == nil {
-		//					var fileInfo FileInfo
-		//					if err := json.Unmarshal(data, &fileInfo); err == nil {
-		//						return &fileInfo, nil
-		//					}
-		//				}
-		//			}
-		//			return nil, errors.New("File Not found")
-		//		}
+		CheckFileExist := func(md5sum string) (*FileInfo, error) {
+			if md5sum != "" {
+				if data, err := this.db.Get([]byte(md5sum), nil); err == nil {
+					var fileInfo FileInfo
+					if err := json.Unmarshal(data, &fileInfo); err == nil {
+						return &fileInfo, nil
+					}
+				}
+			}
+			return nil, errors.New("File Not found")
+		}
 
-		//		if info, err := CheckFileExist(md5sum); err == nil {
-		//			download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
-		//			w.Write([]byte(download_url))
-		//			return
-		//		}
+		if info, err := CheckFileExist(md5sum); err == nil {
+			download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
+			w.Write([]byte(download_url))
+			return
+		}
 
 		UploadToPeer := func(md5sum string, name string, path string) {
 
@@ -741,6 +741,8 @@ func main() {
 	http.HandleFunc("/"+STORE_DIR+"/", server.Download)
 	fmt.Printf(fmt.Sprintf("Listen:%s\n", bind))
 	fmt.Println(fmt.Sprintf("peers:%v", peers))
+
+	log.Info(fmt.Sprintf("peers:%v", peers))
 
 	panic(http.ListenAndServe(bind, new(HttpHandler)))
 
