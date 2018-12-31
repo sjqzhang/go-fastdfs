@@ -499,6 +499,13 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 				md5sum = util.GetFileMd5(uploadFile)
 
+				if info, _ := this.GetFileInfoByMd5(md5sum); info != nil && info.Path != "" && info.Path != folder {
+					os.Remove(folder + "/" + name)
+					download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
+					w.Write([]byte(download_url))
+					return
+				}
+
 			} else {
 
 				v := util.GetFileMd5(uploadFile)
