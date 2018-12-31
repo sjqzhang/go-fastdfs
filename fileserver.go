@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"path/filepath"
 	"reflect"
 	"runtime/debug"
 
@@ -200,6 +201,29 @@ func (this *Common) FileExists(fileName string) bool {
 	return err == nil
 }
 
+func (this *Common) RemoveEmptyDir(pathname string) {
+
+	handlefunc := func(file_path string, f os.FileInfo, err error) error {
+
+		if f.IsDir() {
+
+			files, _ := ioutil.ReadDir(file_path)
+			if len(files) == 0 {
+				os.Remove(file_path)
+			}
+
+		}
+
+		return nil
+	}
+
+	fi, _ := os.Stat(pathname)
+	if fi.IsDir() {
+		filepath.Walk(pathname, handlefunc)
+	}
+
+}
+
 func (this *Common) GetClientIp(r *http.Request) string {
 
 	client_ip := ""
@@ -315,7 +339,6 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		}
 		log.Info(str)
 		if err != nil {
-			fmt.Println(err)
 			log.Error(err)
 		}
 
@@ -445,6 +468,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		SaveUploadFile := func(file multipart.File, header *multipart.FileHeader, path string, name string) (*os.File, string, string, error) {
 
+			defer file.Close()
 			if name == "" {
 				name = header.Filename
 			}
@@ -475,6 +499,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Info(fmt.Sprintf("upload: %s", outPath))
 
 			outFile, err := os.Create(outPath)
+
 			if err != nil {
 				log.Error(err)
 				return nil, "", "", errors.New("(error)fail," + err.Error())
@@ -493,6 +518,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		var uploadFile *os.File
 		var folder string
 
+		defer uploadFile.Close()
+
 		if uploadFile, folder, name, err = SaveUploadFile(file, header, path, name); uploadFile != nil {
 
 			if md5sum == "" {
@@ -500,6 +527,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				md5sum = util.GetFileMd5(uploadFile)
 
 				if info, _ := this.GetFileInfoByMd5(md5sum); info != nil && info.Path != "" && info.Path != folder {
+					uploadFile.Close()
 					os.Remove(folder + "/" + name)
 					download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
 					w.Write([]byte(download_url))
@@ -525,23 +553,23 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		}
 
-		CheckFileExist := func(md5sum string) (*FileInfo, error) {
-			if md5sum != "" {
-				if data, err := this.db.Get([]byte(md5sum), nil); err == nil {
-					var fileInfo FileInfo
-					if err := json.Unmarshal(data, &fileInfo); err == nil {
-						return &fileInfo, nil
-					}
-				}
-			}
-			return nil, errors.New("File Not found")
-		}
+		//		CheckFileExist := func(md5sum string) (*FileInfo, error) {
+		//			if md5sum != "" {
+		//				if data, err := this.db.Get([]byte(md5sum), nil); err == nil {
+		//					var fileInfo FileInfo
+		//					if err := json.Unmarshal(data, &fileInfo); err == nil {
+		//						return &fileInfo, nil
+		//					}
+		//				}
+		//			}
+		//			return nil, errors.New("File Not found")
+		//		}
 
-		if info, err := CheckFileExist(md5sum); err == nil {
-			download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
-			w.Write([]byte(download_url))
-			return
-		}
+		//		if info, err := CheckFileExist(md5sum); err == nil {
+		//			download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
+		//			w.Write([]byte(download_url))
+		//			return
+		//		}
 
 		UploadToPeer := func(md5sum string, name string, path string) {
 
@@ -572,6 +600,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		download_url := fmt.Sprintf("http://%s/%s", r.Host, folder+"/"+name)
 		w.Write([]byte(download_url))
+		return
 
 	} else {
 		w.Write([]byte("(error)fail,please use post method"))
@@ -701,6 +730,7 @@ func main() {
 		for {
 			server.CheckFileAndSendToPeer("", false)
 			time.Sleep(time.Second * 60)
+			util.RemoveEmptyDir(STORE_DIR)
 		}
 	}()
 
@@ -711,9 +741,10 @@ func main() {
 	http.HandleFunc("/"+STORE_DIR+"/", server.Download)
 	fmt.Printf(fmt.Sprintf("Listen:%s\n", bind))
 	fmt.Println(fmt.Sprintf("peers:%v", peers))
+
 	panic(http.ListenAndServe(bind, new(HttpHandler)))
 
-	fmt.Println(server.GetFileInfoByMd5("ba8b582aecda72f1a6eafb6567efbb6f"))
+	//	fmt.Println(server.GetFileInfoByMd5("ba8b582aecda72f1a6eafb6567efbb6f"))
 
 	//	folder := time.Now().Format("20060102/15/04")
 
