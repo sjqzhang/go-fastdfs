@@ -36,11 +36,7 @@ var server = &Server{}
 
 var logacc log.LoggerInterface
 
-var bind = "0.0.0.0:8080"
-
-var peers = []string{}
-var _peers = ""
-var FOLDERS = []string{DATA_DIR, STORE_DIR}
+var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
 
 var (
 	FileName string
@@ -56,13 +52,17 @@ const (
 
 	CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
 
+	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
+
 	Md5_ERROR_FILE_NAME = "errors.md5"
 	FILE_Md5_FILE_NAME  = "files.md5"
 
 	cfgJson = `
-	{
-      "addr": ":9160"
-	}
+{
+  "addr": ":8080",
+  "peers":["%s"],
+  "group":"group1"
+}
 	
 	`
 
@@ -109,6 +109,13 @@ type FileInfo struct {
 }
 
 type GloablConfig struct {
+	Addr  string   `json:"addr"`
+	Peers []string `json:"peers"`
+	Group string   `json:"group"`
+}
+
+func Config() *GloablConfig {
+	return (*GloablConfig)(atomic.LoadPointer(&ptr))
 }
 
 func ParseConfig(filePath string) {
@@ -201,6 +208,21 @@ func (this *Common) FileExists(fileName string) bool {
 	return err == nil
 }
 
+func (this *Common) WriteFile(path string, data string) bool {
+	if err := ioutil.WriteFile(path, []byte(data), 0666); err == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (this *Common) WriteBinFile(path string, data []byte) bool {
+	if err := ioutil.WriteFile(path, data, 0666); err == nil {
+		return true
+	} else {
+		return false
+	}
+}
 func (this *Common) RemoveEmptyDir(pathname string) {
 
 	handlefunc := func(file_path string, f os.FileInfo, err error) error {
@@ -290,7 +312,7 @@ func (this *Server) CheckFileAndSendToPeer(filename string, is_force_upload bool
 
 func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 
-	for _, u := range peers {
+	for _, u := range Config().Peers {
 		peer := ""
 		if !strings.HasPrefix(u, "http://") {
 			u = "http://" + u
@@ -529,7 +551,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				if info, _ := this.GetFileInfoByMd5(md5sum); info != nil && info.Path != "" && info.Path != folder {
 					uploadFile.Close()
 					os.Remove(folder + "/" + name)
-					download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
+					download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+info.Path+"/"+info.Name)
 					w.Write([]byte(download_url))
 					return
 				}
@@ -566,7 +588,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if info, err := CheckFileExist(md5sum); err == nil {
-			download_url := fmt.Sprintf("http://%s/%s", r.Host, info.Path+"/"+info.Name)
+			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+info.Path+"/"+info.Name)
 			w.Write([]byte(download_url))
 			return
 		}
@@ -598,7 +620,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		defer fd.Close()
 		fd.WriteString(msg)
 
-		download_url := fmt.Sprintf("http://%s/%s", r.Host, folder+"/"+name)
+		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+folder+"/"+name)
 		w.Write([]byte(download_url))
 		return
 
@@ -637,10 +659,16 @@ func init() {
 	for _, folder := range FOLDERS {
 		os.Mkdir(folder, 0777)
 	}
-	flag.StringVar(&bind, "b", bind, "bind")
-	flag.StringVar(&_peers, "peers", _peers, "peers")
-
 	flag.Parse()
+
+	if !util.FileExists(CONST_CONF_FILE_NAME) {
+
+		peer := "http://" + util.GetPulicIP() + ":8080"
+
+		cfg := fmt.Sprintf(cfgJson, peer)
+
+		util.WriteFile(CONST_CONF_FILE_NAME, cfg)
+	}
 
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {
 		panic(err)
@@ -657,25 +685,28 @@ func init() {
 		log.Error(err.Error())
 	}
 
-	staticHandler = http.StripPrefix("/"+STORE_DIR, http.FileServer(http.Dir(STORE_DIR)))
+	ParseConfig(CONST_CONF_FILE_NAME)
+
+	staticHandler = http.StripPrefix("/"+Config().Group+"/"+STORE_DIR+"/", http.FileServer(http.Dir(STORE_DIR)))
+
 	initComponent()
 }
 
 func initComponent() {
 	ip := util.GetPulicIP()
 	ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")
-	if _peers != "" {
-		for _, peer := range strings.Split(_peers, ",") {
-			if util.Contains(ip, ex.FindAllString(peer, -1)) {
-				continue
-			}
-			if strings.HasPrefix(peer, "http") {
-				peers = append(peers, peer)
-			} else {
-				peers = append(peers, "http://"+peer)
-			}
+	var peers []string
+	for _, peer := range Config().Peers {
+		if util.Contains(ip, ex.FindAllString(peer, -1)) {
+			continue
+		}
+		if strings.HasPrefix(peer, "http") {
+			peers = append(peers, peer)
+		} else {
+			peers = append(peers, "http://"+peer)
 		}
 	}
+	Config().Peers = peers
 
 	db, err := leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
 	if err != nil {
@@ -738,23 +769,8 @@ func main() {
 	http.HandleFunc("/check_file_exist", server.CheckFileExist)
 	http.HandleFunc("/upload", server.Upload)
 	http.HandleFunc("/sync", server.Sync)
-	http.HandleFunc("/"+STORE_DIR+"/", server.Download)
-	fmt.Printf(fmt.Sprintf("Listen:%s\n", bind))
-	fmt.Println(fmt.Sprintf("peers:%v", peers))
-
-	log.Info(fmt.Sprintf("peers:%v", peers))
-
-	panic(http.ListenAndServe(bind, new(HttpHandler)))
-
-	//	fmt.Println(server.GetFileInfoByMd5("ba8b582aecda72f1a6eafb6567efbb6f"))
-
-	//	folder := time.Now().Format("20060102/15/04")
-
-	//	ex, _ := regexp.Compile("\\d{8}/\\d{2}/\\d{2}")
-
-	//	ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")
-	//	ip := util.GetPulicIP()
-
-	//	fmt.Println(ex.FindAllString(ip, -1), folder)
+	http.HandleFunc("/"+Config().Group+"/"+STORE_DIR+"/", server.Download)
+	fmt.Println("Listen on " + Config().Addr)
+	panic(http.ListenAndServe(Config().Addr, new(HttpHandler)))
 
 }
