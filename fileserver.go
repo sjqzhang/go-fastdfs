@@ -63,7 +63,7 @@ const (
   "addr": ":8080",
   "peers":["%s"],
   "group":"group1",
-  "use_file_rename":false,
+  "rename_file":false,
   "show_dir":true
 }
 	
@@ -113,11 +113,11 @@ type FileInfo struct {
 }
 
 type GloablConfig struct {
-	Addr          string   `json:"addr"`
-	Peers         []string `json:"peers"`
-	Group         string   `json:"group"`
-	UseFileRename bool     `json:"use_file_rename"`
-	ShowDir       bool     `json:"show_dir"`
+	Addr       string   `json:"addr"`
+	Peers      []string `json:"peers"`
+	Group      string   `json:"group"`
+	RenameFile bool     `json:"rename_file"`
+	ShowDir    bool     `json:"show_dir"`
 }
 
 func Config() *GloablConfig {
@@ -284,8 +284,10 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		pathMd5 := this.util.MD5(fullpath)
 		for _, peer := range Config().Peers {
+			fmt.Println(peer)
 			if fileInfo, _ := this.checkPeerFileExist(peer, pathMd5); fileInfo != nil && fileInfo.Md5 != "" {
 				if fileInfo.ReName != "" {
+					fmt.Println(peer + r.RequestURI)
 					http.Redirect(w, r, peer+r.RequestURI, 302)
 					break
 				}
@@ -354,7 +356,13 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		if this.util.Contains(peer, fileInfo.Peers) {
 			continue
 		}
-		if !this.util.FileExists(fileInfo.Path + "/" + fileInfo.Name) {
+
+		name := fileInfo.Name
+
+		if Config().RenameFile {
+			name = fileInfo.ReName
+		}
+		if !this.util.FileExists(fileInfo.Path + "/" + name) {
 			continue
 		}
 
@@ -369,7 +377,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		b.Header("path", fileInfo.Path)
 		b.Param("name", fileInfo.Name)
 		b.Param("md5", fileInfo.Md5)
-		b.PostFile("file", fileInfo.Path+"/"+fileInfo.Name)
+		b.PostFile("file", fileInfo.Path+"/"+name)
 		str, err := b.String()
 
 		if !strings.HasPrefix(str, "http://") {
@@ -550,6 +558,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
 		name := ""
+		outname := ""
 		pathname := r.Header.Get("Path")
 		md5sum := r.PostFormValue("md5")
 		file, header, err := r.FormFile("file")
@@ -569,7 +578,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 			}
 			rename := ""
-			if Config().UseFileRename {
+			if Config().RenameFile {
 				rename = this.util.MD5(this.util.GetUUID()) + path.Ext(name)
 			}
 			ns := strings.Split(name, "/")
@@ -594,6 +603,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 
 			outPath := fmt.Sprintf(folder+"/%s", name)
+			if Config().RenameFile {
+				outPath = fmt.Sprintf(folder+"/%s", rename)
+			}
 
 			if this.util.FileExists(outPath) {
 				for i := 0; i < 10000; i++ {
@@ -639,9 +651,14 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 				if info, _ := this.GetFileInfoByMd5(md5sum); info != nil && info.Path != "" && info.Path != folder {
 					uploadFile.Close()
-					os.Remove(folder + "/" + name)
-					download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+info.Path+"/"+info.Name)
+					outname = name
+					if Config().RenameFile {
+						outname = rename
+					}
+					os.Remove(folder + "/" + outname)
+					download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+info.Path+"/"+outname)
 					w.Write([]byte(download_url))
+
 					return
 				}
 
@@ -700,7 +717,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 				fullpath := path + "/" + name
 
-				if Config().UseFileRename {
+				if Config().RenameFile {
 					fullpath = path + "/" + rename
 				}
 				pathMd5 = this.util.MD5(fullpath)
@@ -719,12 +736,16 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		UploadToPeer(md5sum, name, folder)
 
-		msg := fmt.Sprintf("%s|%s\n", md5sum, folder+"/"+name)
+		if Config().RenameFile {
+			outname = rename
+		}
+
+		msg := fmt.Sprintf("%s|%s\n", md5sum, folder+"/"+outname)
 		fd, _ := os.OpenFile(STORE_DIR+"/"+time.Now().Format("20060102")+"/"+FILE_Md5_FILE_NAME, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		defer fd.Close()
 		fd.WriteString(msg)
 
-		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+folder+"/"+name)
+		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+folder+"/"+outname)
 		w.Write([]byte(download_url))
 		return
 
