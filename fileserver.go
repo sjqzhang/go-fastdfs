@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime/debug"
@@ -61,7 +62,9 @@ const (
 {
   "addr": ":8080",
   "peers":["%s"],
-  "group":"group1"
+  "group":"group1",
+  "use_file_rename":false,
+  "show_dir":true
 }
 	
 	`
@@ -102,16 +105,19 @@ type Server struct {
 }
 
 type FileInfo struct {
-	Name  string
-	Path  string
-	Md5   string
-	Peers []string
+	Name   string
+	ReName string
+	Path   string
+	Md5    string
+	Peers  []string
 }
 
 type GloablConfig struct {
-	Addr  string   `json:"addr"`
-	Peers []string `json:"peers"`
-	Group string   `json:"group"`
+	Addr          string   `json:"addr"`
+	Peers         []string `json:"peers"`
+	Group         string   `json:"group"`
+	UseFileRename bool     `json:"use_file_rename"`
+	ShowDir       bool     `json:"show_dir"`
 }
 
 func Config() *GloablConfig {
@@ -268,6 +274,30 @@ func (this *Common) GetClientIp(r *http.Request) string {
 }
 
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		err  error
+		info os.FileInfo
+	)
+	fullpath := r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+	if info, err = os.Stat(fullpath); err != nil {
+		log.Error(err)
+		pathMd5 := this.util.MD5(fullpath)
+		for _, peer := range Config().Peers {
+			if fileInfo, _ := this.checkPeerFileExist(peer, pathMd5); fileInfo != nil && fileInfo.Md5 != "" {
+				if fileInfo.ReName != "" {
+					http.Redirect(w, r, peer+r.RequestURI, 302)
+					break
+				}
+			}
+		}
+		return
+	}
+
+	if !Config().ShowDir && info.IsDir() {
+		return
+	}
+
 	log.Info("download:" + r.RequestURI)
 	staticHandler.ServeHTTP(w, r)
 }
@@ -401,6 +431,9 @@ func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, e
 	if err = req.ToJSON(&fileInfo); err == nil {
 		if fileInfo.Md5 == "" {
 			return &FileInfo{}, nil
+		} else {
+
+			return &fileInfo, nil
 		}
 	}
 	return &FileInfo{}, errors.New("file not found")
@@ -474,10 +507,50 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("job is running"))
 }
 
+func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
+	var (
+		err  error
+		data []byte
+
+		fileInfo FileInfo
+	)
+
+	if data, err = this.db.Get([]byte(key), nil); err != nil {
+		return nil, err
+	}
+
+	if err = json.Unmarshal(data, &fileInfo); err != nil {
+		return nil, err
+	}
+	return &fileInfo, nil
+
+}
+
+func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo) (*FileInfo, error) {
+	var (
+		err  error
+		data []byte
+	)
+
+	if data, err = json.Marshal(fileInfo); err != nil {
+
+		return fileInfo, err
+
+	}
+
+	if err = this.db.Put([]byte(key), data, nil); err != nil {
+		return fileInfo, err
+	}
+
+	return fileInfo, nil
+
+}
+
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		name := r.PostFormValue("name")
-		path := r.Header.Get("Path")
+		//		name := r.PostFormValue("name")
+		name := ""
+		pathname := r.Header.Get("Path")
 		md5sum := r.PostFormValue("md5")
 		file, header, err := r.FormFile("file")
 
@@ -488,19 +561,23 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		SaveUploadFile := func(file multipart.File, header *multipart.FileHeader, path string, name string) (*os.File, string, string, error) {
+		SaveUploadFile := func(file multipart.File, header *multipart.FileHeader, pathname string, name string) (*os.File, string, string, string, error) {
 
 			defer file.Close()
 			if name == "" {
 				name = header.Filename
-			}
 
+			}
+			rename := ""
+			if Config().UseFileRename {
+				rename = this.util.MD5(this.util.GetUUID()) + path.Ext(name)
+			}
 			ns := strings.Split(name, "/")
 			if len(ns) > 1 {
 				if strings.TrimSpace(ns[len(ns)-1]) != "" {
 					name = ns[len(ns)-1]
 				} else {
-					return nil, "", "", errors.New("(error) filename is error")
+					return nil, "", "", "", errors.New("(error) filename is error")
 				}
 			}
 
@@ -508,8 +585,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 			folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
 
-			if path != "" && strings.HasPrefix(path, STORE_DIR) {
-				folder = path
+			if pathname != "" && strings.HasPrefix(pathname, STORE_DIR) {
+				folder = pathname
 			}
 
 			if !util.FileExists(folder) {
@@ -518,31 +595,43 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 			outPath := fmt.Sprintf(folder+"/%s", name)
 
+			if this.util.FileExists(outPath) {
+				for i := 0; i < 10000; i++ {
+					outPath = fmt.Sprintf(folder+"/%d%s", i, name)
+					if !this.util.FileExists(outPath) {
+						name = fmt.Sprintf("%d%s", i, name)
+						break
+					}
+				}
+
+			}
+
 			log.Info(fmt.Sprintf("upload: %s", outPath))
 
 			outFile, err := os.Create(outPath)
 
 			if err != nil {
 				log.Error(err)
-				return nil, "", "", errors.New("(error)fail," + err.Error())
+				return nil, "", "", "", errors.New("(error)fail," + err.Error())
 
 			}
 
 			if _, err := io.Copy(outFile, file); err != nil {
 				log.Error(err)
-				return nil, "", "", errors.New("(error)fail," + err.Error())
+				return nil, "", "", "", errors.New("(error)fail," + err.Error())
 			}
 
-			return outFile, folder, name, nil
+			return outFile, folder, name, rename, nil
 
 		}
 
 		var uploadFile *os.File
 		var folder string
+		var rename string
 
 		defer uploadFile.Close()
 
-		if uploadFile, folder, name, err = SaveUploadFile(file, header, path, name); uploadFile != nil {
+		if uploadFile, folder, name, rename, err = SaveUploadFile(file, header, pathname, name); uploadFile != nil {
 
 			if md5sum == "" {
 
@@ -596,14 +685,29 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		UploadToPeer := func(md5sum string, name string, path string) {
 
 			fileInfo := FileInfo{
-				Name:  name,
-				Md5:   md5sum,
-				Path:  path,
-				Peers: []string{this.GetServerURI(r)},
+				Name:   name,
+				ReName: rename,
+				Md5:    md5sum,
+				Path:   path,
+				Peers:  []string{this.GetServerURI(r)},
 			}
 			if v, err := json.Marshal(fileInfo); err == nil {
 
-				this.db.Put([]byte(md5sum), v, nil)
+				if err := this.db.Put([]byte(md5sum), v, nil); err != nil {
+					log.Error(err)
+				}
+				pathMd5 := ""
+
+				fullpath := path + "/" + name
+
+				if Config().UseFileRename {
+					fullpath = path + "/" + rename
+				}
+				pathMd5 = this.util.MD5(fullpath)
+
+				if err := this.db.Put([]byte(pathMd5), v, nil); err != nil {
+					log.Error(err)
+				}
 
 			} else {
 				log.Error(err)
