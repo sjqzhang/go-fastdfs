@@ -770,7 +770,11 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		fileInfo.Path = r.Header.Get("Sync-Path")
 		fileInfo.Md5 = r.PostFormValue("md5")
 		fileInfo.Name = r.PostFormValue("name")
-		uploadFile, _, err = r.FormFile("file")
+		if uploadFile, _, err = r.FormFile("file"); err != nil {
+			w.Write([]byte(err.Error()))
+			log.Error(err)
+			return
+		}
 		fileInfo.Peers = []string{}
 
 		defer uploadFile.Close()
