@@ -73,6 +73,7 @@ const (
   "addr": ":8080",
   "peers":["%s"],
   "group":"group1",
+  "refresh_interval":120,
   "rename_file":false,
   "show_dir":true
 }
@@ -124,11 +125,12 @@ type FileInfo struct {
 }
 
 type GloablConfig struct {
-	Addr       string   `json:"addr"`
-	Peers      []string `json:"peers"`
-	Group      string   `json:"group"`
-	RenameFile bool     `json:"rename_file"`
-	ShowDir    bool     `json:"show_dir"`
+	Addr            string   `json:"addr"`
+	Peers           []string `json:"peers"`
+	Group           string   `json:"group"`
+	RenameFile      bool     `json:"rename_file"`
+	ShowDir         bool     `json:"show_dir"`
+	RefreshInterval int      `json:"refresh_interval"`
 }
 
 type CommonMap struct {
@@ -1175,8 +1177,6 @@ func initComponent() {
 
 	}
 
-	//	fmt.Println(statMap.Get())
-
 }
 
 type HttpHandler struct {
@@ -1222,7 +1222,7 @@ func main() {
 	go func() {
 		for {
 			server.CheckFileAndSendToPeer("", false)
-			time.Sleep(time.Second * 60)
+			time.Sleep(time.Second * time.Duration(Config().RefreshInterval))
 			util.RemoveEmptyDir(STORE_DIR)
 			server.SaveStat()
 		}
