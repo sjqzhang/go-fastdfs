@@ -428,7 +428,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		pathMd5 = this.util.MD5(fullpath)
 		for _, peer = range Config().Peers {
-			fmt.Println(peer)
+
 			if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil {
 				log.Error(err)
 				continue
@@ -502,6 +502,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		result   string
 		data     []byte
 		tmpFile  *os.File
+		fi       os.FileInfo
 	)
 
 	defer func() {
@@ -529,6 +530,14 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		}
 		if !this.util.FileExists(fileInfo.Path + "/" + filename) {
 			continue
+		} else {
+			if fileInfo.Size == 0 {
+				if fi, err = os.Stat(fileInfo.Path + "/" + filename); err != nil {
+					log.Error(err)
+				} else {
+					fileInfo.Size = fi.Size()
+				}
+			}
 		}
 
 		if info, _ = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
@@ -551,7 +560,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 
 		if !strings.HasPrefix(result, "http://") {
 			if write_log {
-				msg := fmt.Sprintf("%s|%s\n", fileInfo.Md5, fileInfo.Path+"/"+fileInfo.Name)
+				msg := fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+fileInfo.Name)
 				tmpFile, err = os.OpenFile(STORE_DIR+"/"+time.Now().Format("20060102")+"/"+Md5_ERROR_FILE_NAME, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 				defer tmpFile.Close()
 				tmpFile.WriteString(msg)
@@ -764,8 +773,6 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		uploadFile, _, err = r.FormFile("file")
 		fileInfo.Peers = []string{}
 
-		fmt.Println("SyncFile", fileInfo)
-
 		defer uploadFile.Close()
 
 		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
@@ -779,8 +786,6 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 			return
 		}
-
-		fmt.Print("create file")
 
 		os.MkdirAll(fileInfo.Path, 0777)
 
@@ -1019,22 +1024,21 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			outname = fileInfo.ReName
 		}
 
-		msg := fmt.Sprintf("%s|%s\n", fileInfo.Md5, fileInfo.Path+"/"+outname)
+		if fi, err := os.Stat(fileInfo.Path + "/" + outname); err != nil {
+			log.Error(err)
+		} else {
+			fileInfo.Size = fi.Size()
+			statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
+			statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
+		}
+
+		msg := fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+outname)
 		if tmpFile, err = os.OpenFile(STORE_DIR+"/"+time.Now().Format("20060102")+"/"+FILE_Md5_FILE_NAME, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
 			log.Error(err)
 			return
 		}
 		defer tmpFile.Close()
 		tmpFile.WriteString(msg)
-
-		if fi, err := os.Stat(fileInfo.Path + "/" + outname); err != nil {
-			log.Error(err)
-		} else {
-			fmt.Println(fi.Size())
-			statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
-		}
-
-		statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
 
 		this.SaveStat()
 
@@ -1160,7 +1164,6 @@ func initComponent() {
 						vv := strings.Split(fmt.Sprintf("%f", v), ".")[0]
 
 						if count, err = strconv.ParseInt(vv, 10, 64); err != nil {
-							fmt.Println(err)
 							log.Error(err)
 						} else {
 							statMap.Put(k, count)
