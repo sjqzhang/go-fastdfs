@@ -12,6 +12,18 @@
 
 `./fileserver`
 
+# 配置  (conf/cfg.json)
+```json
+{
+  "addr": ":8080",
+  "peers":["http://10.1.50.xx:8080","http://10.1.14.xx:8080","http://10.1.50.xx:8080"],
+  "group":"group1",
+  "refresh_interval":120,
+  "rename_file":false,
+  "show_dir":true
+}
+```
+
 
 # 上传命令
 
