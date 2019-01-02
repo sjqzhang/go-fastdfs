@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 	"reflect"
@@ -421,9 +422,24 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		peer     string
 		fileInfo *FileInfo
 		fullpath string
+		pathval  url.Values
 	)
 
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+
+	if pathval, err = url.ParseQuery(fullpath); err != nil {
+		log.Error(err)
+	} else {
+
+		for k, _ := range pathval {
+			if k != "" {
+				fullpath = k
+				break
+			}
+		}
+
+	}
+
 	if info, err = os.Stat(fullpath); err != nil {
 		log.Error(err)
 		pathMd5 = this.util.MD5(fullpath)
