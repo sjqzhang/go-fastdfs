@@ -66,8 +66,8 @@ const (
 
 	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
 
-	Md5_ERROR_FILE_NAME = "errors.md5"
-	FILE_Md5_FILE_NAME  = "files.md5"
+	CONST_Md5_ERROR_FILE_NAME = "errors.md5"
+	CONST_FILE_Md5_FILE_NAME  = "files.md5"
 
 	cfgJson = `
 {
@@ -76,6 +76,7 @@ const (
   "group":"group1",
   "refresh_interval":120,
   "rename_file":false,
+  "enable_web_upload":true,
   "show_dir":true
 }
 	
@@ -132,6 +133,7 @@ type GloablConfig struct {
 	RenameFile      bool     `json:"rename_file"`
 	ShowDir         bool     `json:"show_dir"`
 	RefreshInterval int      `json:"refresh_interval"`
+	EnableWebUpload bool     `json:"enable_web_upload"`
 }
 
 type CommonMap struct {
@@ -462,6 +464,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !Config().ShowDir && info.IsDir() {
+		w.Write([]byte("list dir deny"))
 		return
 	}
 
@@ -485,7 +488,7 @@ func (this *Server) CheckFileAndSendToPeer(filename string, is_force_upload bool
 	}()
 
 	if filename == "" {
-		filename = STORE_DIR + "/" + time.Now().Format("20060102") + "/" + Md5_ERROR_FILE_NAME
+		filename = DATA_DIR + "/" + time.Now().Format("20060102") + "/" + CONST_Md5_ERROR_FILE_NAME
 	}
 
 	if data, err := ioutil.ReadFile(filename); err == nil {
@@ -517,7 +520,6 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		postURL  string
 		result   string
 		data     []byte
-		tmpFile  *os.File
 		fi       os.FileInfo
 	)
 
@@ -576,10 +578,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 
 		if !strings.HasPrefix(result, "http://") {
 			if write_log {
-				msg := fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+fileInfo.Name)
-				tmpFile, err = os.OpenFile(STORE_DIR+"/"+time.Now().Format("20060102")+"/"+Md5_ERROR_FILE_NAME, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-				defer tmpFile.Close()
-				tmpFile.WriteString(msg)
+				this.SaveFileMd5Log(fileInfo, CONST_Md5_ERROR_FILE_NAME)
 			}
 		} else {
 
@@ -601,6 +600,35 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 
 	}
 
+}
+
+func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
+	var (
+		err     error
+		msg     string
+		tmpFile *os.File
+
+		logpath string
+		outname string
+	)
+
+	outname = fileInfo.Name
+
+	if fileInfo.ReName != "" {
+		outname = fileInfo.ReName
+	}
+
+	logpath = DATA_DIR + "/" + time.Now().Format("20060102")
+	if _, err = os.Stat(logpath); err != nil {
+		os.MkdirAll(logpath, 0777)
+	}
+	msg = fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+outname)
+	if tmpFile, err = os.OpenFile(DATA_DIR+"/"+time.Now().Format("20060102")+"/"+filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
+		log.Error(err)
+		return
+	}
+	defer tmpFile.Close()
+	tmpFile.WriteString(msg)
 }
 
 func (this *Server) GetFileInfoByMd5(md5sum string) (*FileInfo, error) {
@@ -697,13 +725,13 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	date = strings.Replace(date, ".", "", -1)
-	filename := STORE_DIR + "/" + date + "/" + Md5_ERROR_FILE_NAME
+	filename := DATA_DIR + "/" + date + "/" + CONST_Md5_ERROR_FILE_NAME
 
 	if this.util.FileExists(filename) {
 
 		go this.CheckFileAndSendToPeer(filename, is_force_upload)
 	}
-	filename = STORE_DIR + "/" + date + "/" + FILE_Md5_FILE_NAME
+	filename = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
 
 	if this.util.FileExists(filename) {
 
@@ -772,6 +800,25 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo) (*File
 
 }
 
+func (this *Server) IsPeer(r *http.Request) bool {
+	var (
+		ip    string
+		peer  string
+		bflag bool
+	)
+	ip = this.util.GetClientIp(r)
+	ip = "http://" + ip
+	bflag = false
+
+	for _, peer = range Config().Peers {
+		if strings.HasPrefix(peer, ip) {
+			bflag = true
+			break
+		}
+	}
+	return bflag
+}
+
 func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 	var (
 		err        error
@@ -782,6 +829,12 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		fi         os.FileInfo
 		uploadFile multipart.File
 	)
+
+	if !this.IsPeer(r) {
+		log.Error(fmt.Sprintf(" not is peer,ip:%s", this.util.GetClientIp(r)))
+		return
+	}
+
 	if r.Method == "POST" {
 		fileInfo.Path = r.Header.Get("Sync-Path")
 		fileInfo.Md5 = r.PostFormValue("md5")
@@ -848,6 +901,7 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		if fi, err = os.Stat(outPath); err != nil {
 			log.Error(err)
 		} else {
+			fileInfo.Size = fi.Size()
 			statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
 			statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
 		}
@@ -861,6 +915,8 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo); err != nil {
 			log.Error(err)
 		}
+
+		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
 		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+fileInfo.Path+"/"+fileInfo.Name)
 		w.Write([]byte(download_url))
@@ -878,7 +934,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		outname      string
 		md5sum       string
 		fileInfo     FileInfo
-		tmpFile      *os.File
 		uploadFile   multipart.File
 		uploadHeader *multipart.FileHeader
 	)
@@ -1052,15 +1107,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
 		}
 
-		msg := fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+outname)
-		if tmpFile, err = os.OpenFile(STORE_DIR+"/"+time.Now().Format("20060102")+"/"+FILE_Md5_FILE_NAME, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
-			log.Error(err)
-			return
-		}
-		defer tmpFile.Close()
-		tmpFile.WriteString(msg)
-
 		this.SaveStat()
+
+		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
 		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+fileInfo.Path+"/"+outname)
 		w.Write([]byte(download_url))
@@ -1086,8 +1135,9 @@ func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w,
-		`<html>
+	if Config().EnableWebUpload {
+		fmt.Fprintf(w,
+			`<html>
 	    <head>
 	        <meta charset="utf-8"></meta>
 	        <title>Uploader</title>
@@ -1099,6 +1149,9 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	        </form>
 	    </body>
 	</html>`)
+	} else {
+		w.Write([]byte("web upload deny"))
+	}
 }
 
 func init() {
