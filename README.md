@@ -45,7 +45,7 @@
 ```
 
 
-# 上传命令
+# 命令上传
 
 `curl -F file=@http-index-fs http://10.1.50.90:8080/upload` 	
 
