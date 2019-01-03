@@ -82,6 +82,8 @@ const (
   "rename_file":false,
   "是否支持ＷＥＢ上专":"真假",
   "enable_web_upload":true,
+  "下载域名":"",
+　"download_domain ":"",
   "是否显示目录":"真假",
   "show_dir":true
 }
@@ -140,6 +142,7 @@ type GloablConfig struct {
 	ShowDir         bool     `json:"show_dir"`
 	RefreshInterval int      `json:"refresh_interval"`
 	EnableWebUpload bool     `json:"enable_web_upload"`
+	DownloadDomain  string   `json:"download_domain"`
 }
 
 type CommonMap struct {
@@ -1044,8 +1047,10 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			if v.ReName != "" {
 				outname = v.ReName
 			}
-
 			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+v.Path+"/"+outname)
+			if Config().DownloadDomain != "" {
+				download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+v.Path+"/"+outname)
+			}
 			w.Write([]byte(download_url))
 
 			return
@@ -1118,6 +1123,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
 		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+fileInfo.Path+"/"+outname)
+		if Config().DownloadDomain != "" {
+			download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+fileInfo.Path+"/"+outname)
+		}
 		w.Write([]byte(download_url))
 		return
 
