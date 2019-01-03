@@ -49,3 +49,7 @@
 
 `curl -F file=@http-index-fs http://10.1.50.90:8080/upload` 	
 
+
+# WEB上传（浏览器打开）
+
+`http://127.0.0.1:8080` 	
