@@ -69,23 +69,22 @@ const (
 	CONST_Md5_ERROR_FILE_NAME = "errors.md5"
 	CONST_FILE_Md5_FILE_NAME  = "files.md5"
 
-	cfgJson = `
-{
-  "绑定端号":"端口",
-  "addr": ":8080",
-  "集群":"集群列表",
-  "peers":["%s"],
-  "组号":"组号",
-  "group":"group1",
-  "refresh_interval":120,
-  "是否自动重命名":"真假",
-  "rename_file":false,
-  "是否支持ＷＥＢ上专":"真假",
-  "enable_web_upload":true,
-  "下载域名":"",
-　"download_domain ":"",
-  "是否显示目录":"真假",
-  "show_dir":true
+	cfgJson = `{
+	"绑定端号": "端口",
+	"addr": ":8080",
+	"集群": "集群列表",
+	"peers": ["%s"],
+	"组号": "组号",
+	"group": "group1",
+	"refresh_interval": 120,
+	"是否自动重命名": "真假",
+	"rename_file": false,
+	"是否支持ＷＥＢ上专": "真假",
+	"enable_web_upload": true,
+	"下载域名": "",
+	"download_domain": "",
+	"是否显示目录": "真假",
+	"show_dir": true
 }
 	
 	`
