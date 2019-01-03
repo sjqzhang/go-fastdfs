@@ -21,7 +21,7 @@
 
 
 
-# 启动服务器
+# 启动服务器（已编译，[下载直接](https://github.com/sjqzhang/FileServer/releases)
 
 `./fileserver`
 
