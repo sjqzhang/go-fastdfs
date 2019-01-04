@@ -81,6 +81,8 @@ const (
 	"rename_file": false,
 	"是否支持ＷＥＢ上专": "真假",
 	"enable_web_upload": true,
+	"是否支持非日期路径": "真假",
+	"enable_custom_path": true,
 	"下载域名": "",
 	"download_domain": "",
 	"是否显示目录": "真假",
@@ -134,14 +136,15 @@ type FileInfo struct {
 }
 
 type GloablConfig struct {
-	Addr            string   `json:"addr"`
-	Peers           []string `json:"peers"`
-	Group           string   `json:"group"`
-	RenameFile      bool     `json:"rename_file"`
-	ShowDir         bool     `json:"show_dir"`
-	RefreshInterval int      `json:"refresh_interval"`
-	EnableWebUpload bool     `json:"enable_web_upload"`
-	DownloadDomain  string   `json:"download_domain"`
+	Addr             string   `json:"addr"`
+	Peers            []string `json:"peers"`
+	Group            string   `json:"group"`
+	RenameFile       bool     `json:"rename_file"`
+	ShowDir          bool     `json:"show_dir"`
+	RefreshInterval  int      `json:"refresh_interval"`
+	EnableWebUpload  bool     `json:"enable_web_upload"`
+	DownloadDomain   string   `json:"download_domain"`
+	EnableCustomPath bool     `json:"enable_custom_path"`
 }
 
 type CommonMap struct {
@@ -948,7 +951,11 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
 
-		fileInfo.Path = r.Header.Get("Sync-Path")
+		//		fileInfo.Path = r.Header.Get("Sync-Path")
+
+		if Config().EnableCustomPath {
+			fileInfo.Path = r.PostFormValue("path")
+		}
 		md5sum = r.PostFormValue("md5")
 		fileInfo.Md5 = r.PostFormValue("md5")
 		fileInfo.Name = r.PostFormValue("name")
@@ -981,8 +988,12 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 			folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
 
-			if fileInfo.Path != "" && strings.HasPrefix(fileInfo.Path, STORE_DIR) {
-				folder = fileInfo.Path
+			if fileInfo.Path != "" {
+				if strings.HasPrefix(fileInfo.Path, STORE_DIR) {
+					folder = fileInfo.Path
+				} else {
+					folder = STORE_DIR + "/" + fileInfo.Path
+				}
 			}
 
 			if !util.FileExists(folder) {
@@ -1135,6 +1146,43 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
+	t := time.Now()
+	batch := new(leveldb.Batch)
+
+	for i := 0; i < 100000000; i++ {
+		f := FileInfo{}
+		f.Peers = []string{"http://192.168.0.1", "http://192.168.2.5"}
+		f.Path = "20190201/19/02"
+		s := strconv.Itoa(i)
+		s = util.MD5(s)
+		f.Name = s
+		f.Md5 = s
+
+		//		server.SaveFileInfoToLevelDB(s, &f)
+
+		if data, err := json.Marshal(&f); err == nil {
+			batch.Put([]byte(s), data)
+		}
+
+		if i%10000 == 0 {
+
+			if batch.Len() > 0 {
+				server.db.Write(batch, nil)
+				//				batch = new(leveldb.Batch)
+				batch.Reset()
+			}
+			fmt.Println(i, time.Since(t).Seconds())
+
+		}
+
+		//fmt.Println(server.GetFileInfoByMd5(s))
+
+	}
+
+	util.WriteFile("time.txt", time.Since(t).String())
+	fmt.Println(time.Since(t).String())
+}
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 
 	if this.util.FileExists(CONST_STAT_FILE_NAME) {
@@ -1325,6 +1373,8 @@ func main() {
 	http.HandleFunc("/syncfile", server.SyncFile)
 	http.HandleFunc("/"+Config().Group+"/"+STORE_DIR+"/", server.Download)
 	fmt.Println("Listen on " + Config().Addr)
-	panic(http.ListenAndServe(Config().Addr, new(HttpHandler)))
+	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
+	log.Error(err)
+	fmt.Println(err)
 
 }
