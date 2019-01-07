@@ -57,3 +57,26 @@
 # WEB上传（浏览器打开）
 
 `http://127.0.0.1:8080` 	
+
+# Q&A
+- 已经使用fastdfs存储的文件可以迁移到go fastdfs下么？
+```
+答案是可以的，你担心的问题是路径改变,go fastdfs为你考虑了这一点
+
+curl -F file=@data/00/00/_78HAFwyvN2AK6ChAAHg8gw80FQ213.jpg -F path=M00/00/00/ http://10.1.50.90:8080/upload
+
+同理可以用一行命令迁移所有文件
+
+cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=M00/00/00/ http://10.1.50.90:8080/
+
+以上命令可以过迁粗糙
+可以写一些简单脚本进行迁移
+
+```
+
+- 还需要安装nginx么？
+```
+可以不安装，也可以选择安装
+go fastdfs 本身就是一个高性能的web文件服务器。
+```
+
