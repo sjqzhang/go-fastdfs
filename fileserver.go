@@ -417,7 +417,8 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		filename = fileInfo.ReName
 	}
 
-	req := httplib.Get(peer + "/" + Config().Group + "/" + fileInfo.Path + "/" + filename)
+	p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
+	req := httplib.Get(peer + "/" + Config().Group + "/" + p + "/" + filename)
 
 	req.SetTimeout(time.Second*5, time.Second*5)
 	if err = req.ToFile(fileInfo.Path + "/" + filename); err != nil {
@@ -439,6 +440,8 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	)
 
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+
+	fullpath = STORE_DIR + "/" + fullpath
 
 	if pathval, err = url.ParseQuery(fullpath); err != nil {
 		log.Error(err)
@@ -865,7 +868,9 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 				outname = v.ReName
 			}
 
-			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+v.Path+"/"+outname)
+			p := strings.Replace(v.Path, STORE_DIR+"/", "", 1)
+
+			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
 			w.Write([]byte(download_url))
 
 			return
@@ -929,7 +934,9 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
-		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+fileInfo.Path+"/"+fileInfo.Name)
+		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
+
+		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+fileInfo.Name)
 		w.Write([]byte(download_url))
 
 	}
@@ -1057,9 +1064,10 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			if v.ReName != "" {
 				outname = v.ReName
 			}
-			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+v.Path+"/"+outname)
+			p := strings.Replace(v.Path, STORE_DIR+"/", "", 1)
+			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
 			if Config().DownloadDomain != "" {
-				download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+v.Path+"/"+outname)
+				download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+p+"/"+outname)
 			}
 			w.Write([]byte(download_url))
 
@@ -1132,9 +1140,11 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
-		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+fileInfo.Path+"/"+outname)
+		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
+
+		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
 		if Config().DownloadDomain != "" {
-			download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+fileInfo.Path+"/"+outname)
+			download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+p+"/"+outname)
 		}
 		w.Write([]byte(download_url))
 		return
@@ -1248,7 +1258,7 @@ func init() {
 
 	ParseConfig(CONST_CONF_FILE_NAME)
 
-	staticHandler = http.StripPrefix("/"+Config().Group+"/"+STORE_DIR+"/", http.FileServer(http.Dir(STORE_DIR)))
+	staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
 
 	initComponent()
 }
@@ -1371,7 +1381,7 @@ func main() {
 	http.HandleFunc("/sync", server.Sync)
 	http.HandleFunc("/stat", server.Stat)
 	http.HandleFunc("/syncfile", server.SyncFile)
-	http.HandleFunc("/"+Config().Group+"/"+STORE_DIR+"/", server.Download)
+	http.HandleFunc("/"+Config().Group+"/", server.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
 	log.Error(err)
