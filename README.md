@@ -54,7 +54,7 @@
 
 # 命令上传
 
-`curl -F file=@http-index-fs http://10.1.50.90:8080/upload` 	
+`curl -F file=@http-index-fs http://10.1.xx.60:8080/upload` 	
 
 
 # WEB上传（浏览器打开）
