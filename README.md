@@ -21,7 +21,7 @@
 
 
 
-# 启动服务器（已编译，[下载直接](https://github.com/sjqzhang/fastdfs/releases)）
+# 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)体验）
 
 `./fileserver`
 
