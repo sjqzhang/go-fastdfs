@@ -140,6 +140,11 @@ type FileInfo struct {
 	Scene  string
 }
 
+type FileResult struct {
+	Url string `json:"url"`
+	Md5 string `json:"md5"`
+}
+
 type GloablConfig struct {
 	Addr             string   `json:"addr"`
 	Peers            []string `json:"peers"`
@@ -963,6 +968,46 @@ func (this *Server) CheckScene(scene string) (bool, error) {
 
 }
 
+func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
+	var (
+		err      error
+		md5sum   string
+		fileInfo *FileInfo
+		fpath    string
+	)
+
+	r.ParseForm()
+
+	md5sum = r.FormValue("md5")
+
+	if len(md5sum) != 32 {
+		w.Write([]byte("md5 unvalid"))
+		return
+	}
+	if fileInfo, err = this.GetFileInfoByMd5(md5sum); err != nil {
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	if fileInfo.ReName != "" {
+		fpath = fileInfo.Path + "/" + fileInfo.ReName
+	} else {
+		fpath = fileInfo.Path + "/" + fileInfo.Name
+	}
+
+	if fileInfo.Path != "" && this.util.FileExists(fpath) {
+		if err = os.Remove(fpath); err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		} else {
+			w.Write([]byte("remove success"))
+			return
+		}
+	}
+	w.Write([]byte("fail remove"))
+
+}
+
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 	var (
@@ -975,6 +1020,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		uploadFile   multipart.File
 		uploadHeader *multipart.FileHeader
 		scene        string
+		output       string
+		fileResult   FileResult
+		data         []byte
 	)
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
@@ -982,17 +1030,28 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		//		fileInfo.Path = r.Header.Get("Sync-Path")
 
 		if Config().EnableCustomPath {
-			fileInfo.Path = r.PostFormValue("path")
+			fileInfo.Path = r.FormValue("path")
+			fileInfo.Path = strings.Trim(fileInfo.Path, "/")
 		}
-		scene = r.PostFormValue("scene")
-		md5sum = r.PostFormValue("md5")
-		fileInfo.Md5 = r.PostFormValue("md5")
-		fileInfo.Name = r.PostFormValue("name")
+		scene = r.FormValue("scene")
+		md5sum = r.FormValue("md5")
+		output = r.FormValue("output")
+
+		fileInfo.Md5 = md5sum
 		uploadFile, uploadHeader, err = r.FormFile("file")
 		fileInfo.Peers = []string{}
 
 		if scene == "" {
 			scene = Config().DefaultScene
+		}
+
+		if output == "" {
+			output = "text"
+		}
+
+		if !this.util.Contains(output, []string{"json", "text"}) {
+			w.Write([]byte("output just support json or text"))
+			return
 		}
 
 		fileInfo.Scene = scene
@@ -1107,8 +1166,20 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			if Config().DownloadDomain != "" {
 				download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+p+"/"+outname)
 			}
-			w.Write([]byte(download_url))
+			if output == "json" {
+				fileResult.Url = download_url
+				fileResult.Md5 = v.Md5
 
+				if data, err = json.Marshal(fileResult); err != nil {
+					w.Write([]byte(err.Error()))
+					return
+				}
+				w.Write(data)
+
+			} else {
+
+				w.Write([]byte(download_url))
+			}
 			return
 		}
 
@@ -1178,15 +1249,27 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
-		fmt.Println(fileInfo)
-
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
 
 		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
 		if Config().DownloadDomain != "" {
 			download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+p+"/"+outname)
 		}
-		w.Write([]byte(download_url))
+
+		if output == "json" {
+			fileResult.Url = download_url
+			fileResult.Md5 = fileInfo.Md5
+
+			if data, err = json.Marshal(fileResult); err != nil {
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.Write(data)
+
+		} else {
+
+			w.Write([]byte(download_url))
+		}
 		return
 
 	} else {
@@ -1252,11 +1335,22 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	    <head>
 	        <meta charset="utf-8"></meta>
 	        <title>Uploader</title>
+			<style>
+			form {
+				bargin
+				
+			}
+			 .form-line {
+				display:block;
+			}
+			</style>
 	    </head>
 	    <body>
 	        <form action="/upload" method="post" enctype="multipart/form-data">
-	            文件:<input type="file" id="file" name="file">
-				场景:<input type="text" id="scene" name="scene" value="%s">
+	            <span class="form-line">文件(file):<input  type="file" id="file" name="file" ></span>
+				<span class="form-line">场景(scene):<input  type="text" id="scene" name="scene" value="%s"></span>
+				<span class="form-line">输出(output):<input  type="text" id="output" name="output" value="json"></span>
+				<span class="form-line">自定义路径(path):<input  type="text" id="path" name="path" value=""></span>
 	            <input type="submit" name="submit" value="upload">
 	        </form>
 	    </body>
@@ -1419,6 +1513,7 @@ func main() {
 	http.HandleFunc("/", server.Index)
 	http.HandleFunc("/check_file_exist", server.CheckFileExist)
 	http.HandleFunc("/upload", server.Upload)
+	http.HandleFunc("/delete", server.RemoveFile)
 	http.HandleFunc("/sync", server.Sync)
 	http.HandleFunc("/stat", server.Stat)
 	http.HandleFunc("/syncfile", server.SyncFile)
