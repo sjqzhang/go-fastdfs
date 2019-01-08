@@ -85,6 +85,10 @@ const (
 	"enable_custom_path": true,
 	"下载域名": "",
 	"download_domain": "",
+	"场景":"场景列表",
+	"scenes":[],
+	"默认场景":"",
+	"default_scene":"default",
 	"是否显示目录": "真假",
 	"show_dir": true
 }
@@ -133,6 +137,7 @@ type FileInfo struct {
 	Md5    string
 	Size   int64
 	Peers  []string
+	Scene  string
 }
 
 type GloablConfig struct {
@@ -145,6 +150,8 @@ type GloablConfig struct {
 	EnableWebUpload  bool     `json:"enable_web_upload"`
 	DownloadDomain   string   `json:"download_domain"`
 	EnableCustomPath bool     `json:"enable_custom_path"`
+	Scenes           []string `json:"scenes"`
+	DefaultScene     string   `json:"default_scene"`
 }
 
 type CommonMap struct {
@@ -943,6 +950,19 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (this *Server) CheckScene(scene string) (bool, error) {
+
+	if len(Config().Scenes) == 0 {
+		return true, nil
+	}
+
+	if !this.util.Contains(scene, Config().Scenes) {
+		return false, errors.New("not valid scene")
+	}
+	return true, nil
+
+}
+
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 	var (
@@ -954,6 +974,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		fileInfo     FileInfo
 		uploadFile   multipart.File
 		uploadHeader *multipart.FileHeader
+		scene        string
 	)
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
@@ -963,11 +984,25 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		if Config().EnableCustomPath {
 			fileInfo.Path = r.PostFormValue("path")
 		}
+		scene = r.PostFormValue("scene")
 		md5sum = r.PostFormValue("md5")
 		fileInfo.Md5 = r.PostFormValue("md5")
 		fileInfo.Name = r.PostFormValue("name")
 		uploadFile, uploadHeader, err = r.FormFile("file")
 		fileInfo.Peers = []string{}
+
+		if scene == "" {
+			scene = Config().DefaultScene
+		}
+
+		fileInfo.Scene = scene
+
+		if _, err = this.CheckScene(scene); err != nil {
+
+			w.Write([]byte(err.Error()))
+
+			return
+		}
 
 		if err != nil {
 			log.Error(err)
@@ -992,13 +1027,16 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 
 			folder = time.Now().Format("20060102/15/04")
-
-			folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
-
+			if fileInfo.Scene != "" {
+				folder = fmt.Sprintf(STORE_DIR+"/%s/%s", fileInfo.Scene, folder)
+			} else {
+				folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
+			}
 			if fileInfo.Path != "" {
 				if strings.HasPrefix(fileInfo.Path, STORE_DIR) {
 					folder = fileInfo.Path
 				} else {
+
 					folder = STORE_DIR + "/" + fileInfo.Path
 				}
 			}
@@ -1140,6 +1178,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
+		fmt.Println(fileInfo)
+
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
 
 		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
@@ -1208,18 +1248,19 @@ func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	if Config().EnableWebUpload {
 		fmt.Fprintf(w,
-			`<html>
+			fmt.Sprintf(`<html>
 	    <head>
 	        <meta charset="utf-8"></meta>
 	        <title>Uploader</title>
 	    </head>
 	    <body>
 	        <form action="/upload" method="post" enctype="multipart/form-data">
-	            <input type="file" id="file" name="file">
+	            文件:<input type="file" id="file" name="file">
+				场景:<input type="text" id="scene" name="scene" value="%s">
 	            <input type="submit" name="submit" value="upload">
 	        </form>
 	    </body>
-	</html>`)
+	</html>`, Config().DefaultScene))
 	} else {
 		w.Write([]byte("web upload deny"))
 	}
