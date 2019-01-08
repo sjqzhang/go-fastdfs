@@ -46,6 +46,10 @@
 	"enable_custom_path": true,
 	"下载域名": "dowonload.web.com",
 	"download_domain": "",
+	"场景":"场景列表",
+	"scenes":[],
+	"默认场景":"",
+	"default_scene":"default",
 	"是否显示目录": "真假",
 	"show_dir": true
 }
