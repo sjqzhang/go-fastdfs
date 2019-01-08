@@ -419,6 +419,8 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	var (
 		err      error
 		filename string
+		fpath    string
+		fi       os.FileInfo
 	)
 	if _, err = os.Stat(fileInfo.Path); err != nil {
 		os.MkdirAll(fileInfo.Path, 0777)
@@ -432,9 +434,19 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
 	req := httplib.Get(peer + "/" + Config().Group + "/" + p + "/" + filename)
 
+	fpath = fileInfo.Path + "/" + filename
+
 	req.SetTimeout(time.Second*5, time.Second*5)
-	if err = req.ToFile(fileInfo.Path + "/" + filename); err != nil {
+	if err = req.ToFile(fpath); err != nil {
 		log.Error(err)
+	}
+
+	if fi, err = os.Stat(fpath); err != nil {
+		os.Remove(fpath)
+		return
+	}
+	if fi.Size() == 0 {
+		os.Remove(fpath)
 	}
 
 }
@@ -486,6 +498,8 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 			}
 
 		}
+		w.WriteHeader(404)
+		w.Write([]byte("(error)file not found"))
 		return
 	}
 
