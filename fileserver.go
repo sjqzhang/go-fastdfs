@@ -499,7 +499,6 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 		}
 		w.WriteHeader(404)
-		w.Write([]byte("(error)file not found"))
 		return
 	}
 
