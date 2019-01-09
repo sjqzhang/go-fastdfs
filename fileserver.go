@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/md5"
 	"crypto/rand"
+
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -94,12 +95,16 @@ const (
 	"default_scene":"default",
 	"是否显示目录": "真假",
 	"show_dir": true,
+	"邮件配置":"",
 	"mail":{
 		"user":"abc@163.com",
 		"password":"abc",
 		"host":"smtp.163.com:25"
 	},
-	"alram_receivers":[]
+	"告警接收邮件列表":"",
+	"alram_receivers":[],
+	"告警接收URL":"",
+	"alarm_url":""
 }
 	
 	`
@@ -185,6 +190,7 @@ type GloablConfig struct {
 	AlramReceivers   []string `json:"alram_receivers"`
 	DefaultScene     string   `json:"default_scene"`
 	Mail             Mail     `json:"mail"`
+	AlarmUrl         string   `json:"alarm_url"`
 }
 
 type CommonMap struct {
@@ -1488,23 +1494,39 @@ func (this *Server) Check() {
 			err     error
 			subject string
 			body    string
+			req     *httplib.BeegoHTTPRequest
 		)
 
 		for _, peer := range Config().Peers {
 
-			req := httplib.Get(peer + "/status")
+			req = httplib.Get(peer + "/status")
 			req.SetTimeout(time.Second*5, time.Second*5)
 			err = req.ToJSON(&status)
 
 			if status.Status != "ok" {
 
 				for _, to := range Config().AlramReceivers {
-					subject = fmt.Sprintf("fastdfs server %s error", peer)
+					subject = "fastdfs server error"
 
 					if err != nil {
-						body = fmt.Sprintf("%s\nerror:\n%s", subject, err.Error())
+						body = fmt.Sprintf("%s\nserver:%s\nerror:\n%s", subject, peer, err.Error())
+					} else {
+						body = fmt.Sprintf("%s\nserver:%s\n", subject, peer)
 					}
-					this.SendToMail(to, subject, body, "text")
+					if err = this.SendToMail(to, subject, body, "text"); err != nil {
+						log.Error(err)
+					}
+				}
+
+				if Config().AlarmUrl != "" {
+					req = httplib.Post(Config().AlarmUrl)
+					req.SetTimeout(time.Second*10, time.Second*10)
+					req.Param("message", body)
+					req.Param("subject", subject)
+					if _, err = req.String(); err != nil {
+						log.Error(err)
+					}
+
 				}
 
 			}
