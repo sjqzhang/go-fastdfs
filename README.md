@@ -52,7 +52,17 @@
 	"默认场景":"",
 	"default_scene":"default",
 	"是否显示目录": "真假",
-	"show_dir": true
+	"show_dir": true,
+	"邮件配置":"",
+	"mail":{
+		"user":"abc@163.com",
+		"password":"abc",
+		"host":"smtp.163.com:25"
+	},
+	"告警接收邮件列表":"",
+	"alram_receivers":[],
+	"告警接收URL":"",
+	"alarm_url":""
 }
 ```
 
@@ -86,5 +96,10 @@ cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=
 ```
 可以不安装，也可以选择安装
 go fastdfs 本身就是一个高性能的web文件服务器。
+```
+
+- 如何查看集群文件信息？
+```
+http://10.1.xx.60:8080/stat
 ```
 
