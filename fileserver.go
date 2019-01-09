@@ -104,7 +104,12 @@ const (
 	"告警接收邮件列表":"",
 	"alram_receivers":[],
 	"告警接收URL":"",
-	"alarm_url":""
+	"alarm_url":"",
+	"下载是否需带token":"真假",
+	"download_use_token":false,
+	"下载token过期时间":"",
+	"download_token_expire":600
+	
 }
 	
 	`
@@ -185,20 +190,22 @@ type StatDateFileInfo struct {
 }
 
 type GloablConfig struct {
-	Addr             string   `json:"addr"`
-	Peers            []string `json:"peers"`
-	Group            string   `json:"group"`
-	RenameFile       bool     `json:"rename_file"`
-	ShowDir          bool     `json:"show_dir"`
-	RefreshInterval  int      `json:"refresh_interval"`
-	EnableWebUpload  bool     `json:"enable_web_upload"`
-	DownloadDomain   string   `json:"download_domain"`
-	EnableCustomPath bool     `json:"enable_custom_path"`
-	Scenes           []string `json:"scenes"`
-	AlramReceivers   []string `json:"alram_receivers"`
-	DefaultScene     string   `json:"default_scene"`
-	Mail             Mail     `json:"mail"`
-	AlarmUrl         string   `json:"alarm_url"`
+	Addr                string   `json:"addr"`
+	Peers               []string `json:"peers"`
+	Group               string   `json:"group"`
+	RenameFile          bool     `json:"rename_file"`
+	ShowDir             bool     `json:"show_dir"`
+	RefreshInterval     int      `json:"refresh_interval"`
+	EnableWebUpload     bool     `json:"enable_web_upload"`
+	DownloadDomain      string   `json:"download_domain"`
+	EnableCustomPath    bool     `json:"enable_custom_path"`
+	Scenes              []string `json:"scenes"`
+	AlramReceivers      []string `json:"alram_receivers"`
+	DefaultScene        string   `json:"default_scene"`
+	Mail                Mail     `json:"mail"`
+	AlarmUrl            string   `json:"alarm_url"`
+	DownloadUseToken    bool     `json:"download_use_token"`
+	DownloadTokenExpire int      `json:"download_token_expire"`
 }
 
 type CommonMap struct {
@@ -503,14 +510,49 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	var (
-		err      error
-		pathMd5  string
-		info     os.FileInfo
-		peer     string
-		fileInfo *FileInfo
-		fullpath string
-		pathval  url.Values
+		err          error
+		pathMd5      string
+		info         os.FileInfo
+		peer         string
+		fileInfo     *FileInfo
+		fullpath     string
+		pathval      url.Values
+		token        string
+		timestamp    string
+		maxTimestamp int64
+		minTimestamp int64
+		ts           int64
+		md5sum       string
+		fp           *os.File
 	)
+
+	r.ParseForm()
+
+	if Config().DownloadUseToken {
+
+		token = r.FormValue("token")
+		timestamp = r.FormValue("timestamp")
+
+		if token == "" || timestamp == "" {
+			w.Write([]byte("unvalid request"))
+			return
+		}
+
+		maxTimestamp = time.Now().Add(time.Second *
+			time.Duration(Config().DownloadTokenExpire)).Unix()
+		minTimestamp = time.Now().Add(-time.Second *
+			time.Duration(Config().DownloadTokenExpire)).Unix()
+		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
+			w.Write([]byte("unvalid timestamp"))
+			return
+		}
+
+		if ts > maxTimestamp || ts < minTimestamp {
+			w.Write([]byte("timestamp expire"))
+			return
+		}
+
+	}
 
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
 
@@ -529,6 +571,39 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+	CheckToken := func(token string, md5sum string, timestamp string) bool {
+		if this.util.MD5(md5sum+timestamp) != token {
+			return false
+		}
+		return true
+	}
+
+	if Config().DownloadUseToken {
+		pathMd5 = this.util.MD5(fullpath)
+		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
+			log.Error(err)
+			if this.util.FileExists(fullpath) {
+				if fp, err = os.Create(fullpath); err != nil {
+					log.Error(err)
+				}
+				if fp != nil {
+					defer fp.Close()
+				}
+				md5sum = this.util.GetFileMd5(fp)
+				if !CheckToken(token, md5sum, timestamp) {
+					w.Write([]byte("unvalid request,error token"))
+					return
+				}
+			}
+		} else {
+			if !CheckToken(token, fileInfo.Md5, timestamp) {
+				w.Write([]byte("unvalid request,error token"))
+				return
+			}
+		}
+
+	}
+
 	if info, err = os.Stat(fullpath); err != nil {
 		log.Error(err)
 		pathMd5 = this.util.MD5(fullpath)
@@ -538,7 +613,15 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				log.Error(err)
 				continue
 			}
+
 			if fileInfo.Md5 != "" {
+
+				if Config().DownloadUseToken {
+					if !CheckToken(token, fileInfo.Md5, timestamp) {
+						w.Write([]byte("unvalid request,error token"))
+						return
+					}
+				}
 
 				go this.DownloadFromPeer(peer, fileInfo)
 
