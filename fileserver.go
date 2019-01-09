@@ -13,12 +13,15 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/smtp"
 	"net/url"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"reflect"
 	"runtime/debug"
 	"strconv"
+	"syscall"
 	//	"strconv"
 	"sync"
 
@@ -90,7 +93,13 @@ const (
 	"默认场景":"",
 	"default_scene":"default",
 	"是否显示目录": "真假",
-	"show_dir": true
+	"show_dir": true,
+	"mail":{
+		"user":"abc@163.com",
+		"password":"abc",
+		"host":"smtp.163.com:25"
+	},
+	"alram_receivers":[]
 }
 	
 	`
@@ -145,6 +154,18 @@ type FileResult struct {
 	Md5 string `json:"md5"`
 }
 
+type Mail struct {
+	User     string `json:"user"`
+	Password string `json:"password"`
+	Host     string `json:"host"`
+}
+
+type StatDateFileInfo struct {
+	Date      string `json:"date"`
+	TotalSize int64  `json:"totalSize"`
+	FileCount int64  `json:"fileCount"`
+}
+
 type GloablConfig struct {
 	Addr             string   `json:"addr"`
 	Peers            []string `json:"peers"`
@@ -156,7 +177,9 @@ type GloablConfig struct {
 	DownloadDomain   string   `json:"download_domain"`
 	EnableCustomPath bool     `json:"enable_custom_path"`
 	Scenes           []string `json:"scenes"`
+	AlramReceivers   []string `json:"alram_receivers"`
 	DefaultScene     string   `json:"default_scene"`
+	Mail             Mail     `json:"mail"`
 }
 
 type CommonMap struct {
@@ -285,6 +308,13 @@ func (this *Common) GetUUID() string {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", id[0:8], id[8:12], id[12:16], id[16:20], id[20:])
 
 }
+
+func (this *Common) GetToDay() string {
+
+	return time.Now().Format("20060102")
+
+}
+
 func (this *Common) GetPulicIP() string {
 	conn, _ := net.Dial("udp", "8.8.8.8:80")
 	defer conn.Close()
@@ -1212,18 +1242,19 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				err      error
 				pathMd5  string
 				fullpath string
-				data     []byte
+				//				data     []byte
 			)
 
-			if data, err = json.Marshal(fileInfo); err != nil {
+			if _, err = json.Marshal(fileInfo); err != nil {
 				log.Error(err)
 				log.Error(fmt.Sprintf("UploadToPeer fail: %v", fileInfo))
 				return
 
 			}
 
-			if err = this.db.Put([]byte(fileInfo.Md5), data, nil); err != nil {
-				log.Error(err)
+			if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo); err != nil {
+				log.Error("SaveFileInfoToLevelDB fail", err)
+
 			}
 
 			fullpath = fileInfo.Path + "/" + fileInfo.Name
@@ -1234,8 +1265,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 			pathMd5 = this.util.MD5(fullpath)
 
-			if err = this.db.Put([]byte(pathMd5), data, nil); err != nil {
-				log.Error(err)
+			if _, err = this.SaveFileInfoToLevelDB(pathMd5, fileInfo); err != nil {
+				log.Error("SaveFileInfoToLevelDB fail", err)
 			}
 
 			go this.postFileToPeer(fileInfo, true)
@@ -1256,6 +1287,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			fileInfo.Size = fi.Size()
 			statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
 			statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
+			statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
+			statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 		}
 
 		this.SaveStat()
@@ -1290,6 +1323,25 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func (this *Server) SendToMail(to, subject, body, mailtype string) error {
+	host := Config().Mail.Host
+	user := Config().Mail.User
+	password := Config().Mail.Password
+	hp := strings.Split(host, ":")
+	auth := smtp.PlainAuth("", user, password, hp[0])
+	var content_type string
+	if mailtype == "html" {
+		content_type = "Content-Type: text/" + mailtype + "; charset=UTF-8"
+	} else {
+		content_type = "Content-Type: text/plain" + "; charset=UTF-8"
+	}
+
+	msg := []byte("To: " + to + "\r\nFrom: " + user + ">\r\nSubject: " + "\r\n" + content_type + "\r\n\r\n" + body)
+	send_to := strings.Split(to, ";")
+	err := smtp.SendMail(host, auth, user, send_to, msg)
+	return err
 }
 
 func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
@@ -1330,14 +1382,83 @@ func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(time.Since(t).String())
 }
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
+	var (
+		min  int64
+		max  int64
+		err  error
+		i    int64
+		data []byte
+		rows []StatDateFileInfo
+	)
+	min = 20190101
+	max = 20190101
+	for k, _ := range statMap.Get() {
+		ks := strings.Split(k, "_")
+		if len(ks) == 2 {
+			if i, err = strconv.ParseInt(ks[0], 10, 64); err != nil {
+				continue
+			}
+			if i >= max {
+				max = i
+			}
+			if i < min {
+				min = i
+			}
 
-	if this.util.FileExists(CONST_STAT_FILE_NAME) {
-		if data, err := this.util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil {
-			w.Write([]byte(err.Error()))
-		} else {
-			w.Write(data)
 		}
+
 	}
+
+	for i := min; i <= max; i++ {
+
+		s := fmt.Sprintf("%d", i)
+		if v, ok := statMap.GetValue(s + "_" + CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
+			var info StatDateFileInfo
+			info.Date = s
+			switch v.(type) {
+			case int64:
+				info.TotalSize = v.(int64)
+			}
+
+			if v, ok := statMap.GetValue(s + "_" + CONST_STAT_FILE_COUNT_KEY); ok {
+				switch v.(type) {
+				case int64:
+					info.FileCount = v.(int64)
+				}
+			}
+
+			rows = append(rows, info)
+
+		}
+
+	}
+	if data, err = json.Marshal(rows); err != nil {
+		return
+	}
+	w.Write(data)
+
+}
+
+func (this *Server) RegisterExit() {
+	c := make(chan os.Signal)
+	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		for s := range c {
+			switch s {
+			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+				this.SaveStat()
+				log.Info("Exit", s)
+				os.Exit(1)
+			}
+		}
+	}()
+}
+
+func (this *Server) Check() {
+
+}
+
+func (this *Server) HeartBeat(w http.ResponseWriter, r *http.Request) {
 
 }
 
