@@ -579,6 +579,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if Config().DownloadUseToken {
+		fullpath = strings.Split(fullpath, "?")[0]
 		pathMd5 = this.util.MD5(fullpath)
 		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
 			log.Error(err)
