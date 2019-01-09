@@ -95,12 +95,15 @@ const (
 	"default_scene":"default",
 	"是否显示目录": "真假",
 	"show_dir": true,
+	"邮件配置":"",
 	"mail":{
 		"user":"abc@163.com",
 		"password":"abc",
 		"host":"smtp.163.com:25"
 	},
+	"告警接收邮件列表":"",
 	"alram_receivers":[],
+	"告警接收URL":"",
 	"alarm_url":""
 }
 	
@@ -1533,7 +1536,7 @@ func (this *Server) Check() {
 
 	go func() {
 		for {
-			time.Sleep(time.Second * 10)
+			time.Sleep(time.Minute * 10)
 			check()
 		}
 	}()
