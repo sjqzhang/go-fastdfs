@@ -149,6 +149,11 @@ type FileInfo struct {
 	Scene  string
 }
 
+type Status struct {
+	Message string `json:"message"`
+	Status  string `json:"status"`
+}
+
 type FileResult struct {
 	Url string `json:"url"`
 	Md5 string `json:"md5"`
@@ -1432,6 +1437,17 @@ func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
+
+	if v, ok := statMap.GetValue(CONST_STAT_FILE_COUNT_KEY); ok {
+		var info StatDateFileInfo
+		info.Date = "all"
+		info.FileCount = v.(int64)
+		if v, ok := statMap.GetValue(CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
+			info.TotalSize = v.(int64)
+		}
+		rows = append(rows, info)
+	}
+
 	if data, err = json.Marshal(rows); err != nil {
 		return
 	}
@@ -1455,6 +1471,73 @@ func (this *Server) RegisterExit() {
 }
 
 func (this *Server) Check() {
+
+	check := func() {
+
+		defer func() {
+			if re := recover(); re != nil {
+				buffer := debug.Stack()
+				log.Error("postFileToPeer")
+				log.Error(re)
+				log.Error(string(buffer))
+			}
+		}()
+
+		var (
+			status  Status
+			err     error
+			subject string
+			body    string
+		)
+
+		for _, peer := range Config().Peers {
+
+			req := httplib.Get(peer + "/status")
+			req.SetTimeout(time.Second*5, time.Second*5)
+			err = req.ToJSON(&status)
+
+			if status.Status != "ok" {
+
+				for _, to := range Config().AlramReceivers {
+					subject = fmt.Sprintf("fastdfs server %s error", peer)
+
+					if err != nil {
+						body = fmt.Sprintf("%s\nerror:\n%s", subject, err.Error())
+					}
+					this.SendToMail(to, subject, body, "text")
+				}
+
+			}
+		}
+
+	}
+
+	go func() {
+		for {
+			time.Sleep(time.Minute * 10)
+			check()
+		}
+	}()
+
+}
+
+func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		status Status
+		err    error
+		data   []byte
+	)
+
+	status.Status = "ok"
+
+	if data, err = json.Marshal(&status); err != nil {
+		status.Status = "fail"
+		status.Message = err.Error()
+		w.Write(data)
+		return
+	}
+	w.Write(data)
 
 }
 
@@ -1644,12 +1727,15 @@ func main() {
 		}
 	}()
 
+	go server.Check()
+
 	http.HandleFunc("/", server.Index)
 	http.HandleFunc("/check_file_exist", server.CheckFileExist)
 	http.HandleFunc("/upload", server.Upload)
 	http.HandleFunc("/delete", server.RemoveFile)
 	http.HandleFunc("/sync", server.Sync)
 	http.HandleFunc("/stat", server.Stat)
+	http.HandleFunc("/status", server.Status)
 	http.HandleFunc("/syncfile", server.SyncFile)
 	http.HandleFunc("/"+Config().Group+"/", server.Download)
 	fmt.Println("Listen on " + Config().Addr)
