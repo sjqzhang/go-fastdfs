@@ -160,8 +160,16 @@ type Status struct {
 }
 
 type FileResult struct {
-	Url string `json:"url"`
-	Md5 string `json:"md5"`
+	Url    string `json:"url"`
+	Md5    string `json:"md5"`
+	Path   string `json:"path"`
+	Domain string `json:"domain"`
+	Scene  string `json:"scene"`
+	//Just for Compatibility
+	Scenes  string `json:"scenes"`
+	Retmsg  string `json:"retmsg"`
+	Retcode int    `json:"retcode"`
+	Src     string `json:"src"`
 }
 
 type Mail struct {
@@ -1077,6 +1085,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		output       string
 		fileResult   FileResult
 		data         []byte
+		domain       string
 	)
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
@@ -1088,11 +1097,18 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			fileInfo.Path = strings.Trim(fileInfo.Path, "/")
 		}
 		scene = r.FormValue("scene")
+		if scene == "" {
+			//Just for Compatibility
+			scene = r.FormValue("scenes")
+		}
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
 
 		fileInfo.Md5 = md5sum
-		uploadFile, uploadHeader, err = r.FormFile("file")
+		if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
 		fileInfo.Peers = []string{}
 
 		if scene == "" {
@@ -1115,6 +1131,12 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(err.Error()))
 
 			return
+		}
+
+		if Config().DownloadDomain != "" {
+			domain = fmt.Sprintf("http://%s", Config().DownloadDomain)
+		} else {
+			domain = fmt.Sprintf("http://%s", r.Host)
 		}
 
 		if err != nil {
@@ -1216,13 +1238,21 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				outname = v.ReName
 			}
 			p := strings.Replace(v.Path, STORE_DIR+"/", "", 1)
-			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
+			p = Config().Group + "/" + p + "/" + outname
+			download_url := fmt.Sprintf("http://%s/%s", r.Host, p)
 			if Config().DownloadDomain != "" {
-				download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+p+"/"+outname)
+				download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, p)
 			}
 			if output == "json" {
 				fileResult.Url = download_url
 				fileResult.Md5 = v.Md5
+				fileResult.Path = "/" + p
+				fileResult.Domain = domain
+				fileResult.Scene = fileInfo.Scene
+
+				// Just for Compatibility
+				fileResult.Src = fileResult.Path
+				fileResult.Scenes = fileInfo.Scene
 
 				if data, err = json.Marshal(fileResult); err != nil {
 					w.Write([]byte(err.Error()))
@@ -1307,15 +1337,21 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
-
-		download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
+		p = Config().Group + "/" + p + "/" + outname
+		download_url := fmt.Sprintf("http://%s/%s", r.Host, p)
 		if Config().DownloadDomain != "" {
-			download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, Config().Group+"/"+p+"/"+outname)
+			download_url = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, p)
 		}
 
 		if output == "json" {
 			fileResult.Url = download_url
 			fileResult.Md5 = fileInfo.Md5
+			fileResult.Path = "/" + p
+			fileResult.Domain = domain
+			fileResult.Scene = fileInfo.Scene
+			// Just for Compatibility
+			fileResult.Src = fileResult.Path
+			fileResult.Scenes = fileInfo.Scene
 
 			if data, err = json.Marshal(fileResult); err != nil {
 				w.Write([]byte(err.Error()))
