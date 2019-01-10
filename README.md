@@ -1,4 +1,4 @@
-# 分布式文件服务器（类fastdfs）在运维管理等方面优于fastdfs，更人性化
+# 分布式文件服务器go-fastdfs（类fastdfs）在运维管理等方面优于fastdfs，更人性化
 
 - 支持curl命令上传
 - 支持浏览器上传
@@ -38,7 +38,7 @@
 	"绑定端号": "端口",
 	"addr": ":8080",
 	"集群": "集群列表例如： http://10.1.xx.2:8080,http://10.1.xx.5:8080,http://10.1.xx.60:8080,注意是字符串数组",
-	"peers": ["%s"],
+	"peers": ["http://10.1.xx.2:8080","http://10.1.xx.5:8080","http://10.1.xx.60:8080"],
 	"组号": "组号",
 	"group": "group1",
 	"refresh_interval": 120,
@@ -84,11 +84,11 @@
 ```
 答案是可以的，你担心的问题是路径改变,go fastdfs为你考虑了这一点
 
-curl -F file=@data/00/00/_78HAFwyvN2AK6ChAAHg8gw80FQ213.jpg -F path=M00/00/00/ http://10.1.50.90:8080/upload
+curl -F file=@data/00/00/_78HAFwyvN2AK6ChAAHg8gw80FQ213.jpg -F path=M00/00/00/ http://127.0.0.1:8080/upload
 
 同理可以用一行命令迁移所有文件
 
-cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=M00/00/00/ http://10.1.50.90:8080/
+cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=M00/00/00/ http://127.0.0.1:8080/
 
 以上命令可以过迁粗糙
 可以写一些简单脚本进行迁移
@@ -105,4 +105,9 @@ go fastdfs 本身就是一个高性能的web文件服务器。
 ```
 http://10.1.xx.60:8080/stat
 ```
-
+- 可靠性怎样，能用于生产环境么？
+```
+本项目已大规模用于生产环境，如担心不能满足
+可以在使用前对其各项特性进行压力测试，有任何
+问题可以直接提issue
+```
