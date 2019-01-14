@@ -65,7 +65,11 @@
 	"告警接收邮件列表":"",
 	"alram_receivers":[],
 	"告警接收URL":"",
-	"alarm_url":""
+	"alarm_url":"",
+	"下载是否需带token":"真假",
+	"download_use_token":false,
+	"下载token过期时间":"",
+	"download_token_expire":600
 }
 ```
 
