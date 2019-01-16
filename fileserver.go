@@ -145,7 +145,7 @@ type Common struct {
 }
 
 type Server struct {
-	db   *leveldb.DB
+	ldb  *leveldb.DB
 	util *Common
 }
 
@@ -627,7 +627,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				go this.DownloadFromPeer(peer, fileInfo)
 
 				http.Redirect(w, r, peer+r.RequestURI, 302)
-				break
+				return
 			}
 
 		}
@@ -762,7 +762,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 					log.Error(err)
 					return
 				}
-				this.db.Put([]byte(fileInfo.Md5), data, nil)
+				this.ldb.Put([]byte(fileInfo.Md5), data, nil)
 			}
 
 		}
@@ -810,7 +810,7 @@ func (this *Server) GetFileInfoByMd5(md5sum string) (*FileInfo, error) {
 		fileInfo FileInfo
 	)
 
-	if data, err = this.db.Get([]byte(md5sum), nil); err != nil {
+	if data, err = this.ldb.Get([]byte(md5sum), nil); err != nil {
 		return nil, err
 	} else {
 		if err = json.Unmarshal(data, &fileInfo); err == nil {
@@ -893,7 +893,7 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	if len(r.Form["date"]) > 0 {
 		date = r.Form["date"][0]
 	} else {
-		w.Write([]byte("require paramete date , date?=20181230"))
+		w.Write([]byte("require paramete date &force , date?=20181230"))
 		return
 	}
 	date = strings.Replace(date, ".", "", -1)
@@ -920,7 +920,7 @@ func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
 		fileInfo FileInfo
 	)
 
-	if data, err = this.db.Get([]byte(key), nil); err != nil {
+	if data, err = this.ldb.Get([]byte(key), nil); err != nil {
 		return nil, err
 	}
 
@@ -933,21 +933,40 @@ func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
 
 func (this *Server) SaveStat() {
 
-	stat := statMap.Get()
-	if v, ok := stat[CONST_STAT_FILE_TOTAL_SIZE_KEY]; ok {
-		switch v.(type) {
-		case int64:
-			if v.(int64) > 0 {
+	SaveStatFunc := func() {
 
-				if data, err := json.Marshal(stat); err != nil {
-					log.Error(err)
-				} else {
-					this.util.WriteBinFile(CONST_STAT_FILE_NAME, data)
-				}
-
+		defer func() {
+			if re := recover(); re != nil {
+				buffer := debug.Stack()
+				log.Error("SaveStatFunc")
+				log.Error(re)
+				log.Error(string(buffer))
 			}
+		}()
+
+		stat := statMap.Get()
+		if v, ok := stat[CONST_STAT_FILE_TOTAL_SIZE_KEY]; ok {
+			switch v.(type) {
+			case int64:
+				if v.(int64) > 0 {
+
+					if data, err := json.Marshal(stat); err != nil {
+						log.Error(err)
+					} else {
+						this.util.WriteBinFile(CONST_STAT_FILE_NAME, data)
+					}
+
+				}
+			}
+
 		}
 
+	}
+
+	for {
+
+		time.Sleep(time.Minute * 1)
+		SaveStatFunc()
 	}
 
 }
@@ -964,7 +983,7 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo) (*File
 
 	}
 
-	if err = this.db.Put([]byte(key), data, nil); err != nil {
+	if err = this.ldb.Put([]byte(key), data, nil); err != nil {
 		return fileInfo, err
 	}
 
@@ -1416,7 +1435,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 		}
 
-		this.SaveStat()
+		//		this.SaveStat()
 
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
@@ -1497,7 +1516,7 @@ func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 		if i%10000 == 0 {
 
 			if batch.Len() > 0 {
-				server.db.Write(batch, nil)
+				server.ldb.Write(batch, nil)
 				//				batch = new(leveldb.Batch)
 				batch.Reset()
 			}
@@ -1589,6 +1608,7 @@ func (this *Server) RegisterExit() {
 			switch s {
 			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 				this.SaveStat()
+				this.ldb.Close()
 				log.Info("Exit", s)
 				os.Exit(1)
 			}
@@ -1754,13 +1774,13 @@ func init() {
 
 	staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
 
-	initComponent()
+	initComponent(false)
 }
 
-func initComponent() {
+func initComponent(is_reload bool) {
 	var (
 		err   error
-		db    *leveldb.DB
+		ldb   *leveldb.DB
 		ip    string
 		stat  map[string]interface{}
 		data  []byte
@@ -1780,43 +1800,52 @@ func initComponent() {
 		}
 	}
 	Config().Peers = peers
-
-	db, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
-	if err != nil {
-		log.Error(err)
-		panic(err)
-	}
-	server.db = db
-
-	if util.FileExists(CONST_STAT_FILE_NAME) {
-		if data, err = util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil {
+	if !is_reload {
+		ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
+		if err != nil {
 			log.Error(err)
-		} else {
+			panic(err)
+		}
+		server.ldb = ldb
+	}
 
-			if err = json.Unmarshal(data, &stat); err != nil {
+	FormatStatInfo := func() {
+
+		if util.FileExists(CONST_STAT_FILE_NAME) {
+			if data, err = util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil {
 				log.Error(err)
 			} else {
-				for k, v := range stat {
-					switch v.(type) {
-					case float64:
-						vv := strings.Split(fmt.Sprintf("%f", v), ".")[0]
 
-						if count, err = strconv.ParseInt(vv, 10, 64); err != nil {
-							log.Error(err)
-						} else {
-							statMap.Put(k, count)
+				if err = json.Unmarshal(data, &stat); err != nil {
+					log.Error(err)
+				} else {
+					for k, v := range stat {
+						switch v.(type) {
+						case float64:
+							vv := strings.Split(fmt.Sprintf("%f", v), ".")[0]
+
+							if count, err = strconv.ParseInt(vv, 10, 64); err != nil {
+								log.Error(err)
+							} else {
+								statMap.Put(k, count)
+							}
+
+						default:
+							statMap.Put(k, v)
+
 						}
 
-					default:
-						statMap.Put(k, v)
-
 					}
-
 				}
 			}
+
 		}
 
 	}
+	if !is_reload {
+		FormatStatInfo()
+	}
+	//Timer
 
 }
 
@@ -1854,35 +1883,35 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	http.DefaultServeMux.ServeHTTP(res, req)
 }
 
-func main() {
-
-	if !util.FileExists(STORE_DIR) {
-		os.Mkdir(STORE_DIR, 0777)
-	}
+func (this *Server) Main() {
 
 	go func() {
 		for {
-			server.CheckFileAndSendToPeer("", false)
+			this.CheckFileAndSendToPeer("", false)
 			time.Sleep(time.Second * time.Duration(Config().RefreshInterval))
 			util.RemoveEmptyDir(STORE_DIR)
-			server.SaveStat()
 		}
 	}()
+	go this.SaveStat()
+	go this.Check()
 
-	go server.Check()
-
-	http.HandleFunc("/", server.Index)
-	http.HandleFunc("/check_file_exist", server.CheckFileExist)
-	http.HandleFunc("/upload", server.Upload)
-	http.HandleFunc("/delete", server.RemoveFile)
-	http.HandleFunc("/sync", server.Sync)
-	http.HandleFunc("/stat", server.Stat)
-	http.HandleFunc("/status", server.Status)
-	http.HandleFunc("/syncfile", server.SyncFile)
-	http.HandleFunc("/"+Config().Group+"/", server.Download)
+	http.HandleFunc("/", this.Index)
+	http.HandleFunc("/check_file_exist", this.CheckFileExist)
+	http.HandleFunc("/upload", this.Upload)
+	http.HandleFunc("/delete", this.RemoveFile)
+	http.HandleFunc("/sync", this.Sync)
+	http.HandleFunc("/stat", this.Stat)
+	http.HandleFunc("/status", this.Status)
+	http.HandleFunc("/syncfile", this.SyncFile)
+	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
 	log.Error(err)
 	fmt.Println(err)
+}
+
+func main() {
+
+	server.Main()
 
 }
