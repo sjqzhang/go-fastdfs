@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/md5"
 	"crypto/rand"
-
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,6 +13,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"net/smtp"
 	"net/url"
 	"os/signal"
@@ -45,9 +45,13 @@ var util = &Common{}
 var server = &Server{}
 var statMap = &CommonMap{m: make(map[string]interface{})}
 
+var queueToPeers = make(chan FileInfo, CONST_QUEUE_SIZE)
+
 var logacc log.LoggerInterface
 
 var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
+
+var CONST_QUEUE_SIZE = 10000
 
 var (
 	FileName string
@@ -208,6 +212,7 @@ type GloablConfig struct {
 	AlarmUrl            string   `json:"alarm_url"`
 	DownloadUseToken    bool     `json:"download_use_token"`
 	DownloadTokenExpire int      `json:"download_token_expire"`
+	QueueSize           int      `json:"queue_size"`
 }
 
 type CommonMap struct {
@@ -793,6 +798,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		result   string
 		data     []byte
 		fi       os.FileInfo
+		i        int
 	)
 
 	defer func() {
@@ -804,7 +810,9 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		}
 	}()
 
-	for _, peer = range Config().Peers {
+	for i, peer = range Config().Peers {
+
+		_ = i
 
 		if fileInfo.Peers == nil {
 			fileInfo.Peers = []string{}
@@ -830,7 +838,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 			}
 		}
 
-		if info, _ = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
+		if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
 
 			continue
 		}
@@ -838,16 +846,14 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		postURL = fmt.Sprintf("%s/%s", peer, "syncfile")
 		b := httplib.Post(postURL)
 
-		b.SetTimeout(time.Second*5, time.Second*5)
+		b.SetTimeout(time.Second*1, time.Second*1)
 		b.Header("Sync-Path", fileInfo.Path)
 		b.Param("name", filename)
 		b.Param("md5", fileInfo.Md5)
 		b.Param("timestamp", fmt.Sprintf("%d", fileInfo.TimeStamp))
 		b.PostFile("file", fileInfo.Path+"/"+filename)
+		b.Debug(true)
 		result, err = b.String()
-		if err != nil {
-			log.Error(err, result)
-		}
 
 		if !strings.HasPrefix(result, "http://") {
 			if write_log {
@@ -1524,7 +1530,14 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				log.Error("SaveFileInfoToLevelDB fail", err)
 			}
 
-			go this.postFileToPeer(fileInfo, true)
+			if len(queueToPeers) < CONST_QUEUE_SIZE {
+				queueToPeers <- FileInfo{Name: fileInfo.Name,
+					Peers: []string{}, TimeStamp: fileInfo.TimeStamp,
+					Path: fileInfo.Path, Md5: fileInfo.Md5, ReName: fileInfo.ReName,
+					Size: fileInfo.Size, Scene: fileInfo.Scene}
+			}
+
+			// go this.postFileToPeer(fileInfo, true)
 
 		}
 
@@ -1733,6 +1746,25 @@ func (this *Server) RegisterExit() {
 	}()
 }
 
+func (this *Server) Consumer() {
+
+	ConsumerFunc := func() {
+
+		for {
+			fileInfo := <-queueToPeers
+			this.postFileToPeer(&fileInfo, true)
+		}
+
+	}
+
+	for i := 0; i < 50; i++ {
+
+		go ConsumerFunc()
+
+	}
+
+}
+
 func (this *Server) Check() {
 
 	check := func() {
@@ -1889,6 +1921,10 @@ func init() {
 
 	ParseConfig(CONST_CONF_FILE_NAME)
 
+	if Config().QueueSize == 0 {
+		Config().QueueSize = CONST_QUEUE_SIZE
+	}
+
 	staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
 
 	initComponent(false)
@@ -2012,6 +2048,7 @@ func (this *Server) Main() {
 	go server.RepairStat()
 	go this.SaveStat()
 	go this.Check()
+	go this.Consumer()
 
 	http.HandleFunc("/", this.Index)
 	http.HandleFunc("/check_file_exist", this.CheckFileExist)
