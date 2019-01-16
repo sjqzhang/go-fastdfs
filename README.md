@@ -32,6 +32,8 @@
 
 `./fileserver`
 
+# 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
+
 # 配置自动生成  (conf/cfg.json)
 ```json
 {
@@ -135,4 +137,8 @@ http://10.1.xx.60:8080/stat
 错误　"peers": ["http://127.0.0.1:8080","http://127.0.0.1:8081","http://127.0.0.1:8082"]
 正确　"peers": ["http://10.0.0.3:8080","http://10.0.0.4:8080","http://10.0.0.5:8082"]
 ```
+
+- 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
+
+
 
