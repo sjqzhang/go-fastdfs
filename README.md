@@ -32,7 +32,7 @@
 
 `./fileserver`
 
-# 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
+
 
 # 配置自动生成  (conf/cfg.json)
 ```json
@@ -96,6 +96,8 @@ r = requests.post(url, files=files)
 print(t.text)
 ```
 
+
+# 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 
 
 # Q&A
