@@ -23,6 +23,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"syscall"
+
 	//	"strconv"
 	"sync"
 
@@ -150,13 +151,14 @@ type Server struct {
 }
 
 type FileInfo struct {
-	Name   string
-	ReName string
-	Path   string
-	Md5    string
-	Size   int64
-	Peers  []string
-	Scene  string
+	Name      string
+	ReName    string
+	Path      string
+	Md5       string
+	Size      int64
+	Peers     []string
+	Scene     string
+	TimeStamp int64
 }
 
 type Status struct {
@@ -407,6 +409,16 @@ func (this *Common) IsExist(filename string) bool {
 	return err == nil || os.IsExist(err)
 }
 
+func (this *Common) Match(matcher string, content string) []string {
+	var result []string
+	if reg, err := regexp.Compile(matcher); err == nil {
+
+		result = reg.FindAllString(content, -1)
+
+	}
+	return result
+}
+
 func (this *Common) ReadBinFile(path string) ([]byte, error) {
 	if this.IsExist(path) {
 		fi, err := os.Open(path)
@@ -468,6 +480,94 @@ func (this *Common) GetClientIp(r *http.Request) string {
 		client_ip = clients[0]
 	}
 	return client_ip
+
+}
+
+func (this *Server) RepairStat() {
+
+	var (
+		size  int64
+		count int64
+	)
+	defer func() {
+		if re := recover(); re != nil {
+			buffer := debug.Stack()
+			log.Error("RepairStat")
+			log.Error(re)
+			log.Error(string(buffer))
+			fmt.Println(re)
+		}
+	}()
+
+	handlefunc := func(file_path string, f os.FileInfo, err error) error {
+
+		var (
+			files     []os.FileInfo
+			date      []string
+			data      []byte
+			content   string
+			lines     []string
+			count     int64
+			totalSize int64
+			line      string
+			cols      []string
+			size      int64
+		)
+
+		if f.IsDir() {
+
+			if files, err = ioutil.ReadDir(file_path); err != nil {
+				return err
+			}
+
+			for _, file := range files {
+				count = 0
+				size = 0
+				if file.Name() == CONST_FILE_Md5_FILE_NAME {
+					if data, err = ioutil.ReadFile(file_path + "/" + file.Name()); err != nil {
+						log.Error(err)
+						continue
+					}
+					date = this.util.Match("\\d{8}", file_path)
+					if len(date) < 1 {
+						continue
+					}
+					content = string(data)
+					lines = strings.Split(content, "\n")
+					count = int64(len(lines))
+					if count > 1 {
+						count = count - 1
+					}
+					for _, line = range lines {
+
+						cols = strings.Split(line, "|")
+						if len(cols) > 2 {
+							if size, err = strconv.ParseInt(cols[1], 10, 64); err != nil {
+								size = 0
+								continue
+							}
+							totalSize = totalSize + size
+						}
+
+					}
+					statMap.Put(date[0]+"_"+CONST_STAT_FILE_COUNT_KEY, count)
+					statMap.Put(date[0]+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)
+					statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, count)
+					statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)
+
+				}
+
+			}
+
+		}
+
+		return nil
+	}
+
+	statMap.Put(CONST_STAT_FILE_COUNT_KEY, count)
+	statMap.Put(CONST_STAT_FILE_TOTAL_SIZE_KEY, size)
+
+	filepath.Walk(DATA_DIR, handlefunc)
 
 }
 
@@ -742,6 +842,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		b.Header("Sync-Path", fileInfo.Path)
 		b.Param("name", filename)
 		b.Param("md5", fileInfo.Md5)
+		b.Param("timestamp", fmt.Sprintf("%d", fileInfo.TimeStamp))
 		b.PostFile("file", fileInfo.Path+"/"+filename)
 		result, err = b.String()
 		if err != nil {
@@ -790,12 +891,12 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 		outname = fileInfo.ReName
 	}
 
-	logpath = DATA_DIR + "/" + time.Now().Format("20060102")
+	logpath = DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
 	if _, err = os.Stat(logpath); err != nil {
 		os.MkdirAll(logpath, 0777)
 	}
 	msg = fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+outname)
-	if tmpFile, err = os.OpenFile(DATA_DIR+"/"+time.Now().Format("20060102")+"/"+filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
+	if tmpFile, err = os.OpenFile(logpath+"/"+filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
 		log.Error(err)
 		return
 	}
@@ -1011,9 +1112,10 @@ func (this *Server) IsPeer(r *http.Request) bool {
 
 func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 	var (
-		err        error
-		outPath    string
-		outname    string
+		err     error
+		outPath string
+		outname string
+		// timestamp  string
 		fileInfo   FileInfo
 		tmpFile    *os.File
 		fi         os.FileInfo
@@ -1026,9 +1128,15 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "POST" {
+
 		fileInfo.Path = r.Header.Get("Sync-Path")
 		fileInfo.Md5 = r.PostFormValue("md5")
 		fileInfo.Name = r.PostFormValue("name")
+		fileInfo.TimeStamp, err = strconv.ParseInt(r.PostFormValue("timestamp"), 10, 64)
+		if err != nil {
+			fileInfo.TimeStamp = time.Now().Unix()
+			log.Error(err)
+		}
 		if uploadFile, _, err = r.FormFile("file"); err != nil {
 			w.Write([]byte(err.Error()))
 			log.Error(err)
@@ -1081,12 +1189,14 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		if _, err = io.Copy(tmpFile, uploadFile); err != nil {
 			w.Write([]byte(err.Error()))
 			log.Error(err)
+
 			return
 		}
 		if this.util.GetFileMd5(tmpFile) != fileInfo.Md5 {
 			w.Write([]byte("md5 error"))
 			tmpFile.Close()
 			os.Remove(outPath)
+
 			return
 
 		}
@@ -1096,6 +1206,7 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 			fileInfo.Size = fi.Size()
 			statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
 			statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
+
 		}
 
 		if fileInfo.Peers == nil {
@@ -1212,6 +1323,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileInfo.Peers = []string{}
+		fileInfo.TimeStamp = time.Now().Unix()
 
 		if scene == "" {
 			scene = Config().DefaultScene
@@ -1434,8 +1546,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 		}
 
-		//		this.SaveStat()
-
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
@@ -1530,6 +1640,15 @@ func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 	util.WriteFile("time.txt", time.Since(t).String())
 	fmt.Println(time.Since(t).String())
 }
+
+func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
+
+	this.RepairStat()
+
+	w.Write([]byte("ok"))
+
+}
+
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 	var (
 		min  int64
@@ -1606,7 +1725,6 @@ func (this *Server) RegisterExit() {
 		for s := range c {
 			switch s {
 			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-				this.SaveStat()
 				this.ldb.Close()
 				log.Info("Exit", s)
 				os.Exit(1)
@@ -1891,6 +2009,7 @@ func (this *Server) Main() {
 			util.RemoveEmptyDir(STORE_DIR)
 		}
 	}()
+	go server.RepairStat()
 	go this.SaveStat()
 	go this.Check()
 
@@ -1900,6 +2019,7 @@ func (this *Server) Main() {
 	http.HandleFunc("/delete", this.RemoveFile)
 	http.HandleFunc("/sync", this.Sync)
 	http.HandleFunc("/stat", this.Stat)
+	http.HandleFunc("/repair_stat", this.RepairStatWeb)
 	http.HandleFunc("/status", this.Status)
 	http.HandleFunc("/syncfile", this.SyncFile)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
