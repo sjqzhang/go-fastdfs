@@ -824,24 +824,23 @@ func (this *Server) GetFileInfoByMd5(md5sum string) (*FileInfo, error) {
 func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, error) {
 
 	var (
-		err error
+		err      error
+		fileInfo FileInfo
 	)
 
 	req := httplib.Get(peer + fmt.Sprintf("/check_file_exist?md5=%s", md5sum))
 
 	req.SetTimeout(time.Second*5, time.Second*5)
 
-	var fileInfo FileInfo
-
-	if err = req.ToJSON(&fileInfo); err == nil {
-		if fileInfo.Md5 == "" {
-			return &FileInfo{}, nil
-		} else {
-
-			return &fileInfo, nil
-		}
+	if err = req.ToJSON(&fileInfo); err != nil {
+		return &FileInfo{}, err
 	}
-	return &FileInfo{}, errors.New("file not found")
+
+	if fileInfo.Md5 == "" {
+		return &fileInfo, errors.New("not found")
+	}
+
+	return &fileInfo, nil
 
 }
 
