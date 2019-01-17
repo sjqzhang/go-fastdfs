@@ -337,6 +337,7 @@ func (this *Common) GetUUID() string {
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return ""
 	}
+
 	id := this.MD5(base64.URLEncoding.EncodeToString(b))
 	return fmt.Sprintf("%s-%s-%s-%s-%s", id[0:8], id[8:12], id[12:16], id[16:20], id[20:])
 
@@ -464,6 +465,45 @@ func (this *Common) RemoveEmptyDir(pathname string) {
 	if fi.IsDir() {
 		filepath.Walk(pathname, handlefunc)
 	}
+
+}
+
+func (this *Common) JsonEncodePretty(o interface{}) string {
+
+	resp := ""
+	switch o.(type) {
+	case map[string]interface{}:
+		if data, err := json.Marshal(o); err == nil {
+			resp = string(data)
+		}
+	case map[string]string:
+		if data, err := json.Marshal(o); err == nil {
+			resp = string(data)
+		}
+	case []interface{}:
+		if data, err := json.Marshal(o); err == nil {
+			resp = string(data)
+		}
+	case []string:
+		if data, err := json.Marshal(o); err == nil {
+			resp = string(data)
+		}
+	case string:
+		resp = o.(string)
+
+	default:
+		if data, err := json.Marshal(o); err == nil {
+			resp = string(data)
+		}
+
+	}
+	var v interface{}
+	if ok := json.Unmarshal([]byte(resp), &v); ok == nil {
+		if buf, ok := json.MarshalIndent(v, "", "  "); ok == nil {
+			resp = string(buf)
+		}
+	}
+	return resp
 
 }
 
@@ -597,7 +637,13 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 
 	fpath = fileInfo.Path + "/" + filename
 
+
+
 	req.SetTimeout(time.Second*5, time.Second*5)
+
+
+
+
 	if err = req.ToFile(fpath); err != nil {
 		log.Error(err)
 	}
@@ -843,8 +889,16 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 			continue
 		}
 
+
+
+
+
+
+
 		postURL = fmt.Sprintf("%s/%s", peer, "syncfile")
 		b := httplib.Post(postURL)
+
+
 
 		b.SetTimeout(time.Second*1, time.Second*1)
 		b.Header("Sync-Path", fileInfo.Path)
@@ -852,7 +906,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		b.Param("md5", fileInfo.Md5)
 		b.Param("timestamp", fmt.Sprintf("%d", fileInfo.TimeStamp))
 		b.PostFile("file", fileInfo.Path+"/"+filename)
-		b.Debug(true)
+		b.Debug(true) //fuck this is a bug
 		result, err = b.String()
 
 		if !strings.HasPrefix(result, "http://") {
@@ -988,17 +1042,15 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	force := ""
 	is_force_upload := false
 
-	if len(r.Form["force"]) > 0 {
-		force = r.Form["force"][0]
-	}
+	force=r.FormValue("force")
+	date=r.FormValue("date")
 
-	if force != "" {
+	if force == "1" {
 		is_force_upload = true
 	}
 
-	if len(r.Form["date"]) > 0 {
-		date = r.Form["date"][0]
-	} else {
+	if date=="" {
+
 		w.Write([]byte("require paramete date &force , date?=20181230"))
 		return
 	}
@@ -1662,13 +1714,19 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 
 }
 
+
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
+	data:=this.util.JsonEncodePretty(this.GetStat())
+	w.Write([]byte(data))
+}
+
+func (this *Server) GetStat() []StatDateFileInfo {
 	var (
 		min  int64
 		max  int64
 		err  error
 		i    int64
-		data []byte
+
 		rows []StatDateFileInfo
 	)
 	min = 20190101
@@ -1724,10 +1782,8 @@ func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, info)
 	}
 
-	if data, err = json.Marshal(rows); err != nil {
-		return
-	}
-	w.Write(data)
+	return rows
+
 
 }
 
@@ -1764,6 +1820,92 @@ func (this *Server) Consumer() {
 	}
 
 }
+
+func (this *Server) AutoRepair() {
+
+	AutoRepairFunc := func() {
+
+		var (
+			dateStats []StatDateFileInfo
+			err error
+			countKey string
+
+		)
+
+		defer func() {
+			if re := recover(); re != nil {
+				buffer := debug.Stack()
+				log.Error("AutoRepair")
+				log.Error(re)
+				log.Error(string(buffer))
+			}
+		}()
+
+		Update:= func(peer string, dateStat StatDateFileInfo) {
+
+			req:=httplib.Get(fmt.Sprintf("%s/sync?date=%s&force=%s",peer, dateStat.Date,"1"))
+			req.SetTimeout(time.Second*5,time.Second*5)
+			if _,err=req.String();err!=nil {
+				log.Error(err)
+
+			}
+			log.Info(fmt.Sprintf("syn file from %s date %s",peer,dateStat.Date))
+
+
+
+		}
+
+
+		for _,peer:=range Config().Peers {
+
+
+
+			req:=httplib.Get(fmt.Sprintf("%s/%s",peer,"stat"))
+			req.SetTimeout(time.Second*5,time.Second*5)
+			if err=req.ToJSON(&dateStats);err!=nil {
+				log.Error(err)
+				continue
+			}
+
+
+			for _,dateStat:=range dateStats {
+				if dateStat.Date=="all" {
+					continue
+				}
+				countKey=dateStat.Date+"_"+ CONST_STAT_FILE_COUNT_KEY
+				if v,ok:= statMap.GetValue(countKey);ok {
+					switch v.(type) {
+					case int64:
+						if v.(int64)<dateStat.FileCount {
+							Update(peer,dateStat)
+						}
+					}
+				} else {
+					Update(peer,dateStat)
+
+				}
+
+			}
+
+		}
+
+	}
+
+    for {
+    	time.Sleep(time.Second*10)
+		AutoRepairFunc()
+    	time.Sleep(time.Minute*60)
+	}
+
+
+
+}
+
+
+
+
+
+
 
 func (this *Server) Check() {
 
@@ -2049,6 +2191,7 @@ func (this *Server) Main() {
 	go this.SaveStat()
 	go this.Check()
 	go this.Consumer()
+	go this.AutoRepair()
 
 	http.HandleFunc("/", this.Index)
 	http.HandleFunc("/check_file_exist", this.CheckFileExist)
@@ -2067,6 +2210,8 @@ func (this *Server) Main() {
 }
 
 func main() {
+
+
 
 	server.Main()
 
