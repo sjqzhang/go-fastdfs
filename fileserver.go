@@ -1894,7 +1894,7 @@ func (this *Server) AutoRepair() {
     for {
     	time.Sleep(time.Second*10)
 		AutoRepairFunc()
-    	time.Sleep(time.Minute*10)
+    	time.Sleep(time.Minute*60)
 	}
 
 
