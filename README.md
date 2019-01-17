@@ -72,7 +72,9 @@
 	"下载是否需带token":"真假",
 	"download_use_token":false,
 	"下载token过期时间":"",
-	"download_token_expire":600
+	"download_token_expire":600,
+	"是否自动修复":"可能存在性问题（每小时一次）",
+	"auto_repair":true
 }
 ```
 
