@@ -337,6 +337,7 @@ func (this *Common) GetUUID() string {
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return ""
 	}
+
 	id := this.MD5(base64.URLEncoding.EncodeToString(b))
 	return fmt.Sprintf("%s-%s-%s-%s-%s", id[0:8], id[8:12], id[12:16], id[16:20], id[20:])
 
@@ -597,7 +598,13 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 
 	fpath = fileInfo.Path + "/" + filename
 
+
+
 	req.SetTimeout(time.Second*5, time.Second*5)
+
+
+
+
 	if err = req.ToFile(fpath); err != nil {
 		log.Error(err)
 	}
@@ -843,8 +850,16 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 			continue
 		}
 
+
+
+
+
+
+
 		postURL = fmt.Sprintf("%s/%s", peer, "syncfile")
 		b := httplib.Post(postURL)
+
+
 
 		b.SetTimeout(time.Second*1, time.Second*1)
 		b.Header("Sync-Path", fileInfo.Path)
@@ -852,7 +867,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		b.Param("md5", fileInfo.Md5)
 		b.Param("timestamp", fmt.Sprintf("%d", fileInfo.TimeStamp))
 		b.PostFile("file", fileInfo.Path+"/"+filename)
-		b.Debug(true)
+		b.Debug(true) //fuck this is a bug
 		result, err = b.String()
 
 		if !strings.HasPrefix(result, "http://") {
