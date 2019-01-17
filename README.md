@@ -25,6 +25,7 @@
 - 支持token下载　token=md5(file_md5+timestamp)
 - 运维简单，只有一个角色（不像fastdfs有三个角色Tracker Server,Storage Server,Client），配置自动生成
 - 每个节点对等（简化运维）
+- 所有节点都可以同时读写
 
 
 
@@ -139,6 +140,25 @@ http://10.1.xx.60:8080/stat
 错误　"peers": ["http://127.0.0.1:8080","http://127.0.0.1:8081","http://127.0.0.1:8082"]
 正确　"peers": ["http://10.0.0.3:8080","http://10.0.0.4:8080","http://10.0.0.5:8082"]
 ```
+
+
+- 如何压测？
+```
+先用gen_file.py产生大量文件（注意如果要生成大文件，自已在内容中乘上一个大的数即可）
+例如:
+# -*- coding: utf-8 -*-
+import os
+j=0
+for i in range(0,1000000):
+    if i%1000==0:
+        j=i
+        os.system('mkdir %s'%(i))
+    with open('%s/%s.txt'%(j,i),'w+') as f:
+        f.write(str(i)*1024)
+接着用benchmark.py进行压测
+也可以多机同时进行压测，所有节点都是可以同时读写的
+```
+
 
 - 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 
