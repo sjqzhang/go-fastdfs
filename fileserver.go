@@ -113,7 +113,9 @@ const (
 	"下载是否需带token":"真假",
 	"download_use_token":false,
 	"下载token过期时间":"",
-	"download_token_expire":600
+	"download_token_expire":600,
+	"是否自动修复":"可能存在性问题（每小时一次）",
+	"auto_repair":true
 	
 }
 	
@@ -213,6 +215,7 @@ type GloablConfig struct {
 	DownloadUseToken    bool     `json:"download_use_token"`
 	DownloadTokenExpire int      `json:"download_token_expire"`
 	QueueSize           int      `json:"queue_size"`
+	AutoRepair            bool      `json:"auto_repair"`
 }
 
 type CommonMap struct {
@@ -2191,7 +2194,9 @@ func (this *Server) Main() {
 	go this.SaveStat()
 	go this.Check()
 	go this.Consumer()
-	go this.AutoRepair()
+	if Config().AutoRepair {
+		go this.AutoRepair()
+	}
 
 	http.HandleFunc("/", this.Index)
 	http.HandleFunc("/check_file_exist", this.CheckFileExist)
