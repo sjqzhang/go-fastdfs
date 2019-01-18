@@ -609,6 +609,9 @@ func (this *Server) RepairStat() {
 		}
 	}()
 
+	this.statMap.Put(CONST_STAT_FILE_COUNT_KEY, int64(0))
+	this.statMap.Put(CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
+
 
 	handlefunc := func(file_path string, f os.FileInfo, err error) error {
 
@@ -1177,6 +1180,9 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 		if this.util.FileExists(filename) {
 
 			go this.CheckFileAndSendToPeer(filename, is_force_upload)
+		} else {
+			w.Write([]byte(fmt.Sprintf( "%s not found",filename)))
+			return
 		}
 	}  else {
 
@@ -1185,6 +1191,9 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 		if this.util.FileExists(filename) {
 
 			go this.CheckFileAndSendToPeer(filename, is_force_upload)
+		} else {
+			w.Write([]byte(fmt.Sprintf( "%s not found",filename)))
+			return
 		}
 
 
@@ -2466,6 +2475,8 @@ func (this *Server)initComponent(is_reload bool) {
 				}
 			}
 
+		} else {
+			this.RepairStat()
 		}
 
 	}
@@ -2513,7 +2524,6 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 func (this *Server) Main() {
 
 
-	server.RepairStat()
 	go func() {
 		for {
 			this.CheckFileAndSendToPeer("", false)
