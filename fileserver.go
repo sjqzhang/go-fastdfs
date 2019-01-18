@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/deckarep/golang-set"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -35,17 +36,14 @@ import (
 	"unsafe"
 
 	"github.com/astaxie/beego/httplib"
-	"github.com/syndtr/goleveldb/leveldb"
-
 	log "github.com/sjqzhang/seelog"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var staticHandler http.Handler
-var util = &Common{}
-var server = &Server{}
-var statMap = &CommonMap{m: make(map[string]interface{})}
 
-var queueToPeers = make(chan FileInfo, CONST_QUEUE_SIZE)
+var server =NewServer()
+
 
 var logacc log.LoggerInterface
 
@@ -152,9 +150,18 @@ type Common struct {
 }
 
 type Server struct {
-	ldb  *leveldb.DB
-	util *Common
+	ldb          *leveldb.DB
+	util         *Common
+	statMap      *CommonMap
+	queueToPeers chan FileInfo
+	fileset      mapset.Set
+	errorset     mapset.Set
+	curDate string
+
+
 }
+
+
 
 type FileInfo struct {
 	Name      string
@@ -165,6 +172,7 @@ type FileInfo struct {
 	Peers     []string
 	Scene     string
 	TimeStamp int64
+	writeLog bool
 }
 
 type Status struct {
@@ -216,6 +224,42 @@ type GloablConfig struct {
 	DownloadTokenExpire int      `json:"download_token_expire"`
 	QueueSize           int      `json:"queue_size"`
 	AutoRepair            bool      `json:"auto_repair"`
+}
+
+func NewServer() *Server  {
+	var (
+		server *Server
+		size int64
+	)
+
+	size=0
+
+	server=&Server{
+		util:         &Common{},
+		statMap:      &CommonMap{m: make(map[string]interface{})},
+		queueToPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
+		fileset:      mapset.NewSet(),
+		errorset:mapset.NewSet(),
+	}
+	settins:=httplib.BeegoHTTPSettings{
+		UserAgent:        "go-fastdfs",
+		ConnectTimeout:   10 * time.Second,
+		ReadWriteTimeout: 10 * time.Second,
+		Gzip:             true,
+		DumpBody:         true,
+	}
+	httplib.SetDefaultSetting(settins)
+	server.statMap.Put(CONST_STAT_FILE_COUNT_KEY,size)
+	server.statMap.Put(CONST_STAT_FILE_TOTAL_SIZE_KEY,size)
+	server.statMap.Put(server.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY,size)
+	server.statMap.Put(server.util.GetToDay()+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY,size)
+
+
+	server.curDate=server.util.GetToDay()
+
+	return server
+
+
 }
 
 type CommonMap struct {
@@ -349,6 +393,28 @@ func (this *Common) GetUUID() string {
 func (this *Common) GetToDay() string {
 
 	return time.Now().Format("20060102")
+
+}
+
+
+func (this *Common) StrToMapSet(str string,sep string) mapset.Set {
+	result:=mapset.NewSet()
+	for _,v:=range strings.Split(str,sep) {
+		result.Add(v)
+	}
+	return result
+}
+
+func (this *Common) MapSetToStr(set mapset.Set,sep string) string{
+
+	var (
+		ret []string
+	)
+
+	for v:=range  set.Iter() {
+		ret=append(ret,v.(string))
+	}
+	return strings.Join(ret,sep)
 
 }
 
@@ -533,10 +599,6 @@ func (this *Common) GetClientIp(r *http.Request) string {
 
 func (this *Server) RepairStat() {
 
-	var (
-		size  int64
-		count int64
-	)
 	defer func() {
 		if re := recover(); re != nil {
 			buffer := debug.Stack()
@@ -546,6 +608,7 @@ func (this *Server) RepairStat() {
 			fmt.Println(re)
 		}
 	}()
+
 
 	handlefunc := func(file_path string, f os.FileInfo, err error) error {
 
@@ -586,10 +649,12 @@ func (this *Server) RepairStat() {
 					if count > 1 {
 						count = count - 1
 					}
+				    count=0
 					for _, line = range lines {
 
 						cols = strings.Split(line, "|")
 						if len(cols) > 2 {
+							count=count+1
 							if size, err = strconv.ParseInt(cols[1], 10, 64); err != nil {
 								size = 0
 								continue
@@ -598,10 +663,10 @@ func (this *Server) RepairStat() {
 						}
 
 					}
-					statMap.Put(date[0]+"_"+CONST_STAT_FILE_COUNT_KEY, count)
-					statMap.Put(date[0]+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)
-					statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, count)
-					statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)
+					this.statMap.Put(date[0]+"_"+CONST_STAT_FILE_COUNT_KEY, count)
+					this.statMap.Put(date[0]+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)
+					this.statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, count)
+					this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)
 
 				}
 
@@ -612,12 +677,18 @@ func (this *Server) RepairStat() {
 		return nil
 	}
 
-	statMap.Put(CONST_STAT_FILE_COUNT_KEY, count)
-	statMap.Put(CONST_STAT_FILE_TOTAL_SIZE_KEY, size)
+
 
 	filepath.Walk(DATA_DIR, handlefunc)
 
+
+	this.SaveStat()
+
 }
+
+
+
+
 
 func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	var (
@@ -627,7 +698,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		fi       os.FileInfo
 	)
 	if _, err = os.Stat(fileInfo.Path); err != nil {
-		os.MkdirAll(fileInfo.Path, 0777)
+		os.MkdirAll(fileInfo.Path, 0666)
 	}
 
 	filename = fileInfo.Name
@@ -828,7 +899,9 @@ func (this *Server) CheckFileAndSendToPeer(filename string, is_force_upload bool
 				if is_force_upload {
 					fileInfo.Peers = []string{}
 				}
-				this.postFileToPeer(fileInfo, false)
+				//this.postFileToPeer(fileInfo, false)
+				fileInfo.writeLog=false
+				this.queueToPeers<-*fileInfo
 			}
 		}
 
@@ -836,7 +909,7 @@ func (this *Server) CheckFileAndSendToPeer(filename string, is_force_upload bool
 
 }
 
-func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
+func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 
 	var (
 		err      error
@@ -913,7 +986,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo, write_log bool) {
 		result, err = b.String()
 
 		if !strings.HasPrefix(result, "http://") {
-			if write_log {
+			if fileInfo.writeLog {
 				this.SaveFileMd5Log(fileInfo, CONST_Md5_ERROR_FILE_NAME)
 			}
 		} else {
@@ -950,13 +1023,26 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 
 	outname = fileInfo.Name
 
+	if this.curDate!=this.util.GetToDay() {
+		this.errorset.Clear()
+		this.fileset.Clear()
+	}
+
 	if fileInfo.ReName != "" {
 		outname = fileInfo.ReName
 	}
 
+	if filename==CONST_Md5_ERROR_FILE_NAME && this.errorset.Contains(fileInfo.Md5) {
+		return
+	}
+
+	if filename==CONST_FILE_Md5_FILE_NAME && this.fileset.Contains(fileInfo.Md5) {
+		return
+	}
+
 	logpath = DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
 	if _, err = os.Stat(logpath); err != nil {
-		os.MkdirAll(logpath, 0777)
+		os.MkdirAll(logpath, 0666)
 	}
 	msg = fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+outname)
 	if tmpFile, err = os.OpenFile(logpath+"/"+filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
@@ -965,6 +1051,13 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	}
 	defer tmpFile.Close()
 	tmpFile.WriteString(msg)
+	if filename==CONST_FILE_Md5_FILE_NAME {
+		this.fileset.Add(fileInfo.Md5)
+	}
+	if filename==CONST_Md5_ERROR_FILE_NAME {
+		this.errorset.Add(fileInfo.Md5)
+	}
+
 }
 
 func (this *Server) GetFileInfoByMd5(md5sum string) (*FileInfo, error) {
@@ -1038,7 +1131,19 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 
 func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 
+	var (
+		filename string
+
+	)
+
+
 	r.ParseForm()
+
+
+	if !this.IsPeer(r) {
+		w.Write([]byte("client must be in cluster"))
+		return
+	}
 
 	date := ""
 
@@ -1058,18 +1163,44 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	date = strings.Replace(date, ".", "", -1)
-	filename := DATA_DIR + "/" + date + "/" + CONST_Md5_ERROR_FILE_NAME
 
-	if this.util.FileExists(filename) {
+	if is_force_upload {
 
-		go this.CheckFileAndSendToPeer(filename, is_force_upload)
+		filename = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
+
+		if this.util.FileExists(filename) {
+
+			go this.CheckFileAndSendToPeer(filename, is_force_upload)
+		}
+	}  else {
+
+		filename = DATA_DIR + "/" + date + "/" + CONST_Md5_ERROR_FILE_NAME
+
+		if this.util.FileExists(filename) {
+
+			go this.CheckFileAndSendToPeer(filename, is_force_upload)
+		}
+
+
 	}
-	filename = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
 
-	if this.util.FileExists(filename) {
+	//for _,peer:=range Config().Peers {
+	//
+	//	fmt.Println(peer)
+	//
+	//	req:=httplib.Post(fmt.Sprintf("%s/sync",peer))
+	//	req.Param("date",date)
+	//	if is_force_upload {
+	//		req.Param("force","1")
+	//	}
+	//	if _,err:=req.String();err!=nil {
+	//		log.Error(err)
+	//	}
+	//
+	//
+	//
+	//}
 
-		go this.CheckFileAndSendToPeer(filename, is_force_upload)
-	}
 	w.Write([]byte("job is running"))
 }
 
@@ -1105,11 +1236,11 @@ func (this *Server) SaveStat() {
 			}
 		}()
 
-		stat := statMap.Get()
+		stat := this.statMap.Get()
 		if v, ok := stat[CONST_STAT_FILE_TOTAL_SIZE_KEY]; ok {
 			switch v.(type) {
 			case int64:
-				if v.(int64) > 0 {
+				if v.(int64) >=0 {
 
 					if data, err := json.Marshal(stat); err != nil {
 						log.Error(err)
@@ -1124,11 +1255,13 @@ func (this *Server) SaveStat() {
 
 	}
 
-	for {
-
-		time.Sleep(time.Minute * 1)
-		SaveStatFunc()
-	}
+	SaveStatFunc()
+	//
+	//for {
+	//
+	//	time.Sleep(time.Minute * 1)
+	//	SaveStatFunc()
+	//}
 
 }
 
@@ -1159,8 +1292,15 @@ func (this *Server) IsPeer(r *http.Request) bool {
 		bflag bool
 	)
 	ip = this.util.GetClientIp(r)
+
+	if ip=="127.0.0.1" || ip==this.util.GetPulicIP() {
+		return true
+	}
 	ip = "http://" + ip
 	bflag = false
+
+
+
 
 	for _, peer = range Config().Peers {
 		if strings.HasPrefix(peer, ip) {
@@ -1171,11 +1311,150 @@ func (this *Server) IsPeer(r *http.Request) bool {
 	return bflag
 }
 
+func (this *Server) ReceiveMd5s(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		err error
+		md5s string
+		mdfs mapset.Set
+		fileInfo *FileInfo
+
+	)
+
+	if !this.IsPeer(r) {
+		log.Warn(fmt.Sprintf("ReceiveMd5s %s",this.util.GetClientIp(r)))
+		return
+	}
+
+	mdfs=mapset.NewSet()
+
+	r.ParseForm()
+	md5s=r.FormValue("md5s")
+	for _,v:= range strings.Split(md5s,",") {
+
+		mdfs.Add(v)
+
+	}
+
+
+	for m:=range mdfs.Iter() {
+	  if fileInfo,err	=this.GetFileInfoByMd5(m.(string));err!=nil {
+	  	log.Error(err)
+	  	 continue
+	  }
+	  this.queueToPeers<- *fileInfo
+	}
+
+
+}
+
+func (this *Server) GetMd5sForWeb(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		date string
+		err error
+		result mapset.Set
+		lines []string
+	)
+
+	if !this.IsPeer(r) {
+
+		return
+
+	}
+	 date = r.FormValue("date")
+
+	  if result,err=this.GetMd5sByDate(date);err!=nil {
+	  	log.Error(err)
+		  return
+	  }
+     for line:=range result.Iter() {
+     	lines=append(lines,line.(string))
+	 }
+	w.Write([]byte( strings.Join(lines,",") ))
+
+
+}
+
+func (this *Server) GetMd5File(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		date string
+		fpath string
+		data []byte
+		err error
+	)
+	if !this.IsPeer(r) {
+
+		return
+
+	}
+
+	fpath=DATA_DIR+"/"+date+"/"+CONST_FILE_Md5_FILE_NAME
+
+	if !this.util.FileExists(fpath) {
+		w.WriteHeader(404)
+		return
+	}
+	if data,err=ioutil.ReadFile(fpath);err!=nil {
+		w.WriteHeader(500)
+		return
+	}
+	w.Write(data)
+
+}
+
+
+func (this *Server) GetMd5sByDate(date string) (mapset.Set,error) {
+
+	var (
+		err error
+		result mapset.Set
+		fpath string
+		content string
+		lines []string
+		line string
+		cols []string
+		data []byte
+	)
+
+	 result=mapset.NewSet()
+
+	fpath=DATA_DIR+"/"+date+"/"+CONST_FILE_Md5_FILE_NAME
+
+	if !this.util.FileExists(fpath) {
+		return result,errors.New("not found")
+	}
+
+	if data,err=ioutil.ReadFile(fpath);err!=nil {
+		return result,err
+	}
+	content=string(data)
+	lines=strings.Split(content,"\n")
+	for _, line = range lines {
+
+		cols = strings.Split(line, "|")
+		if len(cols) > 2 {
+			if _, err = strconv.ParseInt(cols[1], 10, 64); err != nil {
+				continue
+			}
+			result.Add(cols[0])
+
+		}
+	}
+   return result,nil
+}
+
+
+
+
+
+
 func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 	var (
 		err     error
 		outPath string
-		outname string
+		//outname string
 		// timestamp  string
 		fileInfo   FileInfo
 		tmpFile    *os.File
@@ -1207,21 +1486,21 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 		defer uploadFile.Close()
 
-		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
-			outname = v.Name
-			if v.ReName != "" {
-				outname = v.ReName
-			}
+		//if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
+		//	outname = v.Name
+		//	if v.ReName != "" {
+		//		outname = v.ReName
+		//	}
+		//
+		//	p := strings.Replace(v.Path, STORE_DIR+"/", "", 1)
+		//
+		//	download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
+		//	w.Write([]byte(download_url))
+		//
+		//	return
+		//}
 
-			p := strings.Replace(v.Path, STORE_DIR+"/", "", 1)
-
-			download_url := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+outname)
-			w.Write([]byte(download_url))
-
-			return
-		}
-
-		os.MkdirAll(fileInfo.Path, 0777)
+		os.MkdirAll(fileInfo.Path, 0666)
 
 		outPath = fileInfo.Path + "/" + fileInfo.Name
 
@@ -1265,8 +1544,11 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 		} else {
 			fileInfo.Size = fi.Size()
-			statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
-			statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
+			date:=time.Unix(fileInfo.TimeStamp,0).Format("20060102")
+			this.statMap.AddCountInt64(date+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
+			this.statMap.AddCountInt64(date+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
+			this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
+			this.statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
 
 		}
 
@@ -1451,8 +1733,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if !util.FileExists(folder) {
-				os.MkdirAll(folder, 0777)
+			if !this.util.FileExists(folder) {
+				os.MkdirAll(folder, 0666)
 			}
 
 			outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
@@ -1489,7 +1771,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				return fileInfo, errors.New("(error)fail," + err.Error())
 			}
 
-			v := util.GetFileMd5(outFile)
+			v := this.util.GetFileMd5(outFile)
 			fileInfo.Md5 = v
 			fileInfo.Path = folder
 
@@ -1585,11 +1867,14 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				log.Error("SaveFileInfoToLevelDB fail", err)
 			}
 
-			if len(queueToPeers) < CONST_QUEUE_SIZE {
-				queueToPeers <- FileInfo{Name: fileInfo.Name,
-					Peers: []string{}, TimeStamp: fileInfo.TimeStamp,
-					Path: fileInfo.Path, Md5: fileInfo.Md5, ReName: fileInfo.ReName,
-					Size: fileInfo.Size, Scene: fileInfo.Scene}
+			if len(this.queueToPeers) < CONST_QUEUE_SIZE {
+				//this.queueToPeers <- FileInfo{Name: fileInfo.Name,
+				//	Peers: []string{}, TimeStamp: fileInfo.TimeStamp,
+				//	Path: fileInfo.Path, Md5: fileInfo.Md5, ReName: fileInfo.ReName,
+				//	Size: fileInfo.Size, Scene: fileInfo.Scene}
+
+				fileInfo.writeLog=true
+				this.queueToPeers<-*fileInfo
 			}
 
 			// go this.postFileToPeer(fileInfo, true)
@@ -1608,13 +1893,15 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 		} else {
 			fileInfo.Size = fi.Size()
-			statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
-			statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
-			statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
-			statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
+			this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
+			this.statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
+			this.statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fi.Size())
+			this.statMap.AddCountInt64(this.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 		}
 
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+
+		this.SaveStat()
 
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
 		p = Config().Group + "/" + p + "/" + outname
@@ -1680,7 +1967,7 @@ func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 		f.Peers = []string{"http://192.168.0.1", "http://192.168.2.5"}
 		f.Path = "20190201/19/02"
 		s := strconv.Itoa(i)
-		s = util.MD5(s)
+		s = this.util.MD5(s)
 		f.Name = s
 		f.Md5 = s
 
@@ -1705,7 +1992,7 @@ func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	util.WriteFile("time.txt", time.Since(t).String())
+	this.util.WriteFile("time.txt", time.Since(t).String())
 	fmt.Println(time.Since(t).String())
 }
 
@@ -1734,7 +2021,7 @@ func (this *Server) GetStat() []StatDateFileInfo {
 	)
 	min = 20190101
 	max = 20190101
-	for k, _ := range statMap.Get() {
+	for k, _ := range this.statMap.Get() {
 		ks := strings.Split(k, "_")
 		if len(ks) == 2 {
 			if i, err = strconv.ParseInt(ks[0], 10, 64); err != nil {
@@ -1754,7 +2041,7 @@ func (this *Server) GetStat() []StatDateFileInfo {
 	for i := min; i <= max; i++ {
 
 		s := fmt.Sprintf("%d", i)
-		if v, ok := statMap.GetValue(s + "_" + CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
+		if v, ok := this.statMap.GetValue(s + "_" + CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
 			var info StatDateFileInfo
 			info.Date = s
 			switch v.(type) {
@@ -1762,7 +2049,7 @@ func (this *Server) GetStat() []StatDateFileInfo {
 				info.TotalSize = v.(int64)
 			}
 
-			if v, ok := statMap.GetValue(s + "_" + CONST_STAT_FILE_COUNT_KEY); ok {
+			if v, ok := this.statMap.GetValue(s + "_" + CONST_STAT_FILE_COUNT_KEY); ok {
 				switch v.(type) {
 				case int64:
 					info.FileCount = v.(int64)
@@ -1775,11 +2062,11 @@ func (this *Server) GetStat() []StatDateFileInfo {
 
 	}
 
-	if v, ok := statMap.GetValue(CONST_STAT_FILE_COUNT_KEY); ok {
+	if v, ok := this.statMap.GetValue(CONST_STAT_FILE_COUNT_KEY); ok {
 		var info StatDateFileInfo
 		info.Date = "all"
 		info.FileCount = v.(int64)
-		if v, ok := statMap.GetValue(CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
+		if v, ok := this.statMap.GetValue(CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
 			info.TotalSize = v.(int64)
 		}
 		rows = append(rows, info)
@@ -1810,8 +2097,8 @@ func (this *Server) Consumer() {
 	ConsumerFunc := func() {
 
 		for {
-			fileInfo := <-queueToPeers
-			this.postFileToPeer(&fileInfo, true)
+			fileInfo := <-this.queueToPeers
+			this.postFileToPeer(&fileInfo)
 		}
 
 	}
@@ -1832,6 +2119,10 @@ func (this *Server) AutoRepair() {
 			dateStats []StatDateFileInfo
 			err error
 			countKey string
+			md5s string
+			localSet mapset.Set
+			remoteSet mapset.Set
+			allSet mapset.Set
 
 		)
 
@@ -1876,11 +2167,33 @@ func (this *Server) AutoRepair() {
 					continue
 				}
 				countKey=dateStat.Date+"_"+ CONST_STAT_FILE_COUNT_KEY
-				if v,ok:= statMap.GetValue(countKey);ok {
+				if v,ok:= this.statMap.GetValue(countKey);ok {
 					switch v.(type) {
 					case int64:
-						if v.(int64)<dateStat.FileCount {
-							Update(peer,dateStat)
+						if v.(int64)!=dateStat.FileCount {//不相等,找差异
+						//TODO
+                            req:= httplib.Post(fmt.Sprintf("%s/get_md5s_by_date",peer))
+
+                            req.Param("date",dateStat.Date)
+
+                            if md5s,err=req.String();err!=nil {
+                            	continue
+							}
+                            if localSet,err= this.GetMd5sByDate(dateStat.Date);err!=nil {
+                            	log.Error(err)
+                            	continue
+							}
+                            remoteSet=this.util.StrToMapSet(md5s,",")
+                            allSet=localSet.Union(remoteSet)
+                           md5s= this.util.MapSetToStr(allSet.Difference(localSet),",")
+                           req=httplib.Post(fmt.Sprintf("%s/receive_md5s",peer))
+                           req.SetTimeout(time.Second*5,time.Second*5)
+                           req.Param("md5s",md5s)
+                           req.String()
+
+
+
+							//Update(peer,dateStat)
 						}
 					}
 				} else {
@@ -1894,14 +2207,14 @@ func (this *Server) AutoRepair() {
 
 	}
 
-    for {
-    	time.Sleep(time.Second*10)
-		AutoRepairFunc()
-    	time.Sleep(time.Minute*60)
-	}
+    //for {
+    //	time.Sleep(time.Second*10)
+	//	AutoRepairFunc()
+    //	time.Sleep(time.Minute*60)
+	//}
 
 
-
+	AutoRepairFunc()
 }
 
 
@@ -1917,7 +2230,7 @@ func (this *Server) Check() {
 		defer func() {
 			if re := recover(); re != nil {
 				buffer := debug.Stack()
-				log.Error("postFileToPeer")
+				log.Error("Check")
 				log.Error(re)
 				log.Error(string(buffer))
 			}
@@ -1977,6 +2290,16 @@ func (this *Server) Check() {
 
 }
 
+//func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
+//
+//	if this.IsPeer(r) {
+//		this.AutoRepair()
+//	} else {
+//		w.Write([]byte("not permit"))
+//	}
+//
+//}
+
 func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 
 	var (
@@ -2034,19 +2357,19 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
-	server.util = util
+
 	for _, folder := range FOLDERS {
-		os.Mkdir(folder, 0777)
+		os.Mkdir(folder, 0666)
 	}
 	flag.Parse()
 
-	if !util.FileExists(CONST_CONF_FILE_NAME) {
+	if !server.util.FileExists(CONST_CONF_FILE_NAME) {
 
-		peer := "http://" + util.GetPulicIP() + ":8080"
+		peer := "http://" + server.util.GetPulicIP() + ":8080"
 
 		cfg := fmt.Sprintf(cfgJson, peer)
 
-		util.WriteFile(CONST_CONF_FILE_NAME, cfg)
+		server.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
 
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {
@@ -2072,10 +2395,10 @@ func init() {
 
 	staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
 
-	initComponent(false)
+	server.initComponent(false)
 }
 
-func initComponent(is_reload bool) {
+func (this *Server)initComponent(is_reload bool) {
 	var (
 		err   error
 		ldb   *leveldb.DB
@@ -2084,11 +2407,11 @@ func initComponent(is_reload bool) {
 		data  []byte
 		count int64
 	)
-	ip = util.GetPulicIP()
+	ip = this.util.GetPulicIP()
 	ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")
 	var peers []string
 	for _, peer := range Config().Peers {
-		if util.Contains(ip, ex.FindAllString(peer, -1)) {
+		if this.util.Contains(ip, ex.FindAllString(peer, -1)) {
 			continue
 		}
 		if strings.HasPrefix(peer, "http") {
@@ -2109,8 +2432,8 @@ func initComponent(is_reload bool) {
 
 	FormatStatInfo := func() {
 
-		if util.FileExists(CONST_STAT_FILE_NAME) {
-			if data, err = util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil {
+		if this.util.FileExists(CONST_STAT_FILE_NAME) {
+			if data, err = this.util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil {
 				log.Error(err)
 			} else {
 
@@ -2125,11 +2448,11 @@ func initComponent(is_reload bool) {
 							if count, err = strconv.ParseInt(vv, 10, 64); err != nil {
 								log.Error(err)
 							} else {
-								statMap.Put(k, count)
+								this.statMap.Put(k, count)
 							}
 
 						default:
-							statMap.Put(k, v)
+							this.statMap.Put(k, v)
 
 						}
 
@@ -2157,7 +2480,7 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			time.Now().Format("2006/01/02 - 15:04:05"),
 			res.Header(),
 			time.Since(t).String(),
-			util.GetClientIp(req),
+			server.util.GetClientIp(req),
 			req.Method,
 			status_code,
 			req.RequestURI,
@@ -2183,20 +2506,28 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 func (this *Server) Main() {
 
+
+	server.RepairStat()
 	go func() {
 		for {
 			this.CheckFileAndSendToPeer("", false)
 			time.Sleep(time.Second * time.Duration(Config().RefreshInterval))
-			util.RemoveEmptyDir(STORE_DIR)
+			this.util.RemoveEmptyDir(STORE_DIR)
 		}
 	}()
-	go server.RepairStat()
-	go this.SaveStat()
+
 	go this.Check()
 	go this.Consumer()
-	if Config().AutoRepair {
-		go this.AutoRepair()
-	}
+	//if Config().AutoRepair {
+	//	go func() {
+	//		for {
+	//			time.Sleep(time.Second*10)
+	//			this.AutoRepair()
+	//			time.Sleep(time.Minute*60)
+	//		}
+	//	}()
+	//
+	//}
 
 	http.HandleFunc("/", this.Index)
 	http.HandleFunc("/check_file_exist", this.CheckFileExist)
@@ -2206,7 +2537,10 @@ func (this *Server) Main() {
 	http.HandleFunc("/stat", this.Stat)
 	http.HandleFunc("/repair_stat", this.RepairStatWeb)
 	http.HandleFunc("/status", this.Status)
+	//http.HandleFunc("/repair", this.Repair)
 	http.HandleFunc("/syncfile", this.SyncFile)
+	http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
+	http.HandleFunc("/receive_md5s", this.ReceiveMd5s)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
@@ -2215,9 +2549,6 @@ func (this *Server) Main() {
 }
 
 func main() {
-
-
-
 	server.Main()
 
 }
