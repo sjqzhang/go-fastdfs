@@ -749,11 +749,17 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		ts           int64
 		md5sum       string
 		fp           *os.File
+		isPeer bool
 	)
 
 	r.ParseForm()
 
-	if Config().DownloadUseToken {
+
+	isPeer=this.IsPeer(r)
+
+
+
+	if Config().DownloadUseToken &&!isPeer {
 
 		token = r.FormValue("token")
 		timestamp = r.FormValue("timestamp")
@@ -803,7 +809,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		return true
 	}
 
-	if Config().DownloadUseToken {
+	if Config().DownloadUseToken  &&!isPeer {
 		fullpath = strings.Split(fullpath, "?")[0]
 		pathMd5 = this.util.MD5(fullpath)
 		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
@@ -842,7 +848,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 			if fileInfo.Md5 != "" {
 
-				if Config().DownloadUseToken {
+				if Config().DownloadUseToken &&!isPeer {
 					if !CheckToken(token, fileInfo.Md5, timestamp) {
 						w.Write([]byte("unvalid request,error token"))
 						return
