@@ -112,7 +112,7 @@ const (
 	"download_use_token":false,
 	"下载token过期时间":"",
 	"download_token_expire":600,
-	"是否自动修复":"可能存在性问题（每小时一次）",
+	"是否自动修复":"在超过1亿文件时出现性能问题，取消此选项，请手动按天同步，请查看FAQ",
 	"auto_repair":true
 	
 }
@@ -395,6 +395,13 @@ func (this *Common) GetToDay() string {
 	return time.Now().Format("20060102")
 
 }
+
+func (this *Common) GetDayFromTimeStamp(timeStamp int64) string {
+
+	return time.Unix(timeStamp,0).Format("20060102")
+
+}
+
 
 
 func (this *Common) StrToMapSet(str string,sep string) mapset.Set {
@@ -1028,13 +1035,30 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 
 		logpath string
 		outname string
+		logDate string
+		logSet mapset.Set
 	)
+
+
+	logDate=this.util.GetDayFromTimeStamp(fileInfo.TimeStamp)
 
 	outname = fileInfo.Name
 
 	if this.curDate!=this.util.GetToDay() {
 		this.errorset.Clear()
 		this.fileset.Clear()
+	}
+
+
+	if logDate!=this.util.GetToDay() && filename==CONST_FILE_Md5_FILE_NAME {
+
+	  if logSet,err=this.GetMd5sByDate(logDate);err!=nil {
+	  	log.Error(err)
+	  }
+	  if logSet.Contains(fileInfo.Md5) {
+	  	  log.Info(fmt.Sprintf("date log  %s contain md5 %s",logDate,fileInfo.Md5))
+		  return
+	  }
 	}
 
 	if fileInfo.ReName != "" {
