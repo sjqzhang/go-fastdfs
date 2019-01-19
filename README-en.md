@@ -1,33 +1,43 @@
 # [中文](README.md)  [English](README-en.md)
 
-# distributed file server go-fastdfs (like fastdfs) is better than fastdfs in operation and maintenance management, and more humanized
-- Supporting curl command upload
+# Distributed file server go-fastdfs (class fastdfs) is better than fastdfs in terms of operation and maintenance management, more humane
+
+- Support curl command upload
 - Support browser upload
-- Support HTTP Download
+- Support HTTP download
 - Support multi-machine automatic synchronization
-Class fastdfs
-- High performance (using leveldb as a kV library)
-- High reliability (extremely simple design, using mature components)
-Advantages and disadvantages
-- No dependency (single file)
-- Automatic Synchronization
-- Failure Auto-repair
-- Easy maintenance by genius catalogue
+- class fastdfs
+- High performance (using leveldb as a kv library)
+- High reliability (design is extremely simple, using mature components)
+
+# advantage
+
+- No dependencies (single file)
+- Automatic synchronization
+- Failure automatic repair
+- Convenient maintenance by talent directory
 - Support different scenarios
-- Automatic de-duplication of files
-- Support directory customization
-- Support for retaining the original file name
+- Automatic file deduplication
+- Support for directory customization
+- Support to retain the original file name
 - Support for automatic generation of unique file names
 - Support browser upload
 - Support for viewing cluster file information
-- Support cluster monitoring mail alerts
-- Support token download token = MD5 (file_md5 + timestamp)
-- Simple operation and maintenance, with only one role (unlike fastdfs, which has three roles, Tracker Server, Storage Server, Client), and automatic configuration generation
-- Peer to peer for each node (simplified operation and maintenance)
-- All nodes can read and write at the same time
-# Start the server (compiled, [downloaded](https://github.com/sjqzhang/fastdfs/releases)experience)
-`. / fileserver`
-Configuration automatic generation (conf/cfg.json)
+- Support cluster monitoring email alarm
+- Support token download token=md5(file_md5+timestamp)
+- Easy operation and maintenance, only one role (unlike fastdfs has three roles Tracker Server, Storage Server, Client), the configuration is automatically generated
+- Peer-to-peer (simplified operation and maintenance)
+- All nodes can read and write simultaneously
+
+
+
+#Start the server (compiled, [download] (https://github.com/sjqzhang/fastdfs/releases) experience)
+```
+./fileserver
+```
+
+
+# Configure automatic generation (conf/cfg.json)
 ```json
 {
 	"addr": ":8080",
@@ -53,76 +63,98 @@ Configuration automatic generation (conf/cfg.json)
 	"auto_repair": true
 }
 ```
-Command upload
-```
-curl-F file=@http-index-fs http://10.1.xx.60:8080/upload
-```
-# WEB Upload (Browser Open)
+
+
+#Command upload
+
+`curl -F file=@http-index-fs http://10.1.xx.60:8080/upload`
+
+
+# WEB upload (browser open)
+
 `http://127.0.0.1:8080`
-# Code Upload (Options See Browser Upload)
+
+#Code upload (options see browser upload)
+
 ```python
 import requests
 url = 'http://127.0.0.1:8080/upload'
 files = {'file': open('report.xls', 'rb')}
-options={'output':'json','path':'','scene':''} # refer to browser upload options
+options={'output':'json','path':'','scene':''} #See browser upload options
 r = requests.post(url, files=files)
 print(r.text)
 ```
-# If you have any questions, please [click on feedback](https://github.com/sjqzhang/go-fastdfs/issues/new)
-Q&amp;A
-- Can files already stored in fastdfs be migrated to go fastdfs?
+
+
+# Please click [Feedback] (https://github.com/sjqzhang/go-fastdfs/issues/new)
+
+
+# Q&A
+- Can files already stored using fastdfs be migrated to go fastdfs?
 ```
-The answer is yes. The problem you worry about is path change. Go fast DFS considers this for you.
+The answer is yes, the problem you are worried about is the path change, go fastdfs considers this for you.
 
 curl -F file=@data/00/00/_78HAFwyvN2AK6ChAAHg8gw80FQ213.jpg -F path=M00/00/00/ http://127.0.0.1:8080/upload
 
-Similarly, you can migrate all files with one line of command
+Similarly, all files can be migrated with one line of command.
+
 cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=M00/00/00/ http://127.0.0.1:8080/
 
-The above commands can be overridden
-You can write some simple scripts for migration
+The above commands can be moved rough
+Can write some simple scripts for migration
+
 ```
-- Need nginx be installed?
+
+- Need to install nginx yet?
 ```
-You can either not install it, or you can choose to install it.
+Can not be installed, you can also choose to install
 Go fastdfs itself is a high performance web file server.
 ```
+
 - How to view cluster file information?
 ```
 Http://10.1.xx.60:8080/stat
-What if there is a statistical error?
-Please delete stat.json file in the data directory and restart the service. Please recalculate the number of files automatically.
+
+What should I do if there is a file error?
+Please delete the stat.json file in the data directory. Restart the service, please recalculate the number of files automatically.
 ```
-- How reliable can it be used in the production environment?
+- How reliable can it be used in a production environment?
 ```
-The project has been widely used in the production environment, such as fear of unsatisfactory
-It can be used for pressure testing of its various characteristics before use.
-Questions can be asked directly.
+This project has been used on a large scale in the production environment, such as fear of not meeting
+You can stress test its features before use, any
+The problem can be directly mentioned
 ```
-- Can you set up multiple servers in a machine department?
+
+- Can I have multiple servers on one machine?
 ```
-No, the high availability of clusters has been considered at the beginning of the design. In order to ensure the true availability of clusters, different IPs must be used. can't not user 127.0.0.1 as ip
-Error "peers": ["http://127.0.0.1:8080", "http://127.0.0.1:8081", "http://127.0.1:8082"]
-Correct "peers": ["http://10.0.0.3:8080", "http://10.0.0.4:8080", "http://10.0.0.5:8080"]
+No, the high availability of the cluster has been considered at the beginning of the design. In order to ensure the true availability of the cluster, it must be a different ip.
+Error "peers": ["http://127.0.0.1:8080","http://127.0.0.1:8081","http://127.0.0.1:8082"]
+Correct "peers": ["http://10.0.0.3:8080","http://10.0.0.4:8080","http://10.0.0.5:8082"]
 ```
-- What if the file is out of sync?
+- What should I do if the files are not synchronized?
 ```
-Normally, the cluster will repair files automatically and synchronously every hour. (poor performance, it is recommended to turn off automatic repair in mass cases)
+Under normal circumstances, the cluster automatically synchronizes the repair files every hour. (The performance is poor, it is recommended to turn off automatic repair in case of massive)
 What about the abnormal situation?
-Answer: Manual Synchronization
-Http://172.16.70.123:7080/sync?Date=20190117&amp;force=1
-Parametric description: date represents the data force of the synchronization day 1. Indicates whether to force all (poor performance) files on the synchronization day, and 0. Indicates only files that failed to synchronize.
-In case of asynchrony:
-1) Originally running N sets, now suddenly adding one becomes N + 1 sets.
-2) The original operation of N sets, a machine problems, into N-1 sets
+Answer: Manual synchronization
+Http://172.16.70.123:7080/sync?date=20190117&force=1
+Parameter description: date indicates the data of the day of synchronization. force 1. indicates whether to force synchronization of all the day (poor performance), 0. means that only failed files are synchronized.
+
+Unsynchronized situation:
+1) Originally running N sets, now suddenly join one to become N+1
+2) Originally running N sets, one machine has a problem and becomes N-1
+
 ```
-- Does not file synchronization affect access?
+
+- Does the file out of sync affect access?
 ```
-Answer: It won't affect. It will automatically fix asynchronous files when it is not accessible.
+Answer: It will not affect, it will automatically repair the files that are not synchronized when the access is not available.
 ```
-- How to measure?
+
+
+- How to test?
 ```
-gen_file.py is used to generate a large number of files (note that if you want to generate a large file, you multiply it in your content)
+First use gen_file.py to generate a large number of files (note that if you want to generate large files, you can multiply the content by a large number)
+E.g:
 # -*- coding: utf-8 -*-
 import os
 j=0
@@ -132,6 +164,9 @@ for i in range(0,1000000):
         os.system('mkdir %s'%(i))
     with open('%s/%s.txt'%(j,i),'w+') as f:
         f.write(str(i)*1024)
-Then the pressure measurement is done with benchmark.py.
-It can also be measured by multiple computers at the same time. All nodes can be read and written at the same time.
+Then use benchmark.py for pressure measurement
+It is also possible to perform pressure measurement simultaneously in multiple machines, and all nodes can be read and written simultaneously.
 ```
+
+
+- If you have any questions, please click [Reply] (https://github.com/sjqzhang/go-fastdfs/issues/new)
