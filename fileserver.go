@@ -1158,9 +1158,6 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 
 func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 
-	var (
-		filename string
-	)
 
 	r.ParseForm()
 
@@ -1191,23 +1188,13 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	if is_force_upload {
 
 
-		if this.util.FileExists(filename) {
-
 			go this.CheckFileAndSendToPeer(date, CONST_FILE_Md5_FILE_NAME, is_force_upload)
-		} else {
-			w.Write([]byte(fmt.Sprintf("%s not found", filename)))
-			return
-		}
+
 	} else {
 
 
-		if this.util.FileExists(filename) {
-
 			go this.CheckFileAndSendToPeer(date, CONST_Md5_ERROR_FILE_NAME, is_force_upload)
-		} else {
-			w.Write([]byte(fmt.Sprintf("%s not found", filename)))
-			return
-		}
+
 
 	}
 
@@ -2126,9 +2113,9 @@ func (this *Server) Consumer() {
 
 }
 
-func (this *Server) AutoRepair() {
+func (this *Server) AutoRepair(force_repair bool) {
 
-	AutoRepairFunc := func() {
+	AutoRepairFunc := func(force_repair bool) {
 
 		var (
 			dateStats []StatDateFileInfo
@@ -2138,6 +2125,8 @@ func (this *Server) AutoRepair() {
 			localSet  mapset.Set
 			remoteSet mapset.Set
 			allSet    mapset.Set
+			tmpSet mapset.Set
+			fileInfo *FileInfo
 		)
 
 		defer func() {
@@ -2178,7 +2167,7 @@ func (this *Server) AutoRepair() {
 				if v, ok := this.statMap.GetValue(countKey); ok {
 					switch v.(type) {
 					case int64:
-						if v.(int64) != dateStat.FileCount { //不相等,找差异
+						if v.(int64) != dateStat.FileCount || force_repair { //不相等,找差异
 							//TODO
 							req := httplib.Post(fmt.Sprintf("%s/get_md5s_by_date", peer))
 
@@ -2198,6 +2187,13 @@ func (this *Server) AutoRepair() {
 							req.SetTimeout(time.Second*5, time.Second*5)
 							req.Param("md5s", md5s)
 							req.String()
+							tmpSet=allSet.Difference(remoteSet)
+							for v:=range tmpSet.Iter() {
+								if fileInfo,err=this.GetFileInfoByMd5(v.(string));err!=nil {
+									continue
+								}
+								this.queueToPeers<-*fileInfo
+							}
 
 							//Update(peer,dateStat)
 						}
@@ -2219,7 +2215,7 @@ func (this *Server) AutoRepair() {
 	//	time.Sleep(time.Minute*60)
 	//}
 
-	AutoRepairFunc()
+	AutoRepairFunc(force_repair)
 }
 
 func (this *Server) Check() {
@@ -2289,15 +2285,24 @@ func (this *Server) Check() {
 
 }
 
-//func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
-//
-//	if this.IsPeer(r) {
-//		this.AutoRepair()
-//	} else {
-//		w.Write([]byte("not permit"))
-//	}
-//
-//}
+func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		force string
+		force_repair bool
+	)
+	r.ParseForm()
+	force= r.FormValue("force")
+	if force=="1" {
+		force_repair=true
+	}
+	if this.IsPeer(r) {
+		this.AutoRepair(force_repair)
+	} else {
+		w.Write([]byte("not permit"))
+	}
+
+}
 
 func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 
@@ -2410,7 +2415,8 @@ func (this *Server) initComponent(is_reload bool) {
 	ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")
 	var peers []string
 	for _, peer := range Config().Peers {
-		if this.util.Contains(ip, ex.FindAllString(peer, -1)) {
+		if this.util.Contains(ip, ex.FindAllString(peer, -1)) ||
+			this.util.Contains("127.0.0.1", ex.FindAllString(peer, -1))  {
 			continue
 		}
 		if strings.HasPrefix(peer, "http") {
@@ -2536,7 +2542,7 @@ func (this *Server) Main() {
 	http.HandleFunc("/stat", this.Stat)
 	http.HandleFunc("/repair_stat", this.RepairStatWeb)
 	http.HandleFunc("/status", this.Status)
-	//http.HandleFunc("/repair", this.Repair)
+	http.HandleFunc("/repair", this.Repair)
 	http.HandleFunc("/syncfile", this.SyncFile)
 	http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
 	http.HandleFunc("/receive_md5s", this.ReceiveMd5s)
