@@ -54,7 +54,9 @@ Configuration automatic generation (conf/cfg.json)
 }
 ```
 Command upload
-`curl-F file=@http-index-fs http://10.1.xx.60:8080/upload`
+```
+curl-F file=@http-index-fs http://10.1.xx.60:8080/upload
+```
 # WEB Upload (Browser Open)
 `http://127.0.0.1:8080`
 # Code Upload (Options See Browser Upload)
@@ -71,9 +73,12 @@ Q&amp;A
 - Can files already stored in fastdfs be migrated to go fastdfs?
 ```
 The answer is yes. The problem you worry about is path change. Go fast DFS considers this for you.
-Curl-F file=@data/00/00/_78HAFwyvN2AK6ChAAHg8gw80FQ213.jpg-F path=M00/00/00/http://127.0.0.1:8080/upload
+
+curl -F file=@data/00/00/_78HAFwyvN2AK6ChAAHg8gw80FQ213.jpg -F path=M00/00/00/ http://127.0.0.1:8080/upload
+
 Similarly, you can migrate all files with one line of command
-CD fastdfs/data &amp; &amp; find-type f | xargs-n 1-I {} curl-F file =@data/{}-F path = M00/00/00/ http://127.0.0.1:8080/
+cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=M00/00/00/ http://127.0.0.1:8080/
+
 The above commands can be overridden
 You can write some simple scripts for migration
 ```
@@ -96,9 +101,9 @@ Questions can be asked directly.
 ```
 - Can you set up multiple servers in a machine department?
 ```
-No, the high availability of clusters has been considered at the beginning of the design. In order to ensure the true availability of clusters, different IPs must be used.
+No, the high availability of clusters has been considered at the beginning of the design. In order to ensure the true availability of clusters, different IPs must be used. can't not user 127.0.0.1 as ip
 Error "peers": ["http://127.0.0.1:8080", "http://127.0.0.1:8081", "http://127.0.1:8082"]
-Correct "peers": ["http://10.0.0.3:8080", "http://10.0.0.4:8080", "http://10.0.0.5:8082"]
+Correct "peers": ["http://10.0.0.3:8080", "http://10.0.0.4:8080", "http://10.0.0.5:8080"]
 ```
 - What if the file is out of sync?
 ```
