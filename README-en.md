@@ -31,7 +31,7 @@
 
 
 
-#Start the server (compiled, [download] (https://github.com/sjqzhang/fastdfs/releases) experience)
+#Start the server (compiled, [download](https://github.com/sjqzhang/fastdfs/releases) experience)
 ```
 ./fileserver
 ```
@@ -86,7 +86,7 @@ print(r.text)
 ```
 
 
-# Please click [Feedback] (https://github.com/sjqzhang/go-fastdfs/issues/new)
+# Please click [Feedback](https://github.com/sjqzhang/go-fastdfs/issues/new)
 
 
 # Q&A
@@ -169,4 +169,4 @@ It is also possible to perform pressure measurement simultaneously in multiple m
 ```
 
 
-- If you have any questions, please click [Reply] (https://github.com/sjqzhang/go-fastdfs/issues/new)
+- If you have any questions, please click [Reply](https://github.com/sjqzhang/go-fastdfs/issues/new)
