@@ -2924,6 +2924,6 @@ func (this *Server) Main() {
 
 func main() {
 
-	//server.ldb.Has()
+
 	server.Main()
 }
