@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/base64"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -119,7 +120,9 @@ const (
 	"下载token过期时间":"",
 	"download_token_expire":600,
 	"是否自动修复":"在超过1亿文件时出现性能问题，取消此选项，请手动按天同步，请查看FAQ",
-	"auto_repair":true
+	"auto_repair":true,
+    "文件去重算法md5可能存在冲突，默认md5":"sha1|md5",
+    "file_sum_arithmetic":"md5"
 
 	
 }
@@ -233,6 +236,7 @@ type GloablConfig struct {
 	QueueSize           int      `json:"queue_size"`
 	AutoRepair          bool     `json:"auto_repair"`
 	Host                string   `json:"host"`
+	FileSumArithmetic   string   `json:"file_sum_arithmetic"`
 }
 
 func NewServer() *Server {
@@ -557,6 +561,14 @@ func (this *Common) MD5(str string) string {
 func (this *Common) GetFileMd5(file *os.File) string {
 	file.Seek(0, 0)
 	md5h := md5.New()
+	io.Copy(md5h, file)
+	sum := fmt.Sprintf("%x", md5h.Sum(nil))
+	return sum
+}
+
+func (this *Common) GetFileSha1Sum(file *os.File) string {
+	file.Seek(0, 0)
+	md5h := sha1.New()
 	io.Copy(md5h, file)
 	sum := fmt.Sprintf("%x", md5h.Sum(nil))
 	return sum
@@ -961,7 +973,11 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				if fp != nil {
 					defer fp.Close()
 				}
-				md5sum = this.util.GetFileMd5(fp)
+				if strings.ToLower(Config().FileSumArithmetic)=="sha1" {
+					md5sum = this.util.GetFileSha1Sum(fp)
+				} else {
+					md5sum = this.util.GetFileMd5(fp)
+				}
 				if !CheckToken(token, md5sum, timestamp) {
 					w.Write([]byte("unvalid request,error token"))
 					return
@@ -1762,13 +1778,21 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 		outPath = fileInfo.Path + "/" + fileInfo.Name
 
+		sum:=""
+
 		if this.util.FileExists(outPath) {
 			if tmpFile, err = os.Open(outPath); err != nil {
 				log.Error(err)
 				w.Write([]byte(err.Error()))
 				return
 			}
-			if this.util.GetFileMd5(tmpFile) != fileInfo.Md5 {
+
+			if strings.ToLower(Config().FileSumArithmetic)=="sha1" {
+			  sum=this.util.GetFileSha1Sum(tmpFile)
+			} else  {
+				sum=this.util.GetFileMd5(tmpFile)
+			}
+			if sum!= fileInfo.Md5 {
 				tmpFile.Close()
 				log.Error("md5 !=fileInfo.Md5 ")
 				w.Write([]byte("md5 !=fileInfo.Md5 "))
@@ -1782,6 +1806,8 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+
+
 		defer tmpFile.Close()
 
 		if _, err = io.Copy(tmpFile, uploadFile); err != nil {
@@ -1790,7 +1816,12 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 			return
 		}
-		if this.util.GetFileMd5(tmpFile) != fileInfo.Md5 {
+		if strings.ToLower(Config().FileSumArithmetic)=="sha1" {
+			sum=this.util.GetFileSha1Sum(tmpFile)
+		} else  {
+			sum=this.util.GetFileMd5(tmpFile)
+		}
+		if sum != fileInfo.Md5 {
 			log.Error("md5 error")
 			w.Write([]byte("md5 error"))
 			tmpFile.Close()
@@ -2026,8 +2057,14 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			} else {
 				fileInfo.Size = fi.Size()
 			}
+			v := ""
+			if strings.ToLower(Config().FileSumArithmetic)=="sha1" {
+				this.util.GetFileSha1Sum(outFile)
+			} else{
+				v = this.util.GetFileMd5(outFile)
+			}
 
-			v := this.util.GetFileMd5(outFile)
+
 			fileInfo.Md5 = v
 			fileInfo.Path = folder
 
@@ -2923,7 +2960,6 @@ func (this *Server) Main() {
 }
 
 func main() {
-
 
 	server.Main()
 }
