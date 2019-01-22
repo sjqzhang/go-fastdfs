@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
+	"github.com/syndtr/goleveldb/leveldb/filter"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"runtime"
 
 	"errors"
@@ -18,24 +20,24 @@ import (
 	_ "net/http/pprof"
 	"net/smtp"
 	"net/url"
+	"os"
 	"os/signal"
 	"path"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime/debug"
 	"strconv"
-	"syscall"
-	"sync"
-	"os"
-	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unsafe"
 
-	"github.com/json-iterator/go"
-	"github.com/deckarep/golang-set"
 	"github.com/astaxie/beego/httplib"
+	"github.com/deckarep/golang-set"
+	"github.com/json-iterator/go"
 	log "github.com/sjqzhang/seelog"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -234,8 +236,11 @@ type GloablConfig struct {
 }
 
 func NewServer() *Server {
+
 	var (
+		ldb    *leveldb.DB
 		server *Server
+		err    error
 	)
 
 	server = &Server{
@@ -268,6 +273,18 @@ func NewServer() *Server {
 	server.queueset, _ = server.GetMd5sByDate(server.util.GetToDay(), CONST_Md5_QUEUE_FILE_NAME)
 
 	server.curDate = server.util.GetToDay()
+
+	o := &opt.Options{
+		Filter: filter.NewBloomFilter(128),
+	}
+
+	ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, o)
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+		log.Error(err)
+	}
+	server.ldb = ldb
 
 	return server
 
@@ -2573,6 +2590,38 @@ func (this *Server) Check() {
 
 }
 
+func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		err  error
+		data []byte
+
+		cfg GloablConfig
+	)
+
+	if !this.IsPeer(r) {
+		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		return
+	}
+
+	if data, err = ioutil.ReadFile(CONST_CONF_FILE_NAME); err != nil {
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	if err = json.Unmarshal(data, &cfg); err != nil {
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	ParseConfig(CONST_CONF_FILE_NAME)
+
+	this.initComponent(true)
+
+	w.Write([]byte("ok"))
+
+}
+
 func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 
 	var (
@@ -2612,6 +2661,7 @@ func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	sts["Fs.AutoRepair"] = Config().AutoRepair
 	sts["Fs.RefreshInterval"] = Config().RefreshInterval
 	sts["Fs.Peers"] = Config().Peers
+	sts["Fs.Local"] = this.host
 	sts["Fs.FileStats"] = this.GetStat()
 	sts["Fs.ShowDir"] = Config().ShowDir
 	sts["Sys.NumGoroutine"] = runtime.NumGoroutine()
@@ -2722,7 +2772,6 @@ func init() {
 func (this *Server) initComponent(is_reload bool) {
 	var (
 		err   error
-		ldb   *leveldb.DB
 		ip    string
 		stat  map[string]interface{}
 		data  []byte
@@ -2750,14 +2799,6 @@ func (this *Server) initComponent(is_reload bool) {
 		}
 	}
 	Config().Peers = peers
-	if !is_reload {
-		ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
-		if err != nil {
-			log.Error(err)
-			panic(err)
-		}
-		server.ldb = ldb
-	}
 
 	FormatStatInfo := func() {
 
@@ -2869,6 +2910,7 @@ func (this *Server) Main() {
 	http.HandleFunc("/repair_stat", this.RepairStatWeb)
 	http.HandleFunc("/status", this.Status)
 	http.HandleFunc("/repair", this.Repair)
+	http.HandleFunc("/reload", this.Reload)
 	http.HandleFunc("/syncfile", this.SyncFile)
 	http.HandleFunc("/syncfile_info", this.SyncFileInfo)
 	http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
@@ -2881,5 +2923,7 @@ func (this *Server) Main() {
 }
 
 func main() {
+
+	//server.ldb.Has()
 	server.Main()
 }
