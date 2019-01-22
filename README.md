@@ -128,6 +128,11 @@ cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=
 go fastdfs 本身就是一个高性能的web文件服务器。
 ```
 
+- 能动态加载配置么？
+```
+答案：是可以的，但要更新到最新版本
+```
+
 
 - 内存占用很高是怎么回事？
 ```
