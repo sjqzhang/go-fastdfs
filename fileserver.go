@@ -236,10 +236,11 @@ type GloablConfig struct {
 }
 
 func NewServer() *Server {
+
 	var (
-		ldb *leveldb.DB
+		ldb    *leveldb.DB
 		server *Server
-		err error
+		err    error
 	)
 
 	server = &Server{
@@ -273,15 +274,15 @@ func NewServer() *Server {
 
 	server.curDate = server.util.GetToDay()
 
-
 	o := &opt.Options{
 		Filter: filter.NewBloomFilter(128),
 	}
 
 	ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, o)
 	if err != nil {
-		log.Error(err)
+		fmt.Println(err)
 		panic(err)
+		log.Error(err)
 	}
 	server.ldb = ldb
 
@@ -2589,6 +2590,38 @@ func (this *Server) Check() {
 
 }
 
+func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		err  error
+		data []byte
+
+		cfg GloablConfig
+	)
+
+	if !this.IsPeer(r) {
+		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		return
+	}
+
+	if data, err = ioutil.ReadFile(CONST_CONF_FILE_NAME); err != nil {
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	if err = json.Unmarshal(data, &cfg); err != nil {
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	ParseConfig(CONST_CONF_FILE_NAME)
+
+	this.initComponent(true)
+
+	w.Write([]byte("ok"))
+
+}
+
 func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 
 	var (
@@ -2767,7 +2800,6 @@ func (this *Server) initComponent(is_reload bool) {
 	}
 	Config().Peers = peers
 
-
 	FormatStatInfo := func() {
 
 		if this.util.FileExists(CONST_STAT_FILE_NAME) {
@@ -2878,6 +2910,7 @@ func (this *Server) Main() {
 	http.HandleFunc("/repair_stat", this.RepairStatWeb)
 	http.HandleFunc("/status", this.Status)
 	http.HandleFunc("/repair", this.Repair)
+	http.HandleFunc("/reload", this.Reload)
 	http.HandleFunc("/syncfile", this.SyncFile)
 	http.HandleFunc("/syncfile_info", this.SyncFileInfo)
 	http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
@@ -2890,8 +2923,6 @@ func (this *Server) Main() {
 }
 
 func main() {
-
-
 
 	//server.ldb.Has()
 	server.Main()
