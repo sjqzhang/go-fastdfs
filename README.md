@@ -101,7 +101,7 @@ url = 'http://127.0.0.1:8080/upload'
 files = {'file': open('report.xls', 'rb')}
 options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
 r = requests.post(url, files=files)
-print(t.text)
+print(.text)
 ```
 
 
