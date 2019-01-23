@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/base64"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -119,7 +120,9 @@ const (
 	"下载token过期时间":"",
 	"download_token_expire":600,
 	"是否自动修复":"在超过1亿文件时出现性能问题，取消此选项，请手动按天同步，请查看FAQ",
-	"auto_repair":true
+	"auto_repair":true,
+    "文件去重算法md5可能存在冲突，默认md5":"sha1|md5",
+    "file_sum_arithmetic":"md5"
 
 	
 }
@@ -233,6 +236,7 @@ type GloablConfig struct {
 	QueueSize           int      `json:"queue_size"`
 	AutoRepair          bool     `json:"auto_repair"`
 	Host                string   `json:"host"`
+	FileSumArithmetic   string   `json:"file_sum_arithmetic"`
 }
 
 func NewServer() *Server {
@@ -275,7 +279,7 @@ func NewServer() *Server {
 	server.curDate = server.util.GetToDay()
 
 	o := &opt.Options{
-		Filter: filter.NewBloomFilter(128),
+		Filter: filter.NewBloomFilter(160),
 	}
 
 	ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, o)
@@ -557,6 +561,24 @@ func (this *Common) MD5(str string) string {
 func (this *Common) GetFileMd5(file *os.File) string {
 	file.Seek(0, 0)
 	md5h := md5.New()
+	io.Copy(md5h, file)
+	sum := fmt.Sprintf("%x", md5h.Sum(nil))
+	return sum
+}
+
+func (this *Common) GetFileSum(file *os.File, alg string) string {
+	alg = strings.ToLower(alg)
+	if alg == "sha1" {
+		return this.GetFileSha1Sum(file)
+	} else {
+		return this.GetFileMd5(file)
+	}
+
+}
+
+func (this *Common) GetFileSha1Sum(file *os.File) string {
+	file.Seek(0, 0)
+	md5h := sha1.New()
 	io.Copy(md5h, file)
 	sum := fmt.Sprintf("%x", md5h.Sum(nil))
 	return sum
@@ -961,7 +983,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				if fp != nil {
 					defer fp.Close()
 				}
-				md5sum = this.util.GetFileMd5(fp)
+				md5sum = this.util.GetFileSum(fp, Config().FileSumArithmetic)
 				if !CheckToken(token, md5sum, timestamp) {
 					w.Write([]byte("unvalid request,error token"))
 					return
@@ -1225,6 +1247,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 		logSet  mapset.Set
 		toDay   string
 		//tmpInfo *FileInfo
+		ok bool
 	)
 
 	toDay = this.util.GetToDay()
@@ -1239,12 +1262,17 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 
 	if logDate != this.util.GetToDay() && filename == CONST_FILE_Md5_FILE_NAME {
 
-		if logSet, err = this.GetMd5sByDate(logDate, CONST_FILE_Md5_FILE_NAME); err != nil {
-			log.Error(err)
-		}
-		if logSet.Contains(fileInfo.Md5) {
-			log.Info(fmt.Sprintf("date log  %s contain md5 %s", logDate, fileInfo.Md5))
-			return
+		ok, err = this.ldb.Has([]byte(fileInfo.Md5), nil)
+
+		if ok  {
+
+			if logSet, err = this.GetMd5sByDate(logDate, CONST_FILE_Md5_FILE_NAME); err != nil {
+				log.Error(err)
+			}
+			if logSet.Contains(fileInfo.Md5) {
+				log.Info(fmt.Sprintf("date log  %s contain md5 %s", logDate, fileInfo.Md5))
+				return
+			}
 		}
 	}
 
@@ -1260,7 +1288,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 		return
 	}
 
-	if filename == CONST_Md5_QUEUE_FILE_NAME && this.fileset.Contains(fileInfo.Md5) {
+	if filename == CONST_Md5_QUEUE_FILE_NAME && this.queueset.Contains(fileInfo.Md5) {
 		return
 	}
 
@@ -1268,7 +1296,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	if _, err = os.Stat(logpath); err != nil {
 		os.MkdirAll(logpath, 0666)
 	}
-	msg = fmt.Sprintf("%s|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.Path+"/"+outname)
+	msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+outname)
 	if tmpFile, err = os.OpenFile(logpath+"/"+filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
 		log.Error(err)
 		return
@@ -1303,9 +1331,9 @@ func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, e
 		fileInfo FileInfo
 	)
 
-	req := httplib.Get(peer + fmt.Sprintf("/check_file_exist?md5=%s", md5sum))
+	req := httplib.Post(peer + fmt.Sprintf("/check_file_exist?md5=%s", md5sum))
 
-	req.SetTimeout(time.Second*5, time.Second*5)
+	req.SetTimeout(time.Second*5, time.Second*10)
 
 	if err = req.ToJSON(&fileInfo); err != nil {
 		return &FileInfo{}, err
@@ -1324,26 +1352,29 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 		data     []byte
 		err      error
 		fileInfo *FileInfo
+		fpath    string
 	)
 	r.ParseForm()
 	md5sum := ""
-	if len(r.Form["md5"]) > 0 {
-		md5sum = r.Form["md5"][0]
-	} else {
-		return
-	}
+	md5sum = r.FormValue("md5")
 
 	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); fileInfo != nil {
-
-		if data, err = json.Marshal(fileInfo); err == nil {
-			w.Write(data)
-			return
+		fpath = fileInfo.Path + "/" + fileInfo.Name
+		if fileInfo.ReName != "" {
+			fpath = fileInfo.Path + "/" + fileInfo.ReName
+		}
+		if this.util.IsExist(fpath) {
+			if data, err = json.Marshal(fileInfo); err == nil {
+				w.Write(data)
+				return
+			}
+		} else {
+			this.RemoveKeyFromLevelDB(md5sum)// when file delete,delete from leveldb
 		}
 	}
-
 	data, _ = json.Marshal(FileInfo{})
-
 	w.Write(data)
+	return
 
 }
 
@@ -1404,8 +1435,6 @@ func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
 		return nil, err
 	}
 
-	//fmt.Println(fileInfo)
-
 	return &fileInfo, nil
 
 }
@@ -1443,6 +1472,17 @@ func (this *Server) SaveStat() {
 	}
 
 	SaveStatFunc()
+
+}
+
+
+func (this *Server) RemoveKeyFromLevelDB(key string) (error) {
+	var (
+		err  error
+	)
+
+	err=this.ldb.Delete([]byte(key),nil)
+	return err
 
 }
 
@@ -1762,13 +1802,16 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 		outPath = fileInfo.Path + "/" + fileInfo.Name
 
+		sum := ""
+
 		if this.util.FileExists(outPath) {
 			if tmpFile, err = os.Open(outPath); err != nil {
 				log.Error(err)
 				w.Write([]byte(err.Error()))
 				return
 			}
-			if this.util.GetFileMd5(tmpFile) != fileInfo.Md5 {
+			sum = this.util.GetFileSum(tmpFile, Config().FileSumArithmetic)
+			if sum != fileInfo.Md5 {
 				tmpFile.Close()
 				log.Error("md5 !=fileInfo.Md5 ")
 				w.Write([]byte("md5 !=fileInfo.Md5 "))
@@ -1790,7 +1833,9 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 			return
 		}
-		if this.util.GetFileMd5(tmpFile) != fileInfo.Md5 {
+
+		sum = this.util.GetFileSum(tmpFile, Config().FileSumArithmetic)
+		if sum != fileInfo.Md5 {
 			log.Error("md5 error")
 			w.Write([]byte("md5 error"))
 			tmpFile.Close()
@@ -1847,7 +1892,7 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 
 	md5sum = r.FormValue("md5")
 
-	if len(md5sum) != 32 {
+	if len(md5sum) < 32 {
 		w.Write([]byte("md5 unvalid"))
 		return
 	}
@@ -2026,8 +2071,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			} else {
 				fileInfo.Size = fi.Size()
 			}
+			v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
 
-			v := this.util.GetFileMd5(outFile)
 			fileInfo.Md5 = v
 			fileInfo.Path = folder
 
@@ -2363,7 +2408,6 @@ func (this *Server) AppendToDownloadQueue(fileInfo *FileInfo) {
 	if len(this.queueFromPeers) < CONST_QUEUE_SIZE {
 		this.queueFromPeers <- *fileInfo
 	} else {
-		//this.SaveFileMd5Log(fileInfo,CONST_Md5_ERROR_FILE_NAME)
 		log.Warn("Queue  download queueFromPeers is full")
 	}
 
@@ -2924,6 +2968,5 @@ func (this *Server) Main() {
 
 func main() {
 
-	//server.ldb.Has()
 	server.Main()
 }
