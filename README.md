@@ -77,7 +77,9 @@
 	"下载token过期时间":"",
 	"download_token_expire":600,
 	"是否自动修复":"可能存在性问题（每小时一次）",
-	"auto_repair":true
+	"auto_repair":true,
+	 "文件去重算法md5可能存在冲突，默认md5":"sha1|md5",
+         "file_sum_arithmetic":"md5"
 }
 ```
 
