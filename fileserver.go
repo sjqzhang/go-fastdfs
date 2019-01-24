@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
-	"github.com/syndtr/goleveldb/leveldb/filter"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"runtime"
 
 	"errors"
@@ -278,11 +276,12 @@ func NewServer() *Server {
 
 	server.curDate = server.util.GetToDay()
 
-	o := &opt.Options{
-		Filter: filter.NewBloomFilter(160),
-	}
+	//o := &opt.Options{
+	//	Filter: filter.NewBloomFilter(160),
+	//
+	//}
 
-	ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, o)
+	ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
@@ -1247,7 +1246,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 		logSet  mapset.Set
 		toDay   string
 		//tmpInfo *FileInfo
-		ok bool
+		//ok bool
 	)
 
 	toDay = this.util.GetToDay()
@@ -1262,18 +1261,16 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 
 	if logDate != this.util.GetToDay() && filename == CONST_FILE_Md5_FILE_NAME {
 
-		ok, err = this.ldb.Has([]byte(fileInfo.Md5), nil)
+		//ok, err = this.ldb.Has([]byte(fileInfo.Md5), nil)
 
-		if ok  {
-
-			if logSet, err = this.GetMd5sByDate(logDate, CONST_FILE_Md5_FILE_NAME); err != nil {
-				log.Error(err)
-			}
-			if logSet.Contains(fileInfo.Md5) {
-				log.Info(fmt.Sprintf("date log  %s contain md5 %s", logDate, fileInfo.Md5))
-				return
-			}
+		if logSet, err = this.GetMd5sByDate(logDate, CONST_FILE_Md5_FILE_NAME); err != nil {
+			log.Error(err)
 		}
+		if logSet.Contains(fileInfo.Md5) {
+			log.Info(fmt.Sprintf("date log  %s contain md5 %s", logDate, fileInfo.Md5))
+			return
+		}
+
 	}
 
 	if fileInfo.ReName != "" {
@@ -1369,7 +1366,7 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			this.RemoveKeyFromLevelDB(md5sum)// when file delete,delete from leveldb
+			this.RemoveKeyFromLevelDB(md5sum) // when file delete,delete from leveldb
 		}
 	}
 	data, _ = json.Marshal(FileInfo{})
@@ -1475,13 +1472,12 @@ func (this *Server) SaveStat() {
 
 }
 
-
 func (this *Server) RemoveKeyFromLevelDB(key string) (error) {
 	var (
-		err  error
+		err error
 	)
 
-	err=this.ldb.Delete([]byte(key),nil)
+	err = this.ldb.Delete([]byte(key), nil)
 	return err
 
 }
