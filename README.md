@@ -107,6 +107,9 @@ print(.text)
 
 # 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 
+# 重要说明
+## 在issue中有很多实际使用的问题及回答（很多已关闭，请查看已关闭的issue）
+
 
 # Q&A
 - 已经使用fastdfs存储的文件可以迁移到go fastdfs下么？
