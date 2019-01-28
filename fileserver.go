@@ -1160,7 +1160,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 
 			continue
 		}
-	
+
 		postURL = fmt.Sprintf("%s/%s", peer, "syncfile_info")
 		b := httplib.Post(postURL)
 		b.SetTimeout(time.Second*5, time.Second*5)
@@ -2516,7 +2516,7 @@ func (this *Server) CleanMd5SumCache() {
 
 	go func() {
 		for {
-			time.Sleep(time.Minute * 5)
+			time.Sleep(time.Minute * 10)
 			Clean()
 
 		}
