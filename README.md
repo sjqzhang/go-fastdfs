@@ -1,6 +1,8 @@
 
 # [中文](README.md)  [English](README-en.md)
 
+
+# go-fastdfs设计理念--大道至简
 # 分布式文件系统go-fastdfs（类fastdfs）在运维管理等方面优于fastdfs，更人性化
 
 - 支持curl命令上传
