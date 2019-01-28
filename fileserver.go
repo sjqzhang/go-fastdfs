@@ -610,7 +610,7 @@ func (this *Common) FileExists(fileName string) bool {
 }
 
 func (this *Common) WriteFile(path string, data string) bool {
-	if err := ioutil.WriteFile(path, []byte(data), 0666); err == nil {
+	if err := ioutil.WriteFile(path, []byte(data), 0775); err == nil {
 		return true
 	} else {
 		return false
@@ -618,7 +618,7 @@ func (this *Common) WriteFile(path string, data string) bool {
 }
 
 func (this *Common) WriteBinFile(path string, data []byte) bool {
-	if err := ioutil.WriteFile(path, data, 0666); err == nil {
+	if err := ioutil.WriteFile(path, data, 0775); err == nil {
 		return true
 	} else {
 		return false
@@ -867,7 +867,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	}
 
 	if _, err = os.Stat(fileInfo.Path); err != nil {
-		os.MkdirAll(fileInfo.Path, 0666)
+		os.MkdirAll(fileInfo.Path, 0775)
 	}
 
 	filename = fileInfo.Name
@@ -1244,7 +1244,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 
 	logpath = DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
 	if _, err = os.Stat(logpath); err != nil {
-		os.MkdirAll(logpath, 0666)
+		os.MkdirAll(logpath, 0775)
 	}
 	msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fullpath)
 	if tmpFile, err = os.OpenFile(logpath+"/"+filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil {
@@ -1758,7 +1758,7 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		defer uploadFile.Close()
 
 
-		os.MkdirAll(fileInfo.Path, 0666)
+		os.MkdirAll(fileInfo.Path, 0775)
 
 		outPath = fileInfo.Path + "/" + fileInfo.Name
 
@@ -1995,7 +1995,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if !this.util.FileExists(folder) {
-				os.MkdirAll(folder, 0666)
+				os.MkdirAll(folder, 0775)
 			}
 
 			outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
@@ -2753,7 +2753,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 func init() {
 
 	for _, folder := range FOLDERS {
-		os.Mkdir(folder, 0666)
+		os.Mkdir(folder, 0775)
 	}
 	flag.Parse()
 
