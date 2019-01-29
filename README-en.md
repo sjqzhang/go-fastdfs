@@ -1,12 +1,12 @@
 # [中文](README.md)  [English](README-en.md)
 
-# Distributed file server go-fastdfs (class fastdfs) is better than fastdfs in terms of operation and maintenance management, more humane
+# Distributed file server go-fastdfs (similar fastdfs) is better than fastdfs in terms of operation and maintenance management, more humane
 
 - Support curl command upload
 - Support browser upload
 - Support HTTP download
 - Support multi-machine automatic synchronization
-- class fastdfs
+- similar fastdfs
 - High performance (using leveldb as a kv library)
 - High reliability (design is extremely simple, using mature components)
 
