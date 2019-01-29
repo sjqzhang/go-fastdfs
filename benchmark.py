@@ -29,8 +29,11 @@ def task():
             break
         url = 'http://10.1.5.20:8080/upload'
         files = {'file': open(name, 'rb')}
-        options = {'output': 'json', 'path': '', 'scene': ''} 
-        r = requests.post(url, files=files)
+        options = {'output': 'json', 'path': '', 'scene': ''}
+        try:
+            r = requests.post(url, files=files)
+        except Exception as er:
+            print(er)
 
 th=[]
 for i in range(200):
