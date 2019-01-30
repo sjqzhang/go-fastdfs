@@ -1,5 +1,5 @@
 # [中文](README.md)  [English](README-en.md)
-
+![logo](doc/logo.png)
 # Distributed file server go-fastdfs (class fastdfs) is better than fastdfs in terms of operation and maintenance management, more humane
 
 - Support curl command upload
@@ -170,3 +170,5 @@ It is also possible to perform pressure measurement simultaneously in multiple m
 
 
 - If you have any questions, please click [Reply](https://github.com/sjqzhang/go-fastdfs/issues/new)
+
+![二维码](doc/wechat.jpg)
