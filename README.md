@@ -1,6 +1,7 @@
 
 # [中文](README.md)  [English](README-en.md)
 
+![logo](doc/logo.png)
 
 # go-fastdfs设计理念--大道至简
 # 分布式文件系统go-fastdfs（类fastdfs）在运维管理等方面优于fastdfs，更人性化
@@ -255,6 +256,6 @@ issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代
 
 
 - 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
-
+或加![二维码](doc/wechat.jpg)
 
 
