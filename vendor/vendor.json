@@ -33,10 +33,22 @@
 			"revisionTime": "2017-01-30T13:45:32Z"
 		},
 		{
+			"checksumSHA1": "LE/UfJmiAXFbHwf4fNIRnFuMHUM=",
+			"path": "github.com/deckarep/golang-set",
+			"revision": "1d4478f51bed434f1dadf96dcd9b43aabac66795",
+			"revisionTime": "2017-10-13T11:49:54Z"
+		},
+		{
 			"checksumSHA1": "h1d2lPZf6j2dW/mIqVnd1RdykDo=",
 			"path": "github.com/golang/snappy",
 			"revision": "2e65f85255dbc3072edf28d6b5b8efc472979f5a",
 			"revisionTime": "2018-05-18T05:39:59Z"
+		},
+		{
+			"checksumSHA1": "560N9bAl499wgyMi2Xt1rh1zUFY=",
+			"path": "github.com/json-iterator/go",
+			"revision": "a9b9c73b4dfcc385bdb1d3f518552d1c2972f779",
+			"revisionTime": "2017-12-15T02:13:11Z"
 		},
 		{
 			"checksumSHA1": "A05sgnmxGZEtfibmzpOCAfluL9s=",
@@ -124,5 +136,5 @@
 			"revisionTime": "2018-11-30T13:54:26Z"
 		}
 	],
-	"rootPath": "github.com/sjqzhang/FileServer"
+	"rootPath": "github.com/sjqzhang/go-fastdfs"
 }
