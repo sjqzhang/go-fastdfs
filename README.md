@@ -277,6 +277,11 @@ issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代
 
 ```
 
+- 访问限制问题
+```
+出于安全考虑,管理API只能在群集内部调用或者用127.0.0.1调用.
+```
+
 
 - 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 或加
