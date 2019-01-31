@@ -897,8 +897,9 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		os.Remove(fpath)
 	}
 
-	this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
-
+	if this.util.IsExist(fpath) {
+		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+	}
 }
 
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
@@ -1815,8 +1816,9 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 		if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo); err != nil {
 			log.Error(err)
 		}
-
-		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+		if this.util.IsExist(outPath) {
+			this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+		}
 
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
 
@@ -1898,10 +1900,13 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		data         []byte
 		domain       string
 	)
+
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
 
 		//		fileInfo.Path = r.Header.Get("Sync-Path")
+
+
 
 		if strings.Contains(r.Host,"127.0.0.1") {
 			w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
@@ -2114,9 +2119,10 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 		} else {
 			fileInfo.Size = fi.Size()
+			this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 		}
 
-		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+
 
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
 		p = Config().Group + "/" + p + "/" + outname
