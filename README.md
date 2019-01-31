@@ -102,7 +102,7 @@
 python版本:
 ```python
 import requests
-url = 'http://127.0.0.1:8080/upload'
+url = 'http://10.1.5.9:8080/upload'
 files = {'file': open('report.xls', 'rb')}
 options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
 r = requests.post(url, files=files)
@@ -119,7 +119,7 @@ import (
 
 func main()  {
 	var obj interface{}
-	req:=httplib.Post("http://127.0.0.1:8080/upload")
+	req:=httplib.Post("http://10.1.5.9:8080/upload")
 	req.PostFile("file","path/to/file")
 	req.Param("output","json")
 	req.Param("scene","")
