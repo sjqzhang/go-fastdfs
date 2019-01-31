@@ -99,6 +99,7 @@
 
 # 代码上传(选项参阅浏览器上传)
 
+python版本:
 ```python
 import requests
 url = 'http://127.0.0.1:8080/upload'
@@ -107,6 +108,28 @@ options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
 r = requests.post(url, files=files)
 print(r.text)
 ```
+golang版本
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/astaxie/beego/httplib"
+)
+
+func main()  {
+	var obj interface{}
+	req:=httplib.Post("http://127.0.0.1:8080/upload")
+	req.PostFile("file","path/to/file")
+	req.Param("output","json")
+	req.Param("scene","")
+	req.Param("path","")
+	req.ToJSON(&obj)
+	fmt.Print(obj)
+}
+```
+[更多请参考](doc/upload.md)
+
 
 
 # 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
