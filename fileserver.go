@@ -85,7 +85,7 @@ const (
 	cfgJson = `{
 	"绑定端号": "端口",
 	"addr": ":8080",
-	"PeerID": "集群内唯一",
+	"PeerID": "集群内唯一,请使用0-9的字符串",
 	"peer_id": "%s",
 	"集群": "集群列表",
    "本主机地址": "本机http地址",
@@ -771,7 +771,7 @@ func (this *Server) RepairStat() {
 			log.Error("RepairStat")
 			log.Error(re)
 			log.Error(string(buffer))
-			fmt.Println(re)
+
 		}
 	}()
 
@@ -1943,6 +1943,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		fileInfo.Md5 = md5sum
 		if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
+			log.Error(err)
 			w.Write([]byte(err.Error()))
 			return
 		}
@@ -1979,7 +1980,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			log.Error(err)
-			fmt.Printf("FromFileErr")
 			http.Redirect(w, r, "/", http.StatusMovedPermanently)
 			return
 		}
@@ -2001,7 +2001,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 
 			folder = time.Now().Format("20060102/15/04")
-			folder=fmt.Sprintf(folder+"%s",Config().PeerId)
+			if Config().PeerId!="" {
+				folder = fmt.Sprintf(folder+"/%s", Config().PeerId)
+			}
 			if fileInfo.Scene != "" {
 				folder = fmt.Sprintf(STORE_DIR+"/%s/%s", fileInfo.Scene, folder)
 			} else {
@@ -2469,7 +2471,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 							for v := range tmpSet.Iter() {
 								if v != nil {
 									if fileInfo, err = this.GetFileInfoFromLevelDB(v.(string)); err != nil {
-										fmt.Println(err)
+
 										log.Error(err)
 										continue
 									}
