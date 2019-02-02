@@ -88,8 +88,8 @@ const (
 	"PeerID": "集群内唯一,请使用0-9的字符串",
 	"peer_id": "%s",
 	"集群": "集群列表",
-   "本主机地址": "本机http地址",
-    "host":"%s",
+	"本主机地址": "本机http地址",
+	"host": "%s",
 	"peers": ["%s"],
 	"组号": "用于区别不同的集群,带在下载路径中",
 	"group": "group1",
@@ -103,32 +103,33 @@ const (
 	"enable_custom_path": true,
 	"下载域名": "用于外网下载文件的域名,不包含http://",
 	"download_domain": "",
-	"场景":"场景列表",
-	"scenes":[],
-	"默认场景":"默认default",
-	"default_scene":"default",
+	"场景列表": "当设定后，用户指的场景必项在列表中，默认不做限制",
+	"scenes": [],
+	"默认场景": "默认default",
+	"default_scene": "default",
 	"是否显示目录": "默认显示",
 	"show_dir": true,
-	"邮件配置":"",
-	"mail":{
-		"user":"abc@163.com",
-		"password":"abc",
-		"host":"smtp.163.com:25"
+	"邮件配置": "",
+	"mail": {
+		"user": "abc@163.com",
+		"password": "abc",
+		"host": "smtp.163.com:25"
 	},
-	"告警接收邮件列表":"接收人数组",
-	"alram_receivers":[],
-	"告警接收URL":"方法post,参数:subjet,message",
-	"alarm_url":"",
-	"下载是否需带token":"真假",
-	"download_use_token":false,
-	"下载token过期时间":"单位秒",
-	"download_token_expire":600,
-	"是否自动修复":"在超过1亿文件时出现性能问题，取消此选项，请手动按天同步，请查看FAQ",
-	"auto_repair":true,
-    "文件去重算法md5可能存在冲突，默认md5":"sha1|md5",
-    "file_sum_arithmetic":"md5"
+	"告警接收邮件列表": "接收人数组",
+	"alram_receivers": [],
+	"告警接收URL": "方法post,参数:subjet,message",
+	"alarm_url": "",
+	"下载是否需带token": "真假",
+	"download_use_token": false,
+	"下载token过期时间": "单位秒",
+	"download_token_expire": 600,
+	"是否自动修复": "在超过1亿文件时出现性能问题，取消此选项，请手动按天同步，请查看FAQ",
+	"auto_repair": true,
+	"文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
+	"file_sum_arithmetic": "md5",
+	"是否支持按组上传": "默认不支技",
+	"support_group_upload": false
 
-	
 }
 	
 	`
@@ -241,6 +242,7 @@ type GloablConfig struct {
 	Host                string   `json:"host"`
 	FileSumArithmetic   string   `json:"file_sum_arithmetic"`
 	PeerId              string   `json:"peer_id"`
+	SupportGroupUpload              bool   `json:"support_group_upload"`
 }
 
 func NewServer() *Server {
@@ -2742,7 +2744,14 @@ func (this *Server) HeartBeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
+	var (
+		uploadUrl string
+	)
+	uploadUrl="/upload"
 	if Config().EnableWebUpload {
+		if Config().SupportGroupUpload {
+			uploadUrl=fmt.Sprintf( "/%s/upload",Config().Group)
+		}
 		fmt.Fprintf(w,
 			fmt.Sprintf(`<html>
 	    <head>
@@ -2759,7 +2768,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 			</style>
 	    </head>
 	    <body>
-	        <form action="/upload" method="post" enctype="multipart/form-data">
+	        <form action="%s" method="post" enctype="multipart/form-data">
 	            <span class="form-line">文件(file):<input  type="file" id="file" name="file" ></span>
 				<span class="form-line">场景(scene):<input  type="text" id="scene" name="scene" value="%s"></span>
 				<span class="form-line">输出(output):<input  type="text" id="output" name="output" value="json"></span>
@@ -2767,7 +2776,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	            <input type="submit" name="submit" value="upload">
 	        </form>
 	    </body>
-	</html>`, Config().DefaultScene))
+	</html>`, uploadUrl, Config().DefaultScene))
 	} else {
 		w.Write([]byte("web upload deny"))
 	}
@@ -2959,7 +2968,12 @@ func (this *Server) Main() {
 
 	http.HandleFunc("/", this.Index)
 	http.HandleFunc("/check_file_exist", this.CheckFileExist)
-	http.HandleFunc("/upload", this.Upload)
+	if Config().SupportGroupUpload {
+		http.HandleFunc(fmt.Sprintf("/%s/upload",Config().Group), this.Upload)
+	} else {
+		http.HandleFunc("/upload", this.Upload)
+	}
+
 	http.HandleFunc("/delete", this.RemoveFile)
 	http.HandleFunc("/sync", this.Sync)
 	http.HandleFunc("/stat", this.Stat)
