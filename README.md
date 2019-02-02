@@ -130,6 +130,9 @@ func main()  {
 ```
 [更多请参考](doc/upload.md)
 
+部署图
+![部署图](doc/go-fastdfs-deploy.png)
+
 
 
 # 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
