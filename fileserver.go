@@ -91,13 +91,13 @@ const (
 	"本主机地址": "本机http地址",
 	"host": "%s",
 	"peers": ["%s"],
-	"组号": "用于区别不同的集群,带在下载路径中",
+	"组号": "用于区别不同的集群(上传或下载)与support_group_upload配合使用,带在下载路径中",
 	"group": "group1",
 	"重试同步失败文件的时间": "单位秒",
 	"refresh_interval": 1800,
 	"是否自动重命名": "默认不自动重命名,使用原文件名",
 	"rename_file": false,
-	"是否支持ＷＥＢ上专": "默认支持web上传",
+	"是否支持ＷＥＢ上传,方便调试": "默认支持web上传",
 	"enable_web_upload": true,
 	"是否支持非日期路径": "默认支持非日期路径,也即支持自定义路径,需要上传文件时指定path",
 	"enable_custom_path": true,
@@ -107,7 +107,7 @@ const (
 	"scenes": [],
 	"默认场景": "默认default",
 	"default_scene": "default",
-	"是否显示目录": "默认显示",
+	"是否显示目录": "默认显示,方便调试用,上线时请关闭",
 	"show_dir": true,
 	"邮件配置": "",
 	"mail": {
@@ -127,7 +127,7 @@ const (
 	"auto_repair": true,
 	"文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
 	"file_sum_arithmetic": "md5",
-	"是否支持按组上传": "默认不支技",
+	"是否支持按组上传,主要用途是Nginx支持多集群": "默认不支持,不支持上传路径http://10.1.5.4:8080/upload,支持http://10.1.5.4:8080/group(配置中的group参数)/upload",
 	"support_group_upload": false
 
 }
