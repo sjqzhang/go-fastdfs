@@ -1888,11 +1888,16 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		fileInfo *FileInfo
 		fpath    string
 		delUrl string
-	)
 
+		inner string
+	)
+	_=delUrl
+	_=inner
 	r.ParseForm()
 
 	md5sum = r.FormValue("md5")
+	inner = r.FormValue("inner")
+
 
 	if len(md5sum) < 32 {
 		w.Write([]byte("md5 unvalid"))
@@ -1917,15 +1922,19 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(err.Error()))
 			return
 		} else {
-			for _,peer:=range Config().Peers {
-				delUrl=  fmt.Sprintf( "%s%s",peer, this.getRequestURI( "delete"))
-				req:=httplib.Post(delUrl)
-				req.Param("md5sum",fileInfo.Md5)
-				req.SetTimeout(time.Second*5,time.Second*10)
-				if _,err=req.String();err!=nil {
-					log.Error(err)
-				}
-			}
+			//if inner!="1" {
+			//	for _, peer := range Config().Peers {
+			//		delUrl = fmt.Sprintf("%s%s", peer, this.getRequestURI("delete"))
+			//		req := httplib.Post(delUrl)
+			//		req.Param("md5", fileInfo.Md5)
+			//		req.Param("inner", "1")
+			//		req.SetTimeout(time.Second*5, time.Second*10)
+			//		if _, err = req.String(); err != nil {
+			//			log.Error(err)
+			//		}
+			//	}
+			//}
+
             this.SaveFileMd5Log(fileInfo,CONST_REMOME_Md5_FILE_NAME)
 			w.Write([]byte("remove success"))
 			return
@@ -2392,7 +2401,7 @@ func (this *Server) ConsumerDownLoad() {
 		for {
 			fileInfo := <-this.queueFromPeers
 			if len(fileInfo.Peers) <= 0 {
-				log.Warn("Peer is null")
+				log.Warn("Peer is null", fileInfo)
 				continue
 			}
 			for _, peer := range fileInfo.Peers {
