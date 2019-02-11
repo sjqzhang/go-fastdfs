@@ -79,8 +79,9 @@ const (
 	CONST_Md5_ERROR_FILE_NAME = "errors.md5"
 	CONST_Md5_QUEUE_FILE_NAME = "queue.md5"
 	CONST_FILE_Md5_FILE_NAME  = "files.md5"
+	CONST_REMOME_Md5_FILE_NAME  = "removes.md5"
 
-	CONST_MESSAGE_CLUSTER_IP = "Can only be called by the cluster ip"
+	CONST_MESSAGE_CLUSTER_IP = "Can only be called by the cluster ip,current ip:%s"
 
 	cfgJson = `{
 	"绑定端号": "端口",
@@ -127,8 +128,10 @@ const (
 	"auto_repair": true,
 	"文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
 	"file_sum_arithmetic": "md5",
-	"是否支持按组上传,主要用途是Nginx支持多集群": "默认不支持,不支持上传路径http://10.1.5.4:8080/upload,支持http://10.1.5.4:8080/group(配置中的group参数)/upload",
-	"support_group_upload": false
+	"是否支持按组管理,主要用途是Nginx支持多集群": "默认不支持,不支持上传路径http://10.1.5.4:8080/action,支持http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
+	"support_group_manage": false,
+	"管理ip列表": "用于管理集的ip白名单,",
+	"admin_ips": ["127.0.0.1"]
 
 }
 	
@@ -242,7 +245,8 @@ type GloablConfig struct {
 	Host                string   `json:"host"`
 	FileSumArithmetic   string   `json:"file_sum_arithmetic"`
 	PeerId              string   `json:"peer_id"`
-	SupportGroupUpload              bool   `json:"support_group_upload"`
+	SupportGroupManage  bool     `json:"support_group_manage"`
+	AdminIps            []string `json:"admin_ips"`
 }
 
 func NewServer() *Server {
@@ -1184,7 +1188,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 			continue
 		}
 
-		postURL = fmt.Sprintf("%s/%s", peer, "syncfile_info")
+		postURL = fmt.Sprintf("%s%s", peer, this.getRequestURI( "syncfile_info"))
 		b := httplib.Post(postURL)
 		b.SetTimeout(time.Second*5, time.Second*5)
 
@@ -1246,7 +1250,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 		if sumset, err = this.GetMd5sByDate(logDate, filename); err != nil {
 			log.Error(err)
 		}
-		if sumset!=nil {
+		if sumset != nil {
 			this.sumMap.Put(sumKey, sumset)
 		}
 	} else {
@@ -1299,7 +1303,7 @@ func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, e
 		fileInfo FileInfo
 	)
 
-	req := httplib.Post(peer + fmt.Sprintf("/check_file_exist?md5=%s", md5sum))
+	req := httplib.Post( fmt.Sprintf("%s%s?md5=%s",peer, this.getRequestURI("check_file_exist") , md5sum))
 
 	req.SetTimeout(time.Second*5, time.Second*10)
 
@@ -1486,6 +1490,11 @@ func (this *Server) IsPeer(r *http.Request) bool {
 	if ip == "127.0.0.1" || ip == this.util.GetPulicIP() {
 		return true
 	}
+
+	if this.util.Contains(ip, Config().AdminIps) {
+		return true
+	}
+
 	ip = "http://" + ip
 	bflag = false
 
@@ -1509,7 +1518,7 @@ func (this *Server) ReceiveMd5s(w http.ResponseWriter, r *http.Request) {
 
 	if !this.IsPeer(r) {
 		log.Warn(fmt.Sprintf("ReceiveMd5s %s", this.util.GetClientIp(r)))
-		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		return
 	}
 
@@ -1533,6 +1542,15 @@ func (this *Server) ReceiveMd5s(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (this *Server) GetClusterNotPermitMessage( r *http.Request) string {
+    var (
+    	message string
+	)
+    message= fmt.Sprintf(CONST_MESSAGE_CLUSTER_IP,this.util.GetClientIp(r))
+    return message
+}
+
+
 func (this *Server) GetMd5sForWeb(w http.ResponseWriter, r *http.Request) {
 
 	var (
@@ -1544,7 +1562,7 @@ func (this *Server) GetMd5sForWeb(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if !this.IsPeer(r) {
-		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		return
 
 	}
@@ -1718,7 +1736,7 @@ func (this *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 	fileInfoStr = r.FormValue("fileInfo")
 
 	if err = json.Unmarshal([]byte(fileInfoStr), &fileInfo); err != nil {
-		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		log.Error(err)
 		return
 	}
@@ -1754,7 +1772,7 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 	if !this.IsPeer(r) {
 		log.Error(fmt.Sprintf(" not is peer,ip:%s", this.util.GetClientIp(r)))
-		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		return
 	}
 
@@ -1869,6 +1887,7 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		md5sum   string
 		fileInfo *FileInfo
 		fpath    string
+		delUrl string
 	)
 
 	r.ParseForm()
@@ -1890,17 +1909,42 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		fpath = fileInfo.Path + "/" + fileInfo.Name
 	}
 
+
+
 	if fileInfo.Path != "" && this.util.FileExists(fpath) {
+		this.ldb.Delete([]byte(fileInfo.Md5),nil)
 		if err = os.Remove(fpath); err != nil {
 			w.Write([]byte(err.Error()))
 			return
 		} else {
+			for _,peer:=range Config().Peers {
+				delUrl=  fmt.Sprintf( "%s%s",peer, this.getRequestURI( "delete"))
+				req:=httplib.Post(delUrl)
+				req.Param("md5sum",fileInfo.Md5)
+				req.SetTimeout(time.Second*5,time.Second*10)
+				if _,err=req.String();err!=nil {
+					log.Error(err)
+				}
+			}
+            this.SaveFileMd5Log(fileInfo,CONST_REMOME_Md5_FILE_NAME)
 			w.Write([]byte("remove success"))
 			return
 		}
 	}
 	w.Write([]byte("fail remove"))
 
+}
+
+func (this *Server) getRequestURI(action string) string {
+	var (
+		uri string
+	)
+	if Config().SupportGroupManage {
+		uri= "/"+Config().Group+ "/" + action
+	} else {
+		uri = "/" + action
+	}
+	return uri
 }
 
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
@@ -2003,7 +2047,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 
 			folder = time.Now().Format("20060102/15/04")
-			if Config().PeerId!="" {
+			if Config().PeerId != "" {
 				folder = fmt.Sprintf(folder+"/%s", Config().PeerId)
 			}
 			if fileInfo.Scene != "" {
@@ -2421,7 +2465,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 
 		Update := func(peer string, dateStat StatDateFileInfo) { //从远端拉数据过来
 
-			req := httplib.Get(fmt.Sprintf("%s/sync?date=%s&force=%s", peer, dateStat.Date, "1"))
+			req := httplib.Get(fmt.Sprintf("%s%s?date=%s&force=%s", peer,this.getRequestURI("sync"), dateStat.Date, "1"))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			if _, err = req.String(); err != nil {
 				log.Error(err)
@@ -2433,7 +2477,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 
 		for _, peer := range Config().Peers {
 
-			req := httplib.Get(fmt.Sprintf("%s/stat", peer))
+			req := httplib.Get(fmt.Sprintf("%s%s", peer,this.getRequestURI("stat")))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			if err = req.ToJSON(&dateStats); err != nil {
 				log.Error(err)
@@ -2450,7 +2494,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 					case int64:
 						if v.(int64) != dateStat.FileCount || forceRepair { //不相等,找差异
 							//TODO
-							req := httplib.Post(fmt.Sprintf("%s/get_md5s_by_date", peer))
+							req := httplib.Post(fmt.Sprintf("%s%s", peer,this.getRequestURI("get_md5s_by_date")))
 							req.SetTimeout(time.Second*5, time.Second*20)
 
 							req.Param("date", dateStat.Date)
@@ -2465,7 +2509,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 							remoteSet = this.util.StrToMapSet(md5s, ",")
 							allSet = localSet.Union(remoteSet)
 							md5s = this.util.MapSetToStr(allSet.Difference(localSet), ",")
-							req = httplib.Post(fmt.Sprintf("%s/receive_md5s", peer))
+							req = httplib.Post(fmt.Sprintf("%s%s", peer,this.getRequestURI("receive_md5s")))
 							req.SetTimeout(time.Second*5, time.Second*15)
 							req.Param("md5s", md5s)
 							req.String()
@@ -2572,7 +2616,7 @@ func (this *Server) Check() {
 
 		for _, peer := range Config().Peers {
 
-			req = httplib.Get(peer + "/status")
+			req = httplib.Get( fmt.Sprintf("%s%s",peer,this.getRequestURI("status")))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			err = req.ToJSON(&status)
 
@@ -2626,7 +2670,7 @@ func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if !this.IsPeer(r) {
-		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		return
 	}
 
@@ -2651,7 +2695,7 @@ func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 
 	var (
-		force        string
+		force       string
 		forceRepair bool
 	)
 	r.ParseForm()
@@ -2663,7 +2707,7 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 		go this.AutoRepair(forceRepair)
 		w.Write([]byte("repair job start..."))
 	} else {
-		w.Write([]byte(CONST_MESSAGE_CLUSTER_IP))
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 	}
 
 }
@@ -2747,10 +2791,10 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	var (
 		uploadUrl string
 	)
-	uploadUrl="/upload"
+	uploadUrl = "/upload"
 	if Config().EnableWebUpload {
-		if Config().SupportGroupUpload {
-			uploadUrl=fmt.Sprintf( "/%s/upload",Config().Group)
+		if Config().SupportGroupManage {
+			uploadUrl = fmt.Sprintf("/%s/upload", Config().Group)
 		}
 		fmt.Fprintf(w,
 			fmt.Sprintf(`<html>
@@ -2795,7 +2839,7 @@ func init() {
 
 		peer := "http://" + server.util.GetPulicIP() + ":8080"
 
-		cfg := fmt.Sprintf(cfgJson, peerId, peer,peer)
+		cfg := fmt.Sprintf(cfgJson, peerId, peer, peer)
 
 		server.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
@@ -2843,10 +2887,10 @@ func (this *Server) initComponent(isReload bool) {
 	if Config().Host == "" {
 		if len(strings.Split(Config().Addr, ":")) == 2 {
 			server.host = fmt.Sprintf("http://%s:%s", ip, strings.Split(Config().Addr, ":")[1])
-			Config().Host=server.host
+			Config().Host = server.host
 		}
 	} else {
-		server.host= Config().Host
+		server.host = Config().Host
 	}
 
 	ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")
@@ -2966,25 +3010,42 @@ func (this *Server) Main() {
 
 	}
 
-	http.HandleFunc("/", this.Index)
-	http.HandleFunc("/check_file_exist", this.CheckFileExist)
-	if Config().SupportGroupUpload {
-		http.HandleFunc(fmt.Sprintf("/%s/upload",Config().Group), this.Upload)
+
+	if Config().SupportGroupManage {
+		http.HandleFunc(fmt.Sprintf("/%s", Config().Group), this.Index)
+		http.HandleFunc(fmt.Sprintf("/%s/check_file_exist", Config().Group), this.CheckFileExist)
+		http.HandleFunc(fmt.Sprintf("/%s/upload", Config().Group), this.Upload)
+		http.HandleFunc(fmt.Sprintf("/%s/delete", Config().Group), this.RemoveFile)
+		http.HandleFunc(fmt.Sprintf("/%s/sync", Config().Group), this.Sync)
+		http.HandleFunc(fmt.Sprintf("/%s/stat", Config().Group), this.Stat)
+		http.HandleFunc(fmt.Sprintf("/%s/repair_stat", Config().Group), this.RepairStatWeb)
+		http.HandleFunc(fmt.Sprintf("/%s/status", Config().Group), this.Status)
+		http.HandleFunc(fmt.Sprintf("/%s/repair", Config().Group), this.Repair)
+		http.HandleFunc(fmt.Sprintf("/%s/reload", Config().Group), this.Reload)
+		http.HandleFunc(fmt.Sprintf("/%s/syncfile", Config().Group), this.SyncFile)
+		http.HandleFunc(fmt.Sprintf("/%s/syncfile_info", Config().Group), this.SyncFileInfo)
+		http.HandleFunc(fmt.Sprintf("/%s/get_md5s_by_date", Config().Group), this.GetMd5sForWeb)
+		http.HandleFunc(fmt.Sprintf("/%s/receive_md5s", Config().Group), this.ReceiveMd5s)
+
 	} else {
+		http.HandleFunc("/", this.Index)
+		http.HandleFunc("/check_file_exist", this.CheckFileExist)
 		http.HandleFunc("/upload", this.Upload)
+		http.HandleFunc("/delete", this.RemoveFile)
+		http.HandleFunc("/sync", this.Sync)
+		http.HandleFunc("/stat", this.Stat)
+		http.HandleFunc("/repair_stat", this.RepairStatWeb)
+		http.HandleFunc("/status", this.Status)
+		http.HandleFunc("/repair", this.Repair)
+		http.HandleFunc("/reload", this.Reload)
+		http.HandleFunc("/syncfile", this.SyncFile)
+		http.HandleFunc("/syncfile_info", this.SyncFileInfo)
+		http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
+		http.HandleFunc("/receive_md5s", this.ReceiveMd5s)
 	}
 
-	http.HandleFunc("/delete", this.RemoveFile)
-	http.HandleFunc("/sync", this.Sync)
-	http.HandleFunc("/stat", this.Stat)
-	http.HandleFunc("/repair_stat", this.RepairStatWeb)
-	http.HandleFunc("/status", this.Status)
-	http.HandleFunc("/repair", this.Repair)
-	http.HandleFunc("/reload", this.Reload)
-	http.HandleFunc("/syncfile", this.SyncFile)
-	http.HandleFunc("/syncfile_info", this.SyncFileInfo)
-	http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
-	http.HandleFunc("/receive_md5s", this.ReceiveMd5s)
+
+
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
