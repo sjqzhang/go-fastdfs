@@ -3,8 +3,9 @@
 
 ![logo](doc/logo.png)
 
-# go-fastdfs设计理念--大道至简
-# 分布式文件系统go-fastdfs（类fastdfs）在运维管理等方面优于fastdfs，更人性化
+# go-fastdfs设计理念-大道至简
+# go-fastdfs是一个基于http的分布式文件系统，它基于大道至简的设计理念，一切从简设计，使得它的运维及扩展变得更加简单。
+
 
 - 支持curl命令上传
 - 支持浏览器上传
