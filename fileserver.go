@@ -128,7 +128,7 @@ const (
 	"auto_repair": true,
 	"文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
 	"file_sum_arithmetic": "md5",
-	"是否支持按组管理,主要用途是Nginx支持多集群": "默认不支持,不支持上传路径http://10.1.5.4:8080/action,支持http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
+	"是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认不支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
 	"support_group_manage": false,
 	"管理ip列表": "用于管理集的ip白名单,",
 	"admin_ips": ["127.0.0.1"]
@@ -604,6 +604,24 @@ func (this *Common) GetFileSum(file *os.File, alg string) string {
 	}
 
 }
+func (this *Common) GetFileSumByName(filepath string, alg string) (string,error) {
+	var (
+		err error
+		file *os.File
+	)
+	file,err= os.Open(filepath)
+	if err!=nil {
+		return "",err
+	}
+	defer file.Close()
+	alg = strings.ToLower(alg)
+	if alg == "sha1" {
+		return this.GetFileSha1Sum(file),nil
+	} else {
+		return this.GetFileMd5(file),nil
+	}
+
+}
 
 func (this *Common) GetFileSha1Sum(file *os.File) string {
 	file.Seek(0, 0)
@@ -876,6 +894,68 @@ func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool {
 		return true
 	} else {
 		return false
+	}
+
+}
+
+
+func (this *Server) RepairFileInfoFromFile() {
+	defer func() {
+		if re := recover(); re != nil {
+			buffer := debug.Stack()
+			log.Error("RepairFileInfoFromDisk")
+			log.Error(re)
+			log.Error(string(buffer))
+		}
+	}()
+
+	handlefunc := func(file_path string, f os.FileInfo, err error) error {
+
+		var (
+			files []os.FileInfo
+			fi os.FileInfo
+			fileInfo FileInfo
+			sum string
+		)
+
+		if f.IsDir() {
+
+			files, err = ioutil.ReadDir(file_path)
+			if err!=nil {
+				return err
+			}
+
+			for _,fi=range  files {
+
+				if fi.IsDir() || fi.Size()==0 {
+					continue
+				}
+
+
+				sum,err=this.util.GetFileSumByName(file_path+ "/"+ fi.Name(),Config().FileSumArithmetic)
+				if err!=nil {
+					log.Error(err)
+					continue
+				}
+               fileInfo=FileInfo{
+               	Size:fi.Size(),
+               	Name:fi.Name(),
+               	Path:strings.Replace( file_path,"\\","/",-1),
+               	Md5:sum,
+               	TimeStamp:fi.ModTime().Unix(),
+			   }
+               this.SaveFileMd5Log(&fileInfo,CONST_FILE_Md5_FILE_NAME)
+			}
+
+		}
+
+		return nil
+	}
+
+	pathname:=STORE_DIR
+	fi, _ := os.Stat(pathname)
+	if fi.IsDir() {
+		filepath.Walk(pathname, handlefunc)
 	}
 
 }
@@ -2668,6 +2748,14 @@ func (this *Server) Check() {
 	}()
 
 }
+func (this *Server) RepairFileInfo(w http.ResponseWriter, r *http.Request) {
+	if !this.IsPeer(r) {
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+		return
+	}
+	go this.RepairFileInfoFromFile()
+	w.Write([]byte("repair job start,don't try again"))
+}
 
 func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 
@@ -2676,28 +2764,66 @@ func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 		data []byte
 
 		cfg GloablConfig
+		action string
+		cfgjson string
 	)
 
+	r.ParseForm()
 	if !this.IsPeer(r) {
 		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		return
 	}
 
-	if data, err = ioutil.ReadFile(CONST_CONF_FILE_NAME); err != nil {
-		w.Write([]byte(err.Error()))
+	cfgjson=r.FormValue("cfg")
+	action=r.FormValue("action")
+	_=cfgjson
+
+	if action=="get" {
+		w.Write([]byte(this.util.JsonEncodePretty( Config())))
+		return
+
+	}
+
+	if action=="set" {
+		if cfgjson=="" {
+			w.Write([]byte("(error)parameter cfg(json) require"))
+			return
+		}
+		if err=json.Unmarshal([]byte(cfgjson),cfg);err!=nil {
+			log.Error(err)
+			return
+		}
+		cfgjson= this.util.JsonEncodePretty(cfg)
+		this.util.WriteFile(CONST_CONF_FILE_NAME,cfgjson)
+		w.Write([]byte("ok"))
 		return
 	}
 
-	if err = json.Unmarshal(data, &cfg); err != nil {
-		w.Write([]byte(err.Error()))
+	if action=="reload" {
+
+		if data, err = ioutil.ReadFile(CONST_CONF_FILE_NAME); err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		if err = json.Unmarshal(data, &cfg); err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		ParseConfig(CONST_CONF_FILE_NAME)
+
+		this.initComponent(true)
+
+		w.Write([]byte("ok"))
 		return
+
+	}
+	if action=="" {
+		w.Write([]byte("(error)action support set(json) get reload"))
 	}
 
-	ParseConfig(CONST_CONF_FILE_NAME)
 
-	this.initComponent(true)
-
-	w.Write([]byte("ok"))
 
 }
 
@@ -3030,6 +3156,7 @@ func (this *Server) Main() {
 		http.HandleFunc(fmt.Sprintf("/%s/repair_stat", Config().Group), this.RepairStatWeb)
 		http.HandleFunc(fmt.Sprintf("/%s/status", Config().Group), this.Status)
 		http.HandleFunc(fmt.Sprintf("/%s/repair", Config().Group), this.Repair)
+		http.HandleFunc(fmt.Sprintf("/%s/repair_fileinfo", Config().Group), this.RepairFileInfo)
 		http.HandleFunc(fmt.Sprintf("/%s/reload", Config().Group), this.Reload)
 		http.HandleFunc(fmt.Sprintf("/%s/syncfile", Config().Group), this.SyncFile)
 		http.HandleFunc(fmt.Sprintf("/%s/syncfile_info", Config().Group), this.SyncFileInfo)
@@ -3046,6 +3173,7 @@ func (this *Server) Main() {
 		http.HandleFunc("/repair_stat", this.RepairStatWeb)
 		http.HandleFunc("/status", this.Status)
 		http.HandleFunc("/repair", this.Repair)
+		http.HandleFunc("/repair_fileinfo", this.RepairFileInfo)
 		http.HandleFunc("/reload", this.Reload)
 		http.HandleFunc("/syncfile", this.SyncFile)
 		http.HandleFunc("/syncfile_info", this.SyncFileInfo)
@@ -3063,6 +3191,7 @@ func (this *Server) Main() {
 }
 
 func main() {
+
 
 	server.Main()
 
