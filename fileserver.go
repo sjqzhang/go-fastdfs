@@ -1017,6 +1017,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		filename string
 		fpath    string
 		fi       os.FileInfo
+		sum string
 	)
 
 	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) {
@@ -1039,18 +1040,27 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 
 	fpath = fileInfo.Path + "/" + filename
 
-	req.SetTimeout(time.Second*5, time.Second*5)
+	req.SetTimeout(time.Second*5, time.Second*300)
 
 	if err = req.ToFile(fpath); err != nil {
 		log.Error(err)
+		return
 	}
 
 	if fi, err = os.Stat(fpath); err != nil {
 		os.Remove(fpath)
 		return
 	}
-	if fi.Size() == 0 {
+
+	if sum,err=this.util.GetFileSumByName(fpath,Config().FileSumArithmetic);err!=nil {
+		log.Error(err)
+		return
+	}
+
+	if fi.Size()!=fileInfo.Size || sum!=fileInfo.Md5 {
+		log.Error("file sum check error")
 		os.Remove(fpath)
+		return
 	}
 
 	if this.util.IsExist(fpath) {
@@ -2443,11 +2453,18 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
+		inner string
 	)
-	data := this.util.JsonEncodePretty(this.GetStat())
+	r.ParseForm()
+	inner=r.FormValue("inner")
+	data := this.GetStat()
 	result.Status = "ok"
 	result.Data = data
-	w.Write([]byte(this.util.JsonEncodePretty(result)))
+	if inner=="1" {
+		w.Write([]byte(this.util.JsonEncodePretty(data)))
+	} else {
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	}
 }
 
 func (this *Server) GetStat() []StatDateFileInfo {
@@ -2598,10 +2615,18 @@ func (this *Server) Consumer() {
 
 func (this *Server) AutoRepair(forceRepair bool) {
 
+	if this.lockMap.IsLock("AutoRepair") {
+		log.Warn("Lock AutoRepair")
+		return
+	}
+	this.lockMap.LockKey("AutoRepair")
+	defer this.lockMap.UnLockKey("AutoRepair")
+
 	AutoRepairFunc := func(forceRepair bool) {
 
 		var (
 			dateStats []StatDateFileInfo
+
 			err       error
 			countKey  string
 			md5s      string
@@ -2635,8 +2660,9 @@ func (this *Server) AutoRepair(forceRepair bool) {
 
 		for _, peer := range Config().Peers {
 
-			req := httplib.Get(fmt.Sprintf("%s%s", peer, this.getRequestURI("stat")))
-			req.SetTimeout(time.Second*5, time.Second*5)
+			req := httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("stat")))
+			req.Param("inner","1")
+			req.SetTimeout(time.Second*5, time.Second*15)
 			if err = req.ToJSON(&dateStats); err != nil {
 				log.Error(err)
 				continue
