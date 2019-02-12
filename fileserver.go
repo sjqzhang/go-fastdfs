@@ -76,10 +76,10 @@ const (
 
 	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
 
-	CONST_Md5_ERROR_FILE_NAME = "errors.md5"
-	CONST_Md5_QUEUE_FILE_NAME = "queue.md5"
-	CONST_FILE_Md5_FILE_NAME  = "files.md5"
-	CONST_REMOME_Md5_FILE_NAME  = "removes.md5"
+	CONST_Md5_ERROR_FILE_NAME  = "errors.md5"
+	CONST_Md5_QUEUE_FILE_NAME  = "queue.md5"
+	CONST_FILE_Md5_FILE_NAME   = "files.md5"
+	CONST_REMOME_Md5_FILE_NAME = "removes.md5"
 
 	CONST_MESSAGE_CLUSTER_IP = "Can only be called by the cluster ip,current ip:%s"
 
@@ -192,7 +192,7 @@ type FileInfo struct {
 	TimeStamp int64    `json:"timeStamp"`
 }
 
-type Status struct {
+type JsonResult struct {
 	Message string      `json:"message"`
 	Status  string      `json:"status"`
 	Data    interface{} `json:"data"`
@@ -604,21 +604,21 @@ func (this *Common) GetFileSum(file *os.File, alg string) string {
 	}
 
 }
-func (this *Common) GetFileSumByName(filepath string, alg string) (string,error) {
+func (this *Common) GetFileSumByName(filepath string, alg string) (string, error) {
 	var (
-		err error
+		err  error
 		file *os.File
 	)
-	file,err= os.Open(filepath)
-	if err!=nil {
-		return "",err
+	file, err = os.Open(filepath)
+	if err != nil {
+		return "", err
 	}
 	defer file.Close()
 	alg = strings.ToLower(alg)
 	if alg == "sha1" {
-		return this.GetFileSha1Sum(file),nil
+		return this.GetFileSha1Sum(file), nil
 	} else {
-		return this.GetFileMd5(file),nil
+		return this.GetFileMd5(file), nil
 	}
 
 }
@@ -898,7 +898,6 @@ func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool {
 
 }
 
-
 func (this *Server) RepairFileInfoFromFile() {
 	defer func() {
 		if re := recover(); re != nil {
@@ -912,39 +911,38 @@ func (this *Server) RepairFileInfoFromFile() {
 	handlefunc := func(file_path string, f os.FileInfo, err error) error {
 
 		var (
-			files []os.FileInfo
-			fi os.FileInfo
+			files    []os.FileInfo
+			fi       os.FileInfo
 			fileInfo FileInfo
-			sum string
+			sum      string
 		)
 
 		if f.IsDir() {
 
 			files, err = ioutil.ReadDir(file_path)
-			if err!=nil {
+			if err != nil {
 				return err
 			}
 
-			for _,fi=range  files {
+			for _, fi = range files {
 
-				if fi.IsDir() || fi.Size()==0 {
+				if fi.IsDir() || fi.Size() == 0 {
 					continue
 				}
 
-
-				sum,err=this.util.GetFileSumByName(file_path+ "/"+ fi.Name(),Config().FileSumArithmetic)
-				if err!=nil {
+				sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+				if err != nil {
 					log.Error(err)
 					continue
 				}
-               fileInfo=FileInfo{
-               	Size:fi.Size(),
-               	Name:fi.Name(),
-               	Path:strings.Replace( file_path,"\\","/",-1),
-               	Md5:sum,
-               	TimeStamp:fi.ModTime().Unix(),
-			   }
-               this.SaveFileMd5Log(&fileInfo,CONST_FILE_Md5_FILE_NAME)
+				fileInfo = FileInfo{
+					Size:      fi.Size(),
+					Name:      fi.Name(),
+					Path:      strings.Replace(file_path, "\\", "/", -1),
+					Md5:       sum,
+					TimeStamp: fi.ModTime().Unix(),
+				}
+				this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
 
 		}
@@ -952,7 +950,7 @@ func (this *Server) RepairFileInfoFromFile() {
 		return nil
 	}
 
-	pathname:=STORE_DIR
+	pathname := STORE_DIR
 	fi, _ := os.Stat(pathname)
 	if fi.IsDir() {
 		filepath.Walk(pathname, handlefunc)
@@ -1268,7 +1266,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 			continue
 		}
 
-		postURL = fmt.Sprintf("%s%s", peer, this.getRequestURI( "syncfile_info"))
+		postURL = fmt.Sprintf("%s%s", peer, this.getRequestURI("syncfile_info"))
 		b := httplib.Post(postURL)
 		b.SetTimeout(time.Second*5, time.Second*5)
 
@@ -1383,7 +1381,7 @@ func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, e
 		fileInfo FileInfo
 	)
 
-	req := httplib.Post( fmt.Sprintf("%s%s?md5=%s",peer, this.getRequestURI("check_file_exist") , md5sum))
+	req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", peer, this.getRequestURI("check_file_exist"), md5sum))
 
 	req.SetTimeout(time.Second*5, time.Second*10)
 
@@ -1432,10 +1430,16 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 
 func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 
-	r.ParseForm()
+	var (
+		result JsonResult
+	)
 
+	r.ParseForm()
+	result.Status = "fail"
 	if !this.IsPeer(r) {
-		w.Write([]byte("client must be in cluster"))
+
+		result.Message = "client must be in cluster"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 	}
 
@@ -1452,8 +1456,9 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if date == "" {
+		result.Message = "require paramete date &force , ?date=20181230"
 
-		w.Write([]byte("require paramete date &force , ?date=20181230"))
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 	}
 	date = strings.Replace(date, ".", "", -1)
@@ -1467,8 +1472,10 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 		go this.CheckFileAndSendToPeer(date, CONST_Md5_ERROR_FILE_NAME, isForceUpload)
 
 	}
+	result.Status = "ok"
+	result.Message = "job is running"
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
 
-	w.Write([]byte("job is running"))
 }
 
 func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
@@ -1622,14 +1629,13 @@ func (this *Server) ReceiveMd5s(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (this *Server) GetClusterNotPermitMessage( r *http.Request) string {
-    var (
-    	message string
+func (this *Server) GetClusterNotPermitMessage(r *http.Request) string {
+	var (
+		message string
 	)
-    message= fmt.Sprintf(CONST_MESSAGE_CLUSTER_IP,this.util.GetClientIp(r))
-    return message
+	message = fmt.Sprintf(CONST_MESSAGE_CLUSTER_IP, this.util.GetClientIp(r))
+	return message
 }
-
 
 func (this *Server) GetMd5sForWeb(w http.ResponseWriter, r *http.Request) {
 
@@ -1967,20 +1973,21 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		md5sum   string
 		fileInfo *FileInfo
 		fpath    string
-		delUrl string
-
-		inner string
+		delUrl   string
+		result   JsonResult
+		inner    string
 	)
-	_=delUrl
-	_=inner
+	_ = delUrl
+	_ = inner
 	r.ParseForm()
 
 	md5sum = r.FormValue("md5")
 	inner = r.FormValue("inner")
-
+	result.Status = "fail"
 
 	if len(md5sum) < 32 {
-		w.Write([]byte("md5 unvalid"))
+		result.Message = "md5 unvalid"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 	}
 	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); err != nil {
@@ -1994,10 +2001,8 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		fpath = fileInfo.Path + "/" + fileInfo.Name
 	}
 
-
-
 	if fileInfo.Path != "" && this.util.FileExists(fpath) {
-		this.ldb.Delete([]byte(fileInfo.Md5),nil)
+		this.ldb.Delete([]byte(fileInfo.Md5), nil)
 		if err = os.Remove(fpath); err != nil {
 			w.Write([]byte(err.Error()))
 			return
@@ -2015,12 +2020,15 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 			//	}
 			//}
 
-            this.SaveFileMd5Log(fileInfo,CONST_REMOME_Md5_FILE_NAME)
-			w.Write([]byte("remove success"))
+			this.SaveFileMd5Log(fileInfo, CONST_REMOME_Md5_FILE_NAME)
+			result.Message = "remove success"
+			result.Status = "ok"
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 	}
-	w.Write([]byte("fail remove"))
+	result.Message = "fail remove"
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
 
 }
 
@@ -2029,7 +2037,7 @@ func (this *Server) getRequestURI(action string) string {
 		uri string
 	)
 	if Config().SupportGroupManage {
-		uri= "/"+Config().Group+ "/" + action
+		uri = "/" + Config().Group + "/" + action
 	} else {
 		uri = "/" + action
 	}
@@ -2370,15 +2378,23 @@ func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 
 func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 
+	var (
+		result JsonResult
+	)
 	this.RepairStat()
-
-	w.Write([]byte("ok"))
+	result.Status = "ok"
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
 
 }
 
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
+	var (
+		result JsonResult
+	)
 	data := this.util.JsonEncodePretty(this.GetStat())
-	w.Write([]byte(data))
+	result.Status = "ok"
+	result.Data = data
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
 }
 
 func (this *Server) GetStat() []StatDateFileInfo {
@@ -2554,7 +2570,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 
 		Update := func(peer string, dateStat StatDateFileInfo) { //从远端拉数据过来
 
-			req := httplib.Get(fmt.Sprintf("%s%s?date=%s&force=%s", peer,this.getRequestURI("sync"), dateStat.Date, "1"))
+			req := httplib.Get(fmt.Sprintf("%s%s?date=%s&force=%s", peer, this.getRequestURI("sync"), dateStat.Date, "1"))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			if _, err = req.String(); err != nil {
 				log.Error(err)
@@ -2566,7 +2582,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 
 		for _, peer := range Config().Peers {
 
-			req := httplib.Get(fmt.Sprintf("%s%s", peer,this.getRequestURI("stat")))
+			req := httplib.Get(fmt.Sprintf("%s%s", peer, this.getRequestURI("stat")))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			if err = req.ToJSON(&dateStats); err != nil {
 				log.Error(err)
@@ -2583,7 +2599,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 					case int64:
 						if v.(int64) != dateStat.FileCount || forceRepair { //不相等,找差异
 							//TODO
-							req := httplib.Post(fmt.Sprintf("%s%s", peer,this.getRequestURI("get_md5s_by_date")))
+							req := httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("get_md5s_by_date")))
 							req.SetTimeout(time.Second*5, time.Second*20)
 
 							req.Param("date", dateStat.Date)
@@ -2598,7 +2614,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 							remoteSet = this.util.StrToMapSet(md5s, ",")
 							allSet = localSet.Union(remoteSet)
 							md5s = this.util.MapSetToStr(allSet.Difference(localSet), ",")
-							req = httplib.Post(fmt.Sprintf("%s%s", peer,this.getRequestURI("receive_md5s")))
+							req = httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("receive_md5s")))
 							req.SetTimeout(time.Second*5, time.Second*15)
 							req.Param("md5s", md5s)
 							req.String()
@@ -2696,7 +2712,7 @@ func (this *Server) Check() {
 		}()
 
 		var (
-			status  Status
+			status  JsonResult
 			err     error
 			subject string
 			body    string
@@ -2705,7 +2721,7 @@ func (this *Server) Check() {
 
 		for _, peer := range Config().Peers {
 
-			req = httplib.Get( fmt.Sprintf("%s%s",peer,this.getRequestURI("status")))
+			req = httplib.Get(fmt.Sprintf("%s%s", peer, this.getRequestURI("status")))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			err = req.ToJSON(&status)
 
@@ -2749,12 +2765,17 @@ func (this *Server) Check() {
 
 }
 func (this *Server) RepairFileInfo(w http.ResponseWriter, r *http.Request) {
+	var (
+		result JsonResult
+	)
 	if !this.IsPeer(r) {
 		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		return
 	}
+	result.Status = "ok"
+	result.Message = "repair job start,don't try again"
 	go this.RepairFileInfoFromFile()
-	w.Write([]byte("repair job start,don't try again"))
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
 }
 
 func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
@@ -2763,10 +2784,13 @@ func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 		err  error
 		data []byte
 
-		cfg GloablConfig
-		action string
+		cfg     GloablConfig
+		action  string
 		cfgjson string
+		result  JsonResult
 	)
+
+	result.Status = "fail"
 
 	r.ParseForm()
 	if !this.IsPeer(r) {
@@ -2774,56 +2798,62 @@ func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfgjson=r.FormValue("cfg")
-	action=r.FormValue("action")
-	_=cfgjson
+	cfgjson = r.FormValue("cfg")
+	action = r.FormValue("action")
+	_ = cfgjson
 
-	if action=="get" {
-		w.Write([]byte(this.util.JsonEncodePretty( Config())))
+	if action == "get" {
+		result.Data = Config()
+		result.Status = "ok"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 
 	}
 
-	if action=="set" {
-		if cfgjson=="" {
-			w.Write([]byte("(error)parameter cfg(json) require"))
+	if action == "set" {
+		if cfgjson == "" {
+			result.Message = "(error)parameter cfg(json) require"
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
-		if err=json.Unmarshal([]byte(cfgjson),cfg);err!=nil {
+		if err = json.Unmarshal([]byte(cfgjson), &cfg); err != nil {
 			log.Error(err)
+			result.Message = err.Error()
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
-		cfgjson= this.util.JsonEncodePretty(cfg)
-		this.util.WriteFile(CONST_CONF_FILE_NAME,cfgjson)
-		w.Write([]byte("ok"))
+		result.Status = "ok"
+		cfgjson = this.util.JsonEncodePretty(cfg)
+		this.util.WriteFile(CONST_CONF_FILE_NAME, cfgjson)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 	}
 
-	if action=="reload" {
+	if action == "reload" {
 
 		if data, err = ioutil.ReadFile(CONST_CONF_FILE_NAME); err != nil {
-			w.Write([]byte(err.Error()))
+			result.Message = err.Error()
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 
 		if err = json.Unmarshal(data, &cfg); err != nil {
-			w.Write([]byte(err.Error()))
+			result.Message = err.Error()
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 
 		ParseConfig(CONST_CONF_FILE_NAME)
 
 		this.initComponent(true)
-
-		w.Write([]byte("ok"))
+		result.Status = "ok"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 
 	}
-	if action=="" {
+	if action == "" {
 		w.Write([]byte("(error)action support set(json) get reload"))
 	}
-
-
 
 }
 
@@ -2832,7 +2862,9 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 	var (
 		force       string
 		forceRepair bool
+		result      JsonResult
 	)
+	result.Status = "ok"
 	r.ParseForm()
 	force = r.FormValue("force")
 	if force == "1" {
@@ -2840,9 +2872,11 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 	}
 	if this.IsPeer(r) {
 		go this.AutoRepair(forceRepair)
-		w.Write([]byte("repair job start..."))
+		result.Message = "repair job start..."
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 	} else {
-		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 	}
 
 }
@@ -2850,7 +2884,7 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 
 	var (
-		status Status
+		status JsonResult
 		err    error
 		data   []byte
 		sts    map[string]interface{}
@@ -3145,7 +3179,6 @@ func (this *Server) Main() {
 
 	}
 
-
 	if Config().SupportGroupManage {
 		http.HandleFunc(fmt.Sprintf("/%s", Config().Group), this.Index)
 		http.HandleFunc(fmt.Sprintf("/%s/check_file_exist", Config().Group), this.CheckFileExist)
@@ -3181,8 +3214,6 @@ func (this *Server) Main() {
 		http.HandleFunc("/receive_md5s", this.ReceiveMd5s)
 	}
 
-
-
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
@@ -3191,7 +3222,6 @@ func (this *Server) Main() {
 }
 
 func main() {
-
 
 	server.Main()
 
