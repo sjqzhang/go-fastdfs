@@ -1250,6 +1250,10 @@ func (this *Server) CheckFileAndSendToPeer(date string, filename string, isForce
 				continue
 			}
 
+			if !this.util.Contains(this.host,fileInfo.Peers) {
+				fileInfo.Peers=append(fileInfo.Peers,this.host) // peer is null
+			}
+
 			if filename == CONST_Md5_QUEUE_FILE_NAME {
 				this.AppendToDownloadQueue(fileInfo)
 			} else {
@@ -1839,8 +1843,12 @@ func (this *Server) GetMd5sByDate(date string, filename string) (mapset.Set, err
 		fpath = DATA_DIR + "/" + date + "/" + filename
 	}
 
+
+
 	if !this.util.FileExists(fpath) {
-		return result, errors.New(fmt.Sprintf("fpath %s not found", fpath))
+		os.MkdirAll(DATA_DIR + "/" + date,0755)
+		log.Warn(fmt.Sprintf("fpath %s not found", fpath))
+		return result, nil
 	}
 
 	if data, err = ioutil.ReadFile(fpath); err != nil {
@@ -2679,7 +2687,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 						if v.(int64) != dateStat.FileCount || forceRepair { //不相等,找差异
 							//TODO
 							req := httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("get_md5s_by_date")))
-							req.SetTimeout(time.Second*5, time.Second*20)
+							req.SetTimeout(time.Second*15, time.Second*60)
 
 							req.Param("date", dateStat.Date)
 
@@ -2694,7 +2702,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 							allSet = localSet.Union(remoteSet)
 							md5s = this.util.MapSetToStr(allSet.Difference(localSet), ",")
 							req = httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("receive_md5s")))
-							req.SetTimeout(time.Second*5, time.Second*15)
+							req.SetTimeout(time.Second*15, time.Second*60)
 							req.Param("md5s", md5s)
 							req.String()
 							tmpSet = allSet.Difference(remoteSet)
