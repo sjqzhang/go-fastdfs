@@ -174,8 +174,7 @@ type Server struct {
 	sumMap         *CommonMap //map[string]mapset.Set
 	queueToPeers   chan FileInfo
 	queueFromPeers chan FileInfo
-	//fileset      *CommonMap
-	//errorset     *CommonMap
+	lockMap   *CommonMap
 
 	curDate string
 	host    string
@@ -260,6 +259,7 @@ func NewServer() *Server {
 	server = &Server{
 		util:           &Common{},
 		statMap:        &CommonMap{m: make(map[string]interface{})},
+		lockMap:        &CommonMap{m: make(map[string]interface{})},
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
 		//fileset:      &CommonMap{m: make(map[string]interface{})},
@@ -316,6 +316,44 @@ func (s *CommonMap) Put(k string, v interface{}) {
 	defer s.Unlock()
 	s.m[k] = v
 }
+
+func (s *CommonMap) LockKey(k string) {
+	s.Lock()
+	if v,ok:=s.m[k];ok {
+		s.m[k+"_lock_"]=true
+		s.Unlock()
+		v.(*sync.Mutex).Lock()
+
+
+	} else {
+		s.m[k]=&sync.Mutex{}
+		v=s.m[k]
+		s.m[k+"_lock_"]=true
+		s.Unlock()
+		v.(*sync.Mutex).Lock()
+	}
+}
+func (s *CommonMap) UnLockKey(k string) {
+	s.Lock()
+	if v,ok:=s.m[k];ok {
+		v.(*sync.Mutex).Unlock()
+		s.m[k+"_lock_"]=false
+	}
+	s.Unlock()
+}
+
+func (s *CommonMap) IsLock(k string) bool {
+	s.Lock()
+	if v,ok:=s.m[k+"_lock_"];ok {
+		s.Unlock()
+		return v.(bool)
+	}
+	s.Unlock()
+	return false
+}
+
+
+
 
 func (s *CommonMap) Keys() []string {
 
@@ -799,6 +837,14 @@ func (this *Server) RepairStat() {
 		}
 	}()
 
+	if this.lockMap.IsLock("RepairStat") {
+		log.Warn("Lock RepairStat")
+		return
+	}
+
+	this.lockMap.LockKey("RepairStat")
+	defer this.lockMap.UnLockKey("RepairStat")
+
 	this.statMap.Put(CONST_STAT_FILE_COUNT_KEY, int64(0))
 	this.statMap.Put(CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
 
@@ -902,11 +948,18 @@ func (this *Server) RepairFileInfoFromFile() {
 	defer func() {
 		if re := recover(); re != nil {
 			buffer := debug.Stack()
-			log.Error("RepairFileInfoFromDisk")
+			log.Error("RepairFileInfoFromFile")
 			log.Error(re)
 			log.Error(string(buffer))
 		}
 	}()
+
+	if this.lockMap.IsLock("RepairFileInfoFromFile") {
+		log.Warn("Lock RepairFileInfoFromFile")
+		return
+	}
+	this.lockMap.LockKey("RepairFileInfoFromFile")
+	defer  this.lockMap.UnLockKey("RepairFileInfoFromFile")
 
 	handlefunc := func(file_path string, f os.FileInfo, err error) error {
 
@@ -3041,6 +3094,34 @@ func init() {
 	staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
 
 	server.initComponent(false)
+}
+
+func (this *Server)test()  {
+
+	tt:= func(i int) {
+
+		if server.lockMap.IsLock("xx") {
+			return
+		}
+
+		server.lockMap.LockKey("xx")
+		defer server.lockMap.UnLockKey("xx")
+
+
+		//time.Sleep(time.Nanosecond*1)
+		fmt.Println("xx",i)
+	}
+
+	for i:=0;i<10000;i++ {
+		go tt(i)
+	}
+
+	time.Sleep(time.Second*3)
+
+	go tt(999999)
+	go tt(999999)
+	go tt(999999)
+
 }
 
 func (this *Server) initComponent(isReload bool) {
