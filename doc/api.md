@@ -1,6 +1,13 @@
-#API通用说明
+## API通用说明
 ```
 一、统一使用POST请求
+二、返回格式统一为json
+　　格式如下
+    {
+	  "status":"ok",
+	  "message":"",
+	  "data":{}
+	}
 二、url中的group只有在support_group_manage设置为true才有。
 	例如：
 	http://10.1.5.9:8080/group/reload
