@@ -174,7 +174,7 @@ type Server struct {
 	sumMap         *CommonMap //map[string]mapset.Set
 	queueToPeers   chan FileInfo
 	queueFromPeers chan FileInfo
-	lockMap   *CommonMap
+	lockMap        *CommonMap
 
 	curDate string
 	host    string
@@ -258,14 +258,12 @@ func NewServer() *Server {
 
 	server = &Server{
 		util:           &Common{},
-		statMap:        &CommonMap{m: make(map[string]interface{})},
-		lockMap:        &CommonMap{m: make(map[string]interface{})},
+		statMap:        NewCommonMap(0),
+		lockMap:        NewCommonMap(0),
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
-		//fileset:      &CommonMap{m: make(map[string]interface{})},
-		//errorset:     &CommonMap{m: make(map[string]interface{})},
 
-		sumMap: &CommonMap{m: make(map[string]interface{}, 365*3)}, // make(map[string]mapset.Set, 365*3),
+		sumMap: NewCommonMap(363*3), // make(map[string]mapset.Set, 365*3),
 	}
 	settins := httplib.BeegoHTTPSettings{
 		UserAgent:        "go-fastdfs",
@@ -304,6 +302,14 @@ type CommonMap struct {
 	m map[string]interface{}
 }
 
+func NewCommonMap(size int) *CommonMap {
+	if size>0 {
+		return &CommonMap{m: make(map[string]interface{}, size)}
+	} else {
+		return &CommonMap{m: make(map[string]interface{})}
+	}
+}
+
 func (s *CommonMap) GetValue(k string) (interface{}, bool) {
 	s.Lock()
 	defer s.Unlock()
@@ -319,41 +325,37 @@ func (s *CommonMap) Put(k string, v interface{}) {
 
 func (s *CommonMap) LockKey(k string) {
 	s.Lock()
-	if v,ok:=s.m[k];ok {
-		s.m[k+"_lock_"]=true
+	if v, ok := s.m[k]; ok {
+		s.m[k+"_lock_"] = true
 		s.Unlock()
 		v.(*sync.Mutex).Lock()
 
-
 	} else {
-		s.m[k]=&sync.Mutex{}
-		v=s.m[k]
-		s.m[k+"_lock_"]=true
+		s.m[k] = &sync.Mutex{}
+		v = s.m[k]
+		s.m[k+"_lock_"] = true
 		s.Unlock()
 		v.(*sync.Mutex).Lock()
 	}
 }
 func (s *CommonMap) UnLockKey(k string) {
 	s.Lock()
-	if v,ok:=s.m[k];ok {
+	if v, ok := s.m[k]; ok {
 		v.(*sync.Mutex).Unlock()
-		s.m[k+"_lock_"]=false
+		s.m[k+"_lock_"] = false
 	}
 	s.Unlock()
 }
 
 func (s *CommonMap) IsLock(k string) bool {
 	s.Lock()
-	if v,ok:=s.m[k+"_lock_"];ok {
+	if v, ok := s.m[k+"_lock_"]; ok {
 		s.Unlock()
 		return v.(bool)
 	}
 	s.Unlock()
 	return false
 }
-
-
-
 
 func (s *CommonMap) Keys() []string {
 
@@ -959,7 +961,7 @@ func (this *Server) RepairFileInfoFromFile() {
 		return
 	}
 	this.lockMap.LockKey("RepairFileInfoFromFile")
-	defer  this.lockMap.UnLockKey("RepairFileInfoFromFile")
+	defer this.lockMap.UnLockKey("RepairFileInfoFromFile")
 
 	handlefunc := func(file_path string, f os.FileInfo, err error) error {
 
@@ -1017,7 +1019,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		filename string
 		fpath    string
 		fi       os.FileInfo
-		sum string
+		sum      string
 	)
 
 	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) {
@@ -1052,12 +1054,12 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		return
 	}
 
-	if sum,err=this.util.GetFileSumByName(fpath,Config().FileSumArithmetic);err!=nil {
+	if sum, err = this.util.GetFileSumByName(fpath, Config().FileSumArithmetic); err != nil {
 		log.Error(err)
 		return
 	}
 
-	if fi.Size()!=fileInfo.Size || sum!=fileInfo.Md5 {
+	if fi.Size() != fileInfo.Size || sum != fileInfo.Md5 {
 		log.Error("file sum check error")
 		os.Remove(fpath)
 		return
@@ -1250,8 +1252,8 @@ func (this *Server) CheckFileAndSendToPeer(date string, filename string, isForce
 				continue
 			}
 
-			if !this.util.Contains(this.host,fileInfo.Peers) {
-				fileInfo.Peers=append(fileInfo.Peers,this.host) // peer is null
+			if !this.util.Contains(this.host, fileInfo.Peers) {
+				fileInfo.Peers = append(fileInfo.Peers, this.host) // peer is null
 			}
 
 			if filename == CONST_Md5_QUEUE_FILE_NAME {
@@ -1843,10 +1845,8 @@ func (this *Server) GetMd5sByDate(date string, filename string) (mapset.Set, err
 		fpath = DATA_DIR + "/" + date + "/" + filename
 	}
 
-
-
 	if !this.util.FileExists(fpath) {
-		os.MkdirAll(DATA_DIR + "/" + date,0755)
+		os.MkdirAll(DATA_DIR+"/"+date, 0755)
 		log.Warn(fmt.Sprintf("fpath %s not found", fpath))
 		return result, nil
 	}
@@ -2461,14 +2461,14 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
-		inner string
+		inner  string
 	)
 	r.ParseForm()
-	inner=r.FormValue("inner")
+	inner = r.FormValue("inner")
 	data := this.GetStat()
 	result.Status = "ok"
 	result.Data = data
-	if inner=="1" {
+	if inner == "1" {
 		w.Write([]byte(this.util.JsonEncodePretty(data)))
 	} else {
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
@@ -2669,7 +2669,7 @@ func (this *Server) AutoRepair(forceRepair bool) {
 		for _, peer := range Config().Peers {
 
 			req := httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("stat")))
-			req.Param("inner","1")
+			req.Param("inner", "1")
 			req.SetTimeout(time.Second*5, time.Second*15)
 			if err = req.ToJSON(&dateStats); err != nil {
 				log.Error(err)
@@ -3130,9 +3130,9 @@ func init() {
 	server.initComponent(false)
 }
 
-func (this *Server)test()  {
+func (this *Server) test() {
 
-	tt:= func(i int) {
+	tt := func(i int) {
 
 		if server.lockMap.IsLock("xx") {
 			return
@@ -3141,16 +3141,15 @@ func (this *Server)test()  {
 		server.lockMap.LockKey("xx")
 		defer server.lockMap.UnLockKey("xx")
 
-
 		//time.Sleep(time.Nanosecond*1)
-		fmt.Println("xx",i)
+		fmt.Println("xx", i)
 	}
 
-	for i:=0;i<10000;i++ {
+	for i := 0; i < 10000; i++ {
 		go tt(i)
 	}
 
-	time.Sleep(time.Second*3)
+	time.Sleep(time.Second * 3)
 
 	go tt(999999)
 	go tt(999999)
