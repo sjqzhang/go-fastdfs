@@ -2587,7 +2587,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		os.MkdirAll(largeDir, 0775)
 	}
 
-	reName = fmt.Sprintf("%d", this.util.RandInt(100, 100))
+	reName = fmt.Sprintf("%d", this.util.RandInt(100, 200))
 	destPath = largeDir + "/" + reName
 
 	this.lockMap.LockKey(destPath)
