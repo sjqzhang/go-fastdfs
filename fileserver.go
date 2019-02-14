@@ -66,6 +66,10 @@ const (
 
 	DATA_DIR = "data"
 
+	LARGE_DIR_NAME = "haystack"
+
+	LARGE_DIR = STORE_DIR + "/haystack"
+
 	CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
 
 	CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
@@ -80,6 +84,7 @@ const (
 	CONST_Md5_QUEUE_FILE_NAME  = "queue.md5"
 	CONST_FILE_Md5_FILE_NAME   = "files.md5"
 	CONST_REMOME_Md5_FILE_NAME = "removes.md5"
+	CONST_SMALL_FILE_SIZE      = 1024 * 1024
 
 	CONST_MESSAGE_CLUSTER_IP = "Can only be called by the cluster ip,current ip:%s"
 
@@ -94,6 +99,8 @@ const (
 	"peers": ["%s"],
 	"组号": "用于区别不同的集群(上传或下载)与support_group_upload配合使用,带在下载路径中",
 	"group": "group1",
+	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
+	"enable_merge_small_file": false,
 	"重试同步失败文件的时间": "单位秒",
 	"refresh_interval": 1800,
 	"是否自动重命名": "默认不自动重命名,使用原文件名",
@@ -134,7 +141,6 @@ const (
 	"admin_ips": ["127.0.0.1"]
 
 }
-	
 	`
 
 	logConfigStr = `
@@ -189,6 +195,7 @@ type FileInfo struct {
 	Peers     []string `json:"peers"`
 	Scene     string   `json:"scene"`
 	TimeStamp int64    `json:"timeStamp"`
+	OffSet    int64    `json:"offset"`
 }
 
 type JsonResult struct {
@@ -223,29 +230,30 @@ type StatDateFileInfo struct {
 }
 
 type GloablConfig struct {
-	Addr                string   `json:"addr"`
-	Peers               []string `json:"peers"`
-	Group               string   `json:"group"`
-	RenameFile          bool     `json:"rename_file"`
-	ShowDir             bool     `json:"show_dir"`
-	RefreshInterval     int      `json:"refresh_interval"`
-	EnableWebUpload     bool     `json:"enable_web_upload"`
-	DownloadDomain      string   `json:"download_domain"`
-	EnableCustomPath    bool     `json:"enable_custom_path"`
-	Scenes              []string `json:"scenes"`
-	AlramReceivers      []string `json:"alram_receivers"`
-	DefaultScene        string   `json:"default_scene"`
-	Mail                Mail     `json:"mail"`
-	AlarmUrl            string   `json:"alarm_url"`
-	DownloadUseToken    bool     `json:"download_use_token"`
-	DownloadTokenExpire int      `json:"download_token_expire"`
-	QueueSize           int      `json:"queue_size"`
-	AutoRepair          bool     `json:"auto_repair"`
-	Host                string   `json:"host"`
-	FileSumArithmetic   string   `json:"file_sum_arithmetic"`
-	PeerId              string   `json:"peer_id"`
-	SupportGroupManage  bool     `json:"support_group_manage"`
-	AdminIps            []string `json:"admin_ips"`
+	Addr                 string   `json:"addr"`
+	Peers                []string `json:"peers"`
+	Group                string   `json:"group"`
+	RenameFile           bool     `json:"rename_file"`
+	ShowDir              bool     `json:"show_dir"`
+	RefreshInterval      int      `json:"refresh_interval"`
+	EnableWebUpload      bool     `json:"enable_web_upload"`
+	DownloadDomain       string   `json:"download_domain"`
+	EnableCustomPath     bool     `json:"enable_custom_path"`
+	Scenes               []string `json:"scenes"`
+	AlramReceivers       []string `json:"alram_receivers"`
+	DefaultScene         string   `json:"default_scene"`
+	Mail                 Mail     `json:"mail"`
+	AlarmUrl             string   `json:"alarm_url"`
+	DownloadUseToken     bool     `json:"download_use_token"`
+	DownloadTokenExpire  int      `json:"download_token_expire"`
+	QueueSize            int      `json:"queue_size"`
+	AutoRepair           bool     `json:"auto_repair"`
+	Host                 string   `json:"host"`
+	FileSumArithmetic    string   `json:"file_sum_arithmetic"`
+	PeerId               string   `json:"peer_id"`
+	SupportGroupManage   bool     `json:"support_group_manage"`
+	AdminIps             []string `json:"admin_ips"`
+	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
 }
 
 func NewServer() *Server {
@@ -262,8 +270,7 @@ func NewServer() *Server {
 		lockMap:        NewCommonMap(0),
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
-
-		sumMap: NewCommonMap(363*3), // make(map[string]mapset.Set, 365*3),
+		sumMap:         NewCommonMap(363 * 3),
 	}
 	settins := httplib.BeegoHTTPSettings{
 		UserAgent:        "go-fastdfs",
@@ -303,7 +310,7 @@ type CommonMap struct {
 }
 
 func NewCommonMap(size int) *CommonMap {
-	if size>0 {
+	if size > 0 {
 		return &CommonMap{m: make(map[string]interface{}, size)}
 	} else {
 		return &CommonMap{m: make(map[string]interface{})}
@@ -671,6 +678,53 @@ func (this *Common) GetFileSha1Sum(file *os.File) string {
 	return sum
 }
 
+func (this *Common) WriteFileByOffSet(filepath string, offset int64, data []byte) (error) {
+	var (
+		err   error
+		file  *os.File
+		count int
+	)
+	file, err = os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	count, err = file.WriteAt(data, offset)
+	if err != nil {
+		return err
+	}
+	if count != len(data) {
+		return errors.New(fmt.Sprintf("write %s error", filepath))
+	}
+	return nil
+}
+
+func (this *Common) ReadFileByOffSet(filepath string, offset int64, length int) ([]byte, error) {
+	var (
+		err    error
+		file   *os.File
+		result []byte
+		count  int
+	)
+	file, err = os.Open(filepath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	result = make([]byte, length)
+
+	count, err = file.ReadAt(result, offset)
+	if err != nil {
+		return nil, err
+	}
+	if count != length {
+		return nil, errors.New("read error")
+	}
+	return result, nil
+
+}
+
 func (this *Common) Contains(obj interface{}, arrayobj interface{}) bool {
 	targetValue := reflect.ValueOf(arrayobj)
 	switch reflect.TypeOf(arrayobj).Kind() {
@@ -1020,6 +1074,8 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		fpath    string
 		fi       os.FileInfo
 		sum      string
+		data     []byte
+
 	)
 
 	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) {
@@ -1043,6 +1099,32 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	fpath = fileInfo.Path + "/" + filename
 
 	req.SetTimeout(time.Second*5, time.Second*300)
+
+	if fileInfo.OffSet != -1 { //small file download
+		data, err = req.Bytes()
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		data2:=make([]byte,len(data)+1)
+		data2[0]='1'
+        for i,v:=range data {
+        	data2[i+1]=v
+		}
+        data=data2
+		if int64(len(data)) != fileInfo.Size {
+			log.Warn("file size is error")
+			return
+		}
+
+		fpath = strings.Split(fpath, ",")[0]
+
+		err = this.util.WriteFileByOffSet(fpath, fileInfo.OffSet, data)
+		if err != nil {
+			log.Warn(err)
+		}
+		return
+	}
 
 	if err = req.ToFile(fpath); err != nil {
 		log.Error(err)
@@ -1088,6 +1170,13 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		md5sum       string
 		fp           *os.File
 		isPeer       bool
+		isSmallFile  bool
+		data         []byte
+		offset       int64
+		length       int
+		smallPath    string
+		notFound bool
+
 	)
 
 	r.ParseForm()
@@ -1122,6 +1211,14 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
 
+	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
+		isSmallFile = true
+		smallPath = STORE_DIR + "/" + fullpath //notice order
+		fullpath = strings.Split(fullpath, ",")[0]
+
+	}
+	_ = isSmallFile
+	_ = smallPath
 	fullpath = STORE_DIR + "/" + fullpath
 
 	if pathval, err = url.ParseQuery(fullpath); err != nil {
@@ -1145,8 +1242,12 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if Config().DownloadUseToken && !isPeer {
-		fullpath = strings.Split(fullpath, "?")[0]
-		pathMd5 = this.util.MD5(fullpath)
+		if isSmallFile {
+			pathMd5 = this.util.MD5(smallPath)
+		} else {
+			fullpath = strings.Split(fullpath, "?")[0]
+			pathMd5 = this.util.MD5(fullpath)
+		}
 		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
 			log.Error(err)
 			if this.util.FileExists(fullpath) {
@@ -1171,9 +1272,59 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+
+	if isSmallFile {
+		pos := strings.Split(r.RequestURI, ",")
+		if len(pos) < 3 {
+			w.Write([]byte("(error) uri invalid"))
+			return
+		}
+		offset, err = strconv.ParseInt(pos[1], 10, 64)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		if length, err = strconv.Atoi(pos[2]); err != nil {
+			log.Error(err)
+			return
+		}
+
+		if length > CONST_SMALL_FILE_SIZE || offset < 0 {
+			log.Warn("invalid filesize or offset")
+			return
+		}
+
+		if info, err = os.Stat(fullpath); err != nil {
+			log.Error(err)
+			return
+		}
+
+		if info.Size()< offset+ int64(length) {
+            notFound=true
+		} else {
+
+			data, err = this.util.ReadFileByOffSet(fullpath, offset, length)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+			if string(data[0])=="1" {
+				w.Write(data[1:])
+				return
+			} else {
+				notFound=true
+			}
+
+		}
+	}
+
 	if info, err = os.Stat(fullpath); err != nil {
 		log.Error(err)
-		pathMd5 = this.util.MD5(fullpath)
+        if isSmallFile && notFound {
+			pathMd5 = this.util.MD5(smallPath)
+		} else {
+			pathMd5 = this.util.MD5(fullpath)
+		}
 		for _, peer = range Config().Peers {
 
 			if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil {
@@ -1200,6 +1351,8 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
 		return
 	}
+
+
 
 	if !Config().ShowDir && info.IsDir() {
 		w.Write([]byte("list dir deny"))
@@ -1308,6 +1461,9 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 
 		if fileInfo.ReName != "" {
 			filename = fileInfo.ReName
+			if fileInfo.OffSet != -1 {
+				filename = strings.Split(fileInfo.ReName, ",")[0]
+			}
 		}
 
 		fpath = fileInfo.Path + "/" + filename
@@ -1846,7 +2002,7 @@ func (this *Server) GetMd5sByDate(date string, filename string) (mapset.Set, err
 	}
 
 	if !this.util.FileExists(fpath) {
-		os.MkdirAll(DATA_DIR+"/"+date, 0755)
+		os.MkdirAll(DATA_DIR+"/"+date, 0775)
 		log.Warn(fmt.Sprintf("fpath %s not found", fpath))
 		return result, nil
 	}
@@ -2156,6 +2312,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		output = r.FormValue("output")
 
 		fileInfo.Md5 = md5sum
+		fileInfo.OffSet = -1
 		if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
 			log.Error(err)
 			w.Write([]byte(err.Error()))
@@ -2275,6 +2432,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			} else {
 				fileInfo.Size = fi.Size()
 			}
+			if fi.Size() != header.Size {
+				return fileInfo, errors.New("(error)file uncomplete")
+			}
 			v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
 
 			fileInfo.Md5 = v
@@ -2286,7 +2446,10 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		}
 
-		SaveUploadFile(uploadFile, uploadHeader, &fileInfo)
+		if _, err = SaveUploadFile(uploadFile, uploadHeader, &fileInfo); err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
 
 		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
 
@@ -2321,6 +2484,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				w.Write(data)
+				return
 
 			} else {
 
@@ -2339,20 +2503,29 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
+
+			if err = this.SaveSmallFile(&fileInfo); err != nil {
+				log.Error(err)
+				return
+			}
+
+		}
+
 		go this.postFileToPeer(&fileInfo)
 
 		outname = fileInfo.Name
 
-		if Config().RenameFile {
+		if fileInfo.ReName != "" {
 			outname = fileInfo.ReName
 		}
 
-		if fi, err := os.Stat(fileInfo.Path + "/" + outname); err != nil {
-			log.Error(err)
-		} else {
-			fileInfo.Size = fi.Size()
-			this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+		if fileInfo.Size <= 0 {
+			log.Error("file size is zero")
+			return
 		}
+
+		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 
 		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
 		p = Config().Group + "/" + p + "/" + outname
@@ -2387,6 +2560,74 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("(error)fail,please use post method"))
 		return
 	}
+
+}
+
+func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
+
+	var (
+		err      error
+		filename string
+		fpath    string
+		srcFile  *os.File
+		desFile  *os.File
+		largeDir string
+		destPath string
+		reName   string
+	)
+	filename = fileInfo.Name
+	if fileInfo.ReName != "" {
+		filename = fileInfo.ReName
+	}
+	fpath = fileInfo.Path + "/" + filename
+
+	largeDir = LARGE_DIR + "/" + Config().PeerId
+
+	if !this.util.FileExists(largeDir) {
+		os.MkdirAll(largeDir, 0775)
+	}
+
+	reName = fmt.Sprintf("%d", this.util.RandInt(100, 100))
+	destPath = largeDir + "/" + reName
+
+	this.lockMap.LockKey(destPath)
+	defer this.lockMap.UnLockKey(destPath)
+
+	if this.util.FileExists(fpath) {
+		srcFile, err = os.OpenFile(fpath, os.O_CREATE|os.O_RDONLY, 06666)
+		if err != nil {
+			return err
+		}
+		defer srcFile.Close()
+
+		desFile, err = os.OpenFile(destPath, os.O_CREATE|os.O_RDWR, 06666)
+		if err != nil {
+			return err
+		}
+		defer desFile.Close()
+
+		fileInfo.OffSet, err = desFile.Seek(0, 2)
+		if _,err=desFile.Write([]byte("1"));err!=nil  {//first byte set 1
+			return err
+		}
+		fileInfo.OffSet, err = desFile.Seek(0, 2)
+
+		if err != nil {
+			return err
+		}
+		fileInfo.OffSet=fileInfo.OffSet-1  //minus 1 byte
+		fileInfo.Size=fileInfo.Size+1
+		fileInfo.ReName = fmt.Sprintf("%s,%d,%d", reName, fileInfo.OffSet, fileInfo.Size)
+
+		if _, err = io.Copy(desFile, srcFile); err != nil {
+			return err
+		}
+		srcFile.Close()
+		os.Remove(fpath)
+		fileInfo.Path = largeDir
+	}
+
+	return nil
 
 }
 
@@ -3132,28 +3373,56 @@ func init() {
 
 func (this *Server) test() {
 
-	tt := func(i int) {
+	testLock := func() {
+		tt := func(i int) {
 
-		if server.lockMap.IsLock("xx") {
-			return
+			if server.lockMap.IsLock("xx") {
+				return
+			}
+
+			server.lockMap.LockKey("xx")
+			defer server.lockMap.UnLockKey("xx")
+
+			//time.Sleep(time.Nanosecond*1)
+			fmt.Println("xx", i)
 		}
 
-		server.lockMap.LockKey("xx")
-		defer server.lockMap.UnLockKey("xx")
+		for i := 0; i < 10000; i++ {
+			go tt(i)
+		}
 
-		//time.Sleep(time.Nanosecond*1)
-		fmt.Println("xx", i)
+		time.Sleep(time.Second * 3)
+
+		go tt(999999)
+		go tt(999999)
+		go tt(999999)
 	}
+	_ = testLock
 
-	for i := 0; i < 10000; i++ {
-		go tt(i)
+	testFile := func() {
+
+		var (
+			err error
+			f   *os.File
+		)
+
+		f, err = os.OpenFile("tt", os.O_CREATE|os.O_RDWR, 0777)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		f.WriteAt([]byte("1"),100)
+		f.Seek(0, 2)
+		f.Write([]byte("2"))
+		//fmt.Println(f.Seek(0, 2))
+		//fmt.Println(f.Seek(3, 2))
+		//fmt.Println(f.Seek(3, 0))
+		//fmt.Println(f.Seek(3, 1))
+		//fmt.Println(f.Seek(3, 0))
+		//f.Write([]byte("1"))
 	}
-
-	time.Sleep(time.Second * 3)
-
-	go tt(999999)
-	go tt(999999)
-	go tt(999999)
+	_ = testFile
+	//testFile()
 
 }
 
@@ -3337,6 +3606,7 @@ func (this *Server) Main() {
 
 func main() {
 
+	server.test()
 	server.Main()
 
 }
