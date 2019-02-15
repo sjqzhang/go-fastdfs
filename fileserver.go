@@ -46,7 +46,7 @@ var staticHandler http.Handler
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-var server = NewServer()
+var server *Server
 
 var logacc log.LoggerInterface
 
@@ -56,10 +56,11 @@ var CONST_QUEUE_SIZE = 100000
 
 var (
 	FileName string
-	ptr      unsafe.Pointer
-)
 
-const (
+	ptr unsafe.Pointer
+
+	DOCKER_DIR = ""
+
 	STORE_DIR = "files"
 
 	CONF_DIR = "conf"
@@ -76,6 +77,34 @@ const (
 
 	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
 
+	logConfigStr = `
+<seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
+	<outputs formatid="common">  
+		<buffered formatid="common" size="1048576" flushperiod="1000">  
+			<rollingfile type="size" filename="{DOCKER_DIR}log/fileserver.log" maxsize="104857600" maxrolls="10"/>  
+		</buffered>
+	</outputs>  	  
+	 <formats>
+		 <format id="common" format="%Date %Time [%LEV] [%File:%Line] [%Func] %Msg%n" />  
+	 </formats>  
+</seelog>
+`
+
+	logAccessConfigStr = `
+<seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
+	<outputs formatid="common">  
+		<buffered formatid="common" size="1048576" flushperiod="1000">  
+			<rollingfile type="size" filename="{DOCKER_DIR}log/access.log" maxsize="104857600" maxrolls="10"/>  
+		</buffered>
+	</outputs>  	  
+	 <formats>
+		 <format id="common" format="%Date %Time [%LEV] [%File:%Line] [%Func] %Msg%n" />  
+	 </formats>  
+</seelog>
+`
+)
+
+const (
 	CONST_STAT_FILE_COUNT_KEY = "fileCount"
 
 	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
@@ -95,7 +124,7 @@ const (
 	"peer_id": "%s",
 	"本主机地址": "本机http地址,默认自动生成，必段为内网，自动生成不为内网请自行修改，下同",
 	"host": "%s",
-	"集群": "集群列表,注意为了高可用，IP必须不能是同一个,同一不会自动备份，且不能为127.0.0.1,且必须为内容IP，默认自动生成",
+	"集群": "集群列表,注意为了高可用，IP必须不能是同一个,同一不会自动备份，且不能为127.0.0.1,且必须为内网IP，默认自动生成",
 	"peers": ["%s"],
 	"组号": "用于区别不同的集群(上传或下载)与support_group_upload配合使用,带在下载路径中",
 	"group": "group1",
@@ -105,7 +134,7 @@ const (
 	"refresh_interval": 1800,
 	"是否自动重命名": "默认不自动重命名,使用原文件名",
 	"rename_file": false,
-	"是否支持ＷＥＢ上传,方便调试": "默认支持web上传",
+	"是否支持web上传,方便调试": "默认支持web上传",
 	"enable_web_upload": true,
 	"是否支持非日期路径": "默认支持非日期路径,也即支持自定义路径,需要上传文件时指定path",
 	"enable_custom_path": true,
@@ -142,32 +171,6 @@ const (
 
 }
 	`
-
-	logConfigStr = `
-<seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
-	<outputs formatid="common">  
-		<buffered formatid="common" size="1048576" flushperiod="1000">  
-			<rollingfile type="size" filename="./log/fileserver.log" maxsize="104857600" maxrolls="10"/>  
-		</buffered>
-	</outputs>  	  
-	 <formats>
-		 <format id="common" format="%Date %Time [%LEV] [%File:%Line] [%Func] %Msg%n" />  
-	 </formats>  
-</seelog>
-`
-
-	logAccessConfigStr = `
-<seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
-	<outputs formatid="common">  
-		<buffered formatid="common" size="1048576" flushperiod="1000">  
-			<rollingfile type="size" filename="./log/access.log" maxsize="104857600" maxrolls="10"/>  
-		</buffered>
-	</outputs>  	  
-	 <formats>
-		 <format id="common" format="%Date %Time [%LEV] [%File:%Line] [%Func] %Msg%n" />  
-	 </formats>  
-</seelog>
-`
 )
 
 type Common struct {
@@ -1082,7 +1085,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	}
 
 	if _, err = os.Stat(fileInfo.Path); err != nil {
-		os.MkdirAll(fileInfo.Path, 0775)
+		os.MkdirAll(DOCKER_DIR+fileInfo.Path, 0775)
 	}
 
 	filename = fileInfo.Name
@@ -1220,18 +1223,25 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	_ = smallPath
 	fullpath = STORE_DIR + "/" + fullpath
 
+	fullpath = strings.Replace(fullpath, "&", "$$$$", -1)
+
 	if pathval, err = url.ParseQuery(fullpath); err != nil {
 		log.Error(err)
 	} else {
 
-		for k := range pathval {
+		for k, v := range pathval {
 			if k != "" {
-				fullpath = k
-				break
+				if len(v) > 0 && v[0] != "" {
+					fullpath = k + "=" + v[0]
+				} else {
+					fullpath = k
+				}
 			}
+
 		}
 
 	}
+	fullpath = strings.Replace(fullpath, "$$$$", "&", -1)
 
 	CheckToken := func(token string, md5sum string, timestamp string) bool {
 		if this.util.MD5(md5sum+timestamp) != token {
@@ -1568,7 +1578,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	}
 	fullpath = fileInfo.Path + "/" + outname
 
-	logpath = DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
+	logpath =  DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
 	if _, err = os.Stat(logpath); err != nil {
 		os.MkdirAll(logpath, 0775)
 	}
@@ -1998,7 +2008,7 @@ func (this *Server) GetMd5sByDate(date string, filename string) (mapset.Set, err
 	}
 
 	if !this.util.FileExists(fpath) {
-		os.MkdirAll(DATA_DIR+"/"+date, 0775)
+		os.MkdirAll(DOCKER_DIR+DATA_DIR+"/"+date, 0775)
 		log.Warn(fmt.Sprintf("fpath %s not found", fpath))
 		return result, nil
 	}
@@ -2194,19 +2204,26 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
 		md5sum   string
+		md5path  string
 		fileInfo *FileInfo
 		fpath    string
 		delUrl   string
 		result   JsonResult
 		inner    string
+		name     string
 	)
 	_ = delUrl
 	_ = inner
 	r.ParseForm()
 
 	md5sum = r.FormValue("md5")
+	fpath = r.FormValue("path")
 	inner = r.FormValue("inner")
 	result.Status = "fail"
+
+	if fpath != "" && md5sum == "" {
+		md5sum = this.util.MD5(fpath)
+	}
 
 	if len(md5sum) < 32 {
 		result.Message = "md5 unvalid"
@@ -2217,6 +2234,11 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
+	name = fileInfo.Name
+	if fileInfo.ReName != "" {
+		name = fileInfo.ReName
+	}
+	md5path = this.util.MD5(fileInfo.Path + "/" + name)
 
 	if fileInfo.ReName != "" {
 		fpath = fileInfo.Path + "/" + fileInfo.ReName
@@ -2226,6 +2248,7 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 
 	if fileInfo.Path != "" && this.util.FileExists(fpath) {
 		this.ldb.Delete([]byte(fileInfo.Md5), nil)
+		this.ldb.Delete([]byte(md5path), nil)
 		if err = os.Remove(fpath); err != nil {
 			w.Write([]byte(err.Error()))
 			return
@@ -2267,13 +2290,138 @@ func (this *Server) getRequestURI(action string) string {
 	return uri
 }
 
+func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileResult {
+	var (
+		outname     string
+		fileResult  FileResult
+		p           string
+		downloadUrl string
+		domain      string
+	)
+	if Config().DownloadDomain != "" {
+		domain = fmt.Sprintf("http://%s", Config().DownloadDomain)
+	} else {
+		domain = fmt.Sprintf("http://%s", r.Host)
+	}
+	outname = fileInfo.Name
+	if fileInfo.ReName != "" {
+		outname = fileInfo.ReName
+	}
+	p = strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
+	p = Config().Group + "/" + p + "/" + outname
+	downloadUrl = fmt.Sprintf("http://%s/%s", r.Host, p)
+	if Config().DownloadDomain != "" {
+		downloadUrl = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, p)
+	}
+
+	fileResult.Url = downloadUrl
+	fileResult.Md5 = fileInfo.Md5
+	fileResult.Path = "/" + p
+	fileResult.Domain = domain
+	fileResult.Scene = fileInfo.Scene
+	// Just for Compatibility
+	fileResult.Src = fileResult.Path
+	fileResult.Scenes = fileInfo.Scene
+
+	return fileResult
+}
+func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeader, fileInfo *FileInfo, r *http.Request) (*FileInfo, error) {
+	var (
+		err     error
+		outFile *os.File
+		folder  string
+		fi      os.FileInfo
+	)
+
+	defer file.Close()
+
+	fileInfo.Name = header.Filename
+
+	if Config().RenameFile {
+		fileInfo.ReName = this.util.MD5(this.util.GetUUID()) + path.Ext(fileInfo.Name)
+	}
+
+	folder = time.Now().Format("20060102/15/04")
+	if Config().PeerId != "" {
+		folder = fmt.Sprintf(folder+"/%s", Config().PeerId)
+	}
+	if fileInfo.Scene != "" {
+		folder = fmt.Sprintf(STORE_DIR+"/%s/%s", fileInfo.Scene, folder)
+	} else {
+		folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
+	}
+	if fileInfo.Path != "" {
+		if strings.HasPrefix(fileInfo.Path, STORE_DIR) {
+			folder = fileInfo.Path
+		} else {
+			folder = STORE_DIR + "/" + fileInfo.Path
+		}
+	}
+
+	if !this.util.FileExists(folder) {
+		os.MkdirAll(folder, 0775)
+	}
+
+	outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
+	if Config().RenameFile {
+		outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
+	}
+
+	if this.util.FileExists(outPath) {
+		for i := 0; i < 10000; i++ {
+			outPath = fmt.Sprintf(folder+"/%d_%s", i, header.Filename)
+			fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
+			if !this.util.FileExists(outPath) {
+				break
+			}
+		}
+	}
+
+	log.Info(fmt.Sprintf("upload: %s", outPath))
+
+	if outFile, err = os.Create(outPath); err != nil {
+		return fileInfo, err
+	}
+
+	defer outFile.Close()
+
+	if err != nil {
+		log.Error(err)
+		return fileInfo, errors.New("(error)fail," + err.Error())
+
+	}
+
+	if _, err = io.Copy(outFile, file); err != nil {
+		log.Error(err)
+		return fileInfo, errors.New("(error)fail," + err.Error())
+	}
+
+	if fi, err = outFile.Stat(); err != nil {
+		log.Error(err)
+	} else {
+		fileInfo.Size = fi.Size()
+	}
+	if fi.Size() != header.Size {
+		return fileInfo, errors.New("(error)file uncomplete")
+	}
+	v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+
+	fileInfo.Md5 = v
+
+	fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
+
+	fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", r.Host))
+
+	return fileInfo, nil
+}
+
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		err error
 
 		//		pathname     string
-		outname      string
+
 		md5sum       string
 		fileInfo     FileInfo
 		uploadFile   multipart.File
@@ -2282,13 +2430,18 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		output       string
 		fileResult   FileResult
 		data         []byte
-		domain       string
 	)
+
+	//r.ParseForm()
+
 
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
 
 		//		fileInfo.Path = r.Header.Get("Sync-Path")
+
+		md5sum = r.FormValue("md5")
+		output = r.FormValue("output")
 
 		if strings.Contains(r.Host, "127.0.0.1") {
 			w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
@@ -2304,8 +2457,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			//Just for Compatibility
 			scene = r.FormValue("scenes")
 		}
-		md5sum = r.FormValue("md5")
-		output = r.FormValue("output")
 
 		fileInfo.Md5 = md5sum
 		fileInfo.OffSet = -1
@@ -2339,152 +2490,35 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if Config().DownloadDomain != "" {
-			domain = fmt.Sprintf("http://%s", Config().DownloadDomain)
-		} else {
-			domain = fmt.Sprintf("http://%s", r.Host)
-		}
-
 		if err != nil {
 			log.Error(err)
 			http.Redirect(w, r, "/", http.StatusMovedPermanently)
 			return
 		}
 
-		SaveUploadFile := func(file multipart.File, header *multipart.FileHeader, fileInfo *FileInfo) (*FileInfo, error) {
-			var (
-				err     error
-				outFile *os.File
-				folder  string
-				fi      os.FileInfo
-			)
-
-			defer file.Close()
-
-			fileInfo.Name = header.Filename
-
-			if Config().RenameFile {
-				fileInfo.ReName = this.util.MD5(this.util.GetUUID()) + path.Ext(fileInfo.Name)
-			}
-
-			folder = time.Now().Format("20060102/15/04")
-			if Config().PeerId != "" {
-				folder = fmt.Sprintf(folder+"/%s", Config().PeerId)
-			}
-			if fileInfo.Scene != "" {
-				folder = fmt.Sprintf(STORE_DIR+"/%s/%s", fileInfo.Scene, folder)
-			} else {
-				folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
-			}
-			if fileInfo.Path != "" {
-				if strings.HasPrefix(fileInfo.Path, STORE_DIR) {
-					folder = fileInfo.Path
-				} else {
-
-					folder = STORE_DIR + "/" + fileInfo.Path
-				}
-			}
-
-			if !this.util.FileExists(folder) {
-				os.MkdirAll(folder, 0775)
-			}
-
-			outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
-			if Config().RenameFile {
-				outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
-			}
-
-			if this.util.FileExists(outPath) {
-				for i := 0; i < 10000; i++ {
-					outPath = fmt.Sprintf(folder+"/%d_%s", i, header.Filename)
-					fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
-					if !this.util.FileExists(outPath) {
-						break
-					}
-				}
-			}
-
-			log.Info(fmt.Sprintf("upload: %s", outPath))
-
-			if outFile, err = os.Create(outPath); err != nil {
-				return fileInfo, err
-			}
-
-			defer outFile.Close()
-
-			if err != nil {
-				log.Error(err)
-				return fileInfo, errors.New("(error)fail," + err.Error())
-
-			}
-
-			if _, err = io.Copy(outFile, file); err != nil {
-				log.Error(err)
-				return fileInfo, errors.New("(error)fail," + err.Error())
-			}
-
-			if fi, err = outFile.Stat(); err != nil {
-				log.Error(err)
-			} else {
-				fileInfo.Size = fi.Size()
-			}
-			if fi.Size() != header.Size {
-				return fileInfo, errors.New("(error)file uncomplete")
-			}
-			v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
-
-			fileInfo.Md5 = v
-			fileInfo.Path = folder
-
-			fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", r.Host))
-
-			return fileInfo, nil
-
-		}
-
-		if _, err = SaveUploadFile(uploadFile, uploadHeader, &fileInfo); err != nil {
+		if _, err = this.SaveUploadFile(uploadFile, uploadHeader, &fileInfo, r); err != nil {
 			w.Write([]byte(err.Error()))
 			return
 		}
 
 		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
-
+			fileResult = this.BuildFileResult(v, r)
 			if Config().RenameFile {
 				os.Remove(fileInfo.Path + "/" + fileInfo.ReName)
 			} else {
 				os.Remove(fileInfo.Path + "/" + fileInfo.Name)
 			}
-			outname = v.Name
-			if v.ReName != "" {
-				outname = v.ReName
-			}
-			p := strings.Replace(v.Path, STORE_DIR+"/", "", 1)
-			p = Config().Group + "/" + p + "/" + outname
-			downloadUrl := fmt.Sprintf("http://%s/%s", r.Host, p)
-			if Config().DownloadDomain != "" {
-				downloadUrl = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, p)
-			}
+
 			if output == "json" {
-				fileResult.Url = downloadUrl
-				fileResult.Md5 = v.Md5
-				fileResult.Path = "/" + p
-				fileResult.Domain = domain
-				fileResult.Scene = fileInfo.Scene
-
-				// Just for Compatibility
-				fileResult.Src = fileResult.Path
-				fileResult.Scenes = fileInfo.Scene
-
 				if data, err = json.Marshal(fileResult); err != nil {
+					log.Error(err)
 					w.Write([]byte(err.Error()))
-					return
 				}
 				w.Write(data)
-				return
 
 			} else {
+				w.Write([]byte(fileResult.Url))
 
-				w.Write([]byte(downloadUrl))
 			}
 			return
 		}
@@ -2510,49 +2544,49 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 		go this.postFileToPeer(&fileInfo)
 
-		outname = fileInfo.Name
-
-		if fileInfo.ReName != "" {
-			outname = fileInfo.ReName
-		}
-
 		if fileInfo.Size <= 0 {
 			log.Error("file size is zero")
 			return
 		}
-
+		fileResult = this.BuildFileResult(&fileInfo, r)
 		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
-
-		p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
-		p = Config().Group + "/" + p + "/" + outname
-		downloadUrl := fmt.Sprintf("http://%s/%s", r.Host, p)
-		if Config().DownloadDomain != "" {
-			downloadUrl = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, p)
-		}
-
 		if output == "json" {
-			fileResult.Url = downloadUrl
-			fileResult.Md5 = fileInfo.Md5
-			fileResult.Path = "/" + p
-			fileResult.Domain = domain
-			fileResult.Scene = fileInfo.Scene
-			// Just for Compatibility
-			fileResult.Src = fileResult.Path
-			fileResult.Scenes = fileInfo.Scene
-
 			if data, err = json.Marshal(fileResult); err != nil {
+				log.Error(err)
 				w.Write([]byte(err.Error()))
-				return
 			}
 			w.Write(data)
 
 		} else {
+			w.Write([]byte(fileResult.Url))
 
-			w.Write([]byte(downloadUrl))
 		}
 		return
 
 	} else {
+		md5sum = r.FormValue("md5")
+		output = r.FormValue("output")
+		if md5sum == "" {
+			w.Write([]byte("(error) if you want to upload fast md5 is require" +
+				",and if you want to upload file,you must use post method  "))
+			return
+
+		}
+		if v, _ := this.GetFileInfoFromLevelDB(md5sum); v != nil && v.Md5 != "" {
+			fileResult = this.BuildFileResult(v, r)
+			if output == "json" {
+				if data, err = json.Marshal(fileResult); err != nil {
+					log.Error(err)
+					w.Write([]byte(err.Error()))
+				}
+				w.Write(data)
+
+			} else {
+				w.Write([]byte(fileResult.Url))
+
+			}
+			return
+		}
 		w.Write([]byte("(error)fail,please use post method"))
 		return
 	}
@@ -3321,9 +3355,34 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 
 func init() {
 
+	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
+	if DOCKER_DIR != "" {
+		if !strings.HasSuffix(DOCKER_DIR, "/") {
+			DOCKER_DIR = DOCKER_DIR + "/"
+		}
+	} else {
+		DOCKER_DIR = "./"
+	}
+
+	STORE_DIR = DOCKER_DIR + "files"
+	CONF_DIR = DOCKER_DIR + "conf"
+	DATA_DIR = DOCKER_DIR + "data"
+	LARGE_DIR_NAME = "haystack"
+	LARGE_DIR = STORE_DIR + "/haystack"
+	CONST_LEVELDB_FILE_NAME =DOCKER_DIR+ DATA_DIR + "/fileserver.db"
+	CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
+	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
+	FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
+
+	logAccessConfigStr = strings.Replace(logAccessConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
+	logConfigStr = strings.Replace(logConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
+
 	for _, folder := range FOLDERS {
 		os.Mkdir(folder, 0775)
 	}
+
+	server=NewServer()
+
 	flag.Parse()
 
 	peerId := fmt.Sprintf("%d", server.util.RandInt(0, 9))
@@ -3422,13 +3481,50 @@ func (this *Server) test() {
 
 }
 
+func (this *Server) FormatStatInfo() {
+	var (
+		data  []byte
+		err   error
+		count int64
+		stat  map[string]interface{}
+	)
+
+	if this.util.FileExists(CONST_STAT_FILE_NAME) {
+		if data, err = this.util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil {
+			log.Error(err)
+		} else {
+
+			if err = json.Unmarshal(data, &stat); err != nil {
+				log.Error(err)
+			} else {
+				for k, v := range stat {
+					switch v.(type) {
+					case float64:
+						vv := strings.Split(fmt.Sprintf("%f", v), ".")[0]
+
+						if count, err = strconv.ParseInt(vv, 10, 64); err != nil {
+							log.Error(err)
+						} else {
+							this.statMap.Put(k, count)
+						}
+
+					default:
+						this.statMap.Put(k, v)
+
+					}
+
+				}
+			}
+		}
+
+	} else {
+		this.RepairStat()
+	}
+
+}
 func (this *Server) initComponent(isReload bool) {
 	var (
-		err   error
-		ip    string
-		stat  map[string]interface{}
-		data  []byte
-		count int64
+		ip string
 	)
 	ip = this.util.GetPulicIP()
 
@@ -3456,43 +3552,8 @@ func (this *Server) initComponent(isReload bool) {
 	}
 	Config().Peers = peers
 
-	FormatStatInfo := func() {
-
-		if this.util.FileExists(CONST_STAT_FILE_NAME) {
-			if data, err = this.util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil {
-				log.Error(err)
-			} else {
-
-				if err = json.Unmarshal(data, &stat); err != nil {
-					log.Error(err)
-				} else {
-					for k, v := range stat {
-						switch v.(type) {
-						case float64:
-							vv := strings.Split(fmt.Sprintf("%f", v), ".")[0]
-
-							if count, err = strconv.ParseInt(vv, 10, 64); err != nil {
-								log.Error(err)
-							} else {
-								this.statMap.Put(k, count)
-							}
-
-						default:
-							this.statMap.Put(k, v)
-
-						}
-
-					}
-				}
-			}
-
-		} else {
-			this.RepairStat()
-		}
-
-	}
 	if !isReload {
-		FormatStatInfo()
+		this.FormatStatInfo()
 	}
 	//Timer
 
@@ -3602,7 +3663,6 @@ func (this *Server) Main() {
 
 func main() {
 
-	server.test()
 	server.Main()
 
 }
