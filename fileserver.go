@@ -62,6 +62,7 @@ var (
 	DOCKER_DIR = ""
 
 	STORE_DIR = "files"
+	STORE_DIR_NAME = "files"
 
 	CONF_DIR = "conf"
 
@@ -1215,13 +1216,13 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
 		isSmallFile = true
-		smallPath = STORE_DIR + "/" + fullpath //notice order
+		smallPath =DOCKER_DIR+ STORE_DIR + "/" + fullpath //notice order
 		fullpath = strings.Split(fullpath, ",")[0]
 
 	}
 	_ = isSmallFile
 	_ = smallPath
-	fullpath = STORE_DIR + "/" + fullpath
+	fullpath = DOCKER_DIR+ STORE_DIR_NAME + "/" + fullpath
 
 	fullpath = strings.Replace(fullpath, "&", "$$$$", -1)
 
@@ -1242,6 +1243,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	}
 	fullpath = strings.Replace(fullpath, "$$$$", "&", -1)
+     
 
 	CheckToken := func(token string, md5sum string, timestamp string) bool {
 		if this.util.MD5(md5sum+timestamp) != token {
@@ -1450,6 +1452,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 			log.Error(string(buffer))
 		}
 	}()
+
 
 	for i, peer = range Config().Peers {
 
@@ -2008,7 +2011,7 @@ func (this *Server) GetMd5sByDate(date string, filename string) (mapset.Set, err
 	}
 
 	if !this.util.FileExists(fpath) {
-		os.MkdirAll(DOCKER_DIR+DATA_DIR+"/"+date, 0775)
+		os.MkdirAll(DATA_DIR+"/"+date, 0775)
 		log.Warn(fmt.Sprintf("fpath %s not found", fpath))
 		return result, nil
 	}
@@ -2307,7 +2310,7 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 	if fileInfo.ReName != "" {
 		outname = fileInfo.ReName
 	}
-	p = strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
+	p = strings.Replace(fileInfo.Path, STORE_DIR_NAME+"/", "", 1)
 	p = Config().Group + "/" + p + "/" + outname
 	downloadUrl = fmt.Sprintf("http://%s/%s", r.Host, p)
 	if Config().DownloadDomain != "" {
@@ -2408,7 +2411,8 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 
 	fileInfo.Md5 = v
 
-	fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
+	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
+	fileInfo.Path = strings.Replace( folder,DOCKER_DIR,"",1)
 
 	fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", r.Host))
 
@@ -2443,10 +2447,10 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
 
-		if strings.Contains(r.Host, "127.0.0.1") {
-			w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
-			return
-		}
+		//if strings.Contains(r.Host, "127.0.0.1") {
+		//	w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
+		//	return
+		//}
 
 		if Config().EnableCustomPath {
 			fileInfo.Path = r.FormValue("path")
@@ -2534,6 +2538,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
+                fmt.Println(fileInfo.Size,Config().EnableMergeSmallFile,fileInfo)
 
 			if err = this.SaveSmallFile(&fileInfo); err != nil {
 				log.Error(err)
@@ -2609,7 +2614,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	fpath = fileInfo.Path + "/" + filename
+	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 
 	largeDir = LARGE_DIR + "/" + Config().PeerId
 
@@ -2622,6 +2627,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 
 	this.lockMap.LockKey(destPath)
 	defer this.lockMap.UnLockKey(destPath)
+
 
 	if this.util.FileExists(fpath) {
 		srcFile, err = os.OpenFile(fpath, os.O_CREATE|os.O_RDONLY, 06666)
@@ -2654,7 +2660,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		}
 		srcFile.Close()
 		os.Remove(fpath)
-		fileInfo.Path = largeDir
+		fileInfo.Path = strings.Replace( largeDir,DOCKER_DIR,"",1)
 	}
 
 	return nil
@@ -3369,7 +3375,7 @@ func init() {
 	DATA_DIR = DOCKER_DIR + "data"
 	LARGE_DIR_NAME = "haystack"
 	LARGE_DIR = STORE_DIR + "/haystack"
-	CONST_LEVELDB_FILE_NAME =DOCKER_DIR+ DATA_DIR + "/fileserver.db"
+	CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
 	CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
 	FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
@@ -3378,7 +3384,7 @@ func init() {
 	logConfigStr = strings.Replace(logConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
 
 	for _, folder := range FOLDERS {
-		os.Mkdir(folder, 0775)
+		os.MkdirAll(folder, 0775)
 	}
 
 	server=NewServer()
