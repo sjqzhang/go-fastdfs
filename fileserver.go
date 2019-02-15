@@ -1075,7 +1075,6 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		fi       os.FileInfo
 		sum      string
 		data     []byte
-
 	)
 
 	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) {
@@ -1106,12 +1105,12 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 			log.Error(err)
 			return
 		}
-		data2:=make([]byte,len(data)+1)
-		data2[0]='1'
-        for i,v:=range data {
-        	data2[i+1]=v
+		data2 := make([]byte, len(data)+1)
+		data2[0] = '1'
+		for i, v := range data {
+			data2[i+1] = v
 		}
-        data=data2
+		data = data2
 		if int64(len(data)) != fileInfo.Size {
 			log.Warn("file size is error")
 			return
@@ -1123,6 +1122,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		if err != nil {
 			log.Warn(err)
 		}
+		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 		return
 	}
 
@@ -1175,8 +1175,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		offset       int64
 		length       int
 		smallPath    string
-		notFound bool
-
+		notFound     bool
 	)
 
 	r.ParseForm()
@@ -1272,7 +1271,6 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
 	if isSmallFile {
 		pos := strings.Split(r.RequestURI, ",")
 		if len(pos) < 3 {
@@ -1299,8 +1297,8 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if info.Size()< offset+ int64(length) {
-            notFound=true
+		if info.Size() < offset+int64(length) {
+			notFound = true
 		} else {
 
 			data, err = this.util.ReadFileByOffSet(fullpath, offset, length)
@@ -1308,11 +1306,11 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				log.Error(err)
 				return
 			}
-			if string(data[0])=="1" {
+			if string(data[0]) == "1" {
 				w.Write(data[1:])
 				return
 			} else {
-				notFound=true
+				notFound = true
 			}
 
 		}
@@ -1320,7 +1318,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	if info, err = os.Stat(fullpath); err != nil {
 		log.Error(err)
-        if isSmallFile && notFound {
+		if isSmallFile && notFound {
 			pathMd5 = this.util.MD5(smallPath)
 		} else {
 			pathMd5 = this.util.MD5(fullpath)
@@ -1351,8 +1349,6 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
 		return
 	}
-
-
 
 	if !Config().ShowDir && info.IsDir() {
 		w.Write([]byte("list dir deny"))
@@ -2587,7 +2583,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		os.MkdirAll(largeDir, 0775)
 	}
 
-	reName = fmt.Sprintf("%d", this.util.RandInt(100, 200))
+	reName = fmt.Sprintf("%d", this.util.RandInt(100, 300))
 	destPath = largeDir + "/" + reName
 
 	this.lockMap.LockKey(destPath)
@@ -2607,7 +2603,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		defer desFile.Close()
 
 		fileInfo.OffSet, err = desFile.Seek(0, 2)
-		if _,err=desFile.Write([]byte("1"));err!=nil  {//first byte set 1
+		if _, err = desFile.Write([]byte("1")); err != nil { //first byte set 1
 			return err
 		}
 		fileInfo.OffSet, err = desFile.Seek(0, 2)
@@ -2615,8 +2611,8 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		if err != nil {
 			return err
 		}
-		fileInfo.OffSet=fileInfo.OffSet-1  //minus 1 byte
-		fileInfo.Size=fileInfo.Size+1
+		fileInfo.OffSet = fileInfo.OffSet - 1 //minus 1 byte
+		fileInfo.Size = fileInfo.Size + 1
 		fileInfo.ReName = fmt.Sprintf("%s,%d,%d", reName, fileInfo.OffSet, fileInfo.Size)
 
 		if _, err = io.Copy(desFile, srcFile); err != nil {
@@ -3411,7 +3407,7 @@ func (this *Server) test() {
 			fmt.Println(err)
 		}
 
-		f.WriteAt([]byte("1"),100)
+		f.WriteAt([]byte("1"), 100)
 		f.Seek(0, 2)
 		f.Write([]byte("2"))
 		//fmt.Println(f.Seek(0, 2))
