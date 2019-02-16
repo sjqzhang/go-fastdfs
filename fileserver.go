@@ -2542,7 +2542,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
-               
+
 			if err = this.SaveSmallFile(&fileInfo); err != nil {
 				log.Error(err)
 				return

@@ -14,6 +14,8 @@
 - 支持断点下载
 - 支持配置自动生成
 - 支持小文件自动合并(减少inode占用)
+- 支持秒传
+- 支持docker部署
 - 支持自监控告警
 - 支持集群文件信息查看
 - 使用通用HTTP协议
@@ -37,6 +39,9 @@
 - 支持浏览器上传
 - 支持查看集群文件信息
 - 支持集群监控邮件告警
+- 支持小文件自动合并(减少inode占用)
+- 支持秒传
+- 支持docker部署
 - 支持token下载　token=md5(file_md5+timestamp)
 - 运维简单，只有一个角色（不像fastdfs有三个角色Tracker Server,Storage Server,Client），配置自动生成
 - 每个节点对等（简化运维）
@@ -60,7 +65,7 @@
 
 # 代码上传(选项参阅浏览器上传)
 
-python版本:
+## python版本:
 ```python
 import requests
 url = 'http://10.1.5.9:8080/upload'
@@ -69,7 +74,7 @@ options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
 r = requests.post(url, files=files)
 print(r.text)
 ```
-golang版本
+## golang版本
 ```go
 package main
 
@@ -87,6 +92,36 @@ func main()  {
 	req.Param("path","")
 	req.ToJSON(&obj)
 	fmt.Print(obj)
+}
+```
+## java版本
+依赖(这里使用了hutool工具包,更简便)
+```xml
+<dependency>
+	<groupId>cn.hutool</groupId>
+	<artifactId>hutool-all</artifactId>
+	<version>4.4.3</version>
+</dependency>
+```
+上传代码
+```java
+public static void main(String[] args) {
+    //文件地址
+    File file = new File("D:\\git\\2.jpg");
+    //声明参数集合
+    HashMap<String, Object> paramMap = new HashMap<>();
+    //文件
+    paramMap.put("file", file);
+    //输出
+    paramMap.put("output","json");
+    //自定义路径
+    paramMap.put("path","image");
+    //场景
+    paramMap.put("scene","image");
+    //上传
+    String result= HttpUtil.post("http://xxxxx:xxxx/upload", paramMap);
+    //输出json结果
+    System.out.println(result);
 }
 ```
 [更多语言请参考](doc/upload.md)
@@ -276,6 +311,22 @@ for i in range(0,1000000):
 curl wget 如何
 wget -c http://10.1.5.9:8080/group1/default/20190128/16/10/2G
 culr -C - http://10.1.5.9:8080/group1/default/20190128/16/10/2G
+```
+
+- 大文件如何分块上传？
+```
+一般的分块上传都要客户端支持，而语言的多样性，客户端难以维护，但分块上传的功能又有必要，为此提供一个简单的实现思路。
+方案一、
+借助linux split cat 实现分割与合并，具体查看 split 与　cat 帮助。
+分割： split  -b 1M filename #按每个文1M
+合并： cat  x* > filename #合并
+方案二、
+借助hjsplit
+http://www.hjsplit.org/
+具体自行实现
+方案三、
+建议用go实现hjsplit分割合并功，这样具有跨平台功能。（未实现，等你来....）
+ 
 ```
 
 - 集群如何规划及如何进行扩容？
