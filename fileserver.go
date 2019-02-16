@@ -61,7 +61,7 @@ var (
 
 	DOCKER_DIR = ""
 
-	STORE_DIR = "files"
+	STORE_DIR      = "files"
 	STORE_DIR_NAME = "files"
 
 	CONF_DIR = "conf"
@@ -1094,12 +1094,13 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		filename = fileInfo.ReName
 	}
 
-	p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
+	//fmt.Println("downloadFromPeer",fileInfo)
+	p := strings.Replace(fileInfo.Path, STORE_DIR_NAME+"/", "", 1)
 
 	//filename=this.util.UrlEncode(filename)
 	req := httplib.Get(peer + "/" + Config().Group + "/" + p + "/" + filename)
 
-	fpath = fileInfo.Path + "/" + filename
+	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 
 	req.SetTimeout(time.Second*5, time.Second*300)
 
@@ -1213,16 +1214,18 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
+
+	//fmt.Println("fullpath",fullpath)
 
 	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
 		isSmallFile = true
-		smallPath =DOCKER_DIR+ STORE_DIR + "/" + fullpath //notice order
+		smallPath = fullpath //notice order
 		fullpath = strings.Split(fullpath, ",")[0]
 
 	}
 	_ = isSmallFile
 	_ = smallPath
-	fullpath = DOCKER_DIR+ STORE_DIR_NAME + "/" + fullpath
 
 	fullpath = strings.Replace(fullpath, "&", "$$$$", -1)
 
@@ -1243,7 +1246,6 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 	}
 	fullpath = strings.Replace(fullpath, "$$$$", "&", -1)
-     
 
 	CheckToken := func(token string, md5sum string, timestamp string) bool {
 		if this.util.MD5(md5sum+timestamp) != token {
@@ -1453,6 +1455,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 	}()
 
+	//fmt.Println("postFile",fileInfo)
 
 	for i, peer = range Config().Peers {
 
@@ -1475,7 +1478,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 			}
 		}
 
-		fpath = fileInfo.Path + "/" + filename
+		fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 		if !this.util.FileExists(fpath) {
 			log.Warn(fmt.Sprintf("file '%s' not found", fpath))
 			continue
@@ -1581,7 +1584,7 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	}
 	fullpath = fileInfo.Path + "/" + outname
 
-	logpath =  DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
+	logpath = DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
 	if _, err = os.Stat(logpath); err != nil {
 		os.MkdirAll(logpath, 0775)
 	}
@@ -2412,9 +2415,11 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	fileInfo.Md5 = v
 
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
-	fileInfo.Path = strings.Replace( folder,DOCKER_DIR,"",1)
+	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
 
 	fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", r.Host))
+
+	//fmt.Println("upload",fileInfo)
 
 	return fileInfo, nil
 }
@@ -2437,7 +2442,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	)
 
 	//r.ParseForm()
-
 
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
@@ -2538,8 +2542,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
-                fmt.Println(fileInfo.Size,Config().EnableMergeSmallFile,fileInfo)
-
+               
 			if err = this.SaveSmallFile(&fileInfo); err != nil {
 				log.Error(err)
 				return
@@ -2628,7 +2631,6 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 	this.lockMap.LockKey(destPath)
 	defer this.lockMap.UnLockKey(destPath)
 
-
 	if this.util.FileExists(fpath) {
 		srcFile, err = os.OpenFile(fpath, os.O_CREATE|os.O_RDONLY, 06666)
 		if err != nil {
@@ -2660,7 +2662,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		}
 		srcFile.Close()
 		os.Remove(fpath)
-		fileInfo.Path = strings.Replace( largeDir,DOCKER_DIR,"",1)
+		fileInfo.Path = strings.Replace(largeDir, DOCKER_DIR, "", 1)
 	}
 
 	return nil
@@ -3366,10 +3368,7 @@ func init() {
 		if !strings.HasSuffix(DOCKER_DIR, "/") {
 			DOCKER_DIR = DOCKER_DIR + "/"
 		}
-	} else {
-		DOCKER_DIR = "./"
 	}
-
 	STORE_DIR = DOCKER_DIR + "files"
 	CONF_DIR = DOCKER_DIR + "conf"
 	DATA_DIR = DOCKER_DIR + "data"
@@ -3387,7 +3386,7 @@ func init() {
 		os.MkdirAll(folder, 0775)
 	}
 
-	server=NewServer()
+	server = NewServer()
 
 	flag.Parse()
 
