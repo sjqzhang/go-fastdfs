@@ -5,9 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
-	"runtime"
 	random "math/rand"
-
+	"runtime"
 	"errors"
 	"flag"
 	"fmt"
@@ -40,6 +39,8 @@ import (
 	"github.com/json-iterator/go"
 	log "github.com/sjqzhang/seelog"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/tus/tusd"
+	"github.com/tus/tusd/filestore"
 )
 
 var staticHandler http.Handler
@@ -3486,6 +3487,30 @@ func (this *Server) test() {
 
 }
 
+func (this *Server) initTus() {
+	store := filestore.FileStore{
+		Path: STORE_DIR,
+	}
+	bigDir := "/big/"
+	composer := tusd.NewStoreComposer()
+	store.UseIn(composer)
+	handler, err := tusd.NewHandler(tusd.Config{
+		BasePath:      bigDir,
+		StoreComposer: composer,
+	})
+	if err != nil {
+		log.Error(err)
+
+	}
+
+	if Config().SupportGroupManage {
+		http.Handle("/"+Config().Group+bigDir, http.StripPrefix("/"+Config().Group+bigDir, handler))
+	} else {
+		http.Handle(bigDir, http.StripPrefix(bigDir, handler))
+
+	}
+}
+
 func (this *Server) FormatStatInfo() {
 	var (
 		data  []byte
@@ -3559,8 +3584,11 @@ func (this *Server) initComponent(isReload bool) {
 
 	if !isReload {
 		this.FormatStatInfo()
+		this.initTus()
 	}
 	//Timer
+
+	// int tus
 
 }
 
