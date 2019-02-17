@@ -315,7 +315,13 @@ culr -C - http://10.1.5.9:8080/group1/default/20190128/16/10/2G
 
 - Docker如何部署？
 ```
-使用环境变量 GO_FASTDFS_DIR 指向存储目录。
+
+
+步骤：
+一、构建镜像
+docker build . -t fastdfs
+二、运行容器（使用环境变量 GO_FASTDFS_DIR 指向存储目录。）
+docker run --name fastdfs -v ~:/data/fastdfs -e GO_FASTDFS_DIR=/data/fastdfs fastdfs 
 
 ```
 
