@@ -383,6 +383,17 @@ http://www.hjsplit.org/
  注意：方案四、只能指定一个上传服务器，不支持同时写，并且上传的url有变化
  原上传url： http://10.1.5.9:8080/<group>/upload
  断点上传url： http://10.1.5.9:8080/<group>/big/upload/
+ 上传完成，再通过秒传接口，获取文件信息
+```
+
+- 如何秒传文件？
+```
+通过http get的方式访问上传接口
+http://10.0.5.9:8080/upload?md5=filesum&output=json
+参数说明：
+md5=sum(file) 文件的摘要算法要与文件务器的算法一致（算法支持md5|sha1）
+output=json|text 返回的格式
+ 
 ```
 
 - 集群如何规划及如何进行扩容？
