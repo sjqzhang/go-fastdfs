@@ -15,6 +15,7 @@
 - 支持配置自动生成
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
+- 支持继点续传([tus](https://tus.io/))
 - 支持docker部署
 - 支持自监控告警
 - 支持集群文件信息查看
@@ -41,6 +42,7 @@
 - 支持集群监控邮件告警
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
+- 支持继点续传([tus](https://tus.io/))
 - 支持docker部署
 - 支持token下载　token=md5(file_md5+timestamp)
 - 运维简单，只有一个角色（不像fastdfs有三个角色Tracker Server,Storage Server,Client），配置自动生成
@@ -126,6 +128,42 @@ public static void main(String[] args) {
 ```
 [更多语言请参考](doc/upload.md)
 
+# 断点续传示例
+
+## golang版本
+```go
+package main
+
+import (
+    "os"
+    "fmt"
+    "github.com/eventials/go-tus"
+)
+
+func main() {
+    f, err := os.Open("100m")
+    if err != nil {
+        panic(err)
+    }
+    defer f.Close()
+    // create the tus client.
+    client, err := tus.NewClient("http://10.1.5.9:8080/big/upload/", nil)
+    fmt.Println(err)
+    // create an upload from a file.
+    upload, err := tus.NewUploadFromFile(f)
+    fmt.Println(err)
+    // create the uploader.
+    uploader, err := client.CreateUpload(upload)
+    fmt.Println(err)
+    // start the uploading process.
+   fmt.Println( uploader.Upload())
+
+}
+
+````
+[更多客户商请参考](https://github.com/tus)
+
+
 
 部署图
 ![部署图](doc/go-fastdfs-deploy.png)
@@ -200,6 +238,8 @@ cd fastdfs/data && find -type f |xargs -n 1 -I {} curl -F file=@data/{} -F path=
 1亿文件元数据大小约5G,导出元数据文本大小22G
 
 ```
+
+
 
 - 还需要安装nginx么？
 ```
@@ -325,7 +365,7 @@ docker run --name fastdfs -v ~:/data/fastdfs -e GO_FASTDFS_DIR=/data/fastdfs fas
 
 ```
 
-- 大文件如何分块上传？
+- 大文件如何分块上传或断点续传？
 ```
 一般的分块上传都要客户端支持，而语言的多样性，客户端难以维护，但分块上传的功能又有必要，为此提供一个简单的实现思路。
 方案一、
@@ -338,8 +378,12 @@ http://www.hjsplit.org/
 具体自行实现
 方案三、
 建议用go实现hjsplit分割合并功，这样具有跨平台功能。（未实现，等你来....）
- 
-```
+方案四、
+使用内置的继点续传功能（使用protocol for resumable uploads协议，[详情](https://tus.io/)）
+ 注意：方案四、只能指定一个上传服务器，不支持同时写，并且上传的url有变化
+ 原上传url： http://10.1.5.9:8080/<group>/upload
+ 断点上传url： http://10.1.5.9:8080/<group>/big/upload/
+``
 
 - 集群如何规划及如何进行扩容？
 ```
