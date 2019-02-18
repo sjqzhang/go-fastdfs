@@ -5,14 +5,20 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
-	random "math/rand"
-	"runtime"
 	"errors"
 	"flag"
 	"fmt"
-
+	"github.com/astaxie/beego/httplib"
+	"github.com/deckarep/golang-set"
+	"github.com/json-iterator/go"
+	log "github.com/sjqzhang/seelog"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/tus/tusd"
+	"github.com/tus/tusd/filestore"
 	"io"
 	"io/ioutil"
+	slog "log"
+	random "math/rand"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -25,6 +31,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -33,14 +40,6 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
-
-	"github.com/astaxie/beego/httplib"
-	"github.com/deckarep/golang-set"
-	"github.com/json-iterator/go"
-	log "github.com/sjqzhang/seelog"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/tus/tusd"
-	"github.com/tus/tusd/filestore"
 )
 
 var staticHandler http.Handler
@@ -62,12 +61,13 @@ var (
 
 	DOCKER_DIR = ""
 
-	STORE_DIR      = "files"
-	STORE_DIR_NAME = "files"
+	STORE_DIR = STORE_DIR_NAME
 
-	CONF_DIR = "conf"
+	CONF_DIR = CONF_DIR_NAME
 
-	DATA_DIR = "data"
+	LOG_DIR = LOG_DIR_NAME
+
+	DATA_DIR = DATA_DIR_NAME
 
 	LARGE_DIR_NAME = "haystack"
 
@@ -107,6 +107,10 @@ var (
 )
 
 const (
+	STORE_DIR_NAME            = "files"
+	LOG_DIR_NAME              = "log"
+	DATA_DIR_NAME             = "data"
+	CONF_DIR_NAME             = "conf"
 	CONST_STAT_FILE_COUNT_KEY = "fileCount"
 
 	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
@@ -523,6 +527,31 @@ func (this *Common) GetUUID() string {
 	id := this.MD5(base64.URLEncoding.EncodeToString(b))
 	return fmt.Sprintf("%s-%s-%s-%s-%s", id[0:8], id[8:12], id[12:16], id[16:20], id[20:])
 
+}
+
+func (this *Common) CopyFile(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
 }
 
 func (this *Common) RandInt(min, max int) int {
@@ -3370,9 +3399,10 @@ func init() {
 			DOCKER_DIR = DOCKER_DIR + "/"
 		}
 	}
-	STORE_DIR = DOCKER_DIR + "files"
-	CONF_DIR = DOCKER_DIR + "conf"
-	DATA_DIR = DOCKER_DIR + "data"
+	STORE_DIR = DOCKER_DIR + STORE_DIR_NAME
+	CONF_DIR = DOCKER_DIR + CONF_DIR_NAME
+	DATA_DIR = DOCKER_DIR + DATA_DIR_NAME
+	LOG_DIR = DOCKER_DIR + LOG_DIR_NAME
 	LARGE_DIR_NAME = "haystack"
 	LARGE_DIR = STORE_DIR + "/haystack"
 	CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
@@ -3488,27 +3518,116 @@ func (this *Server) test() {
 }
 
 func (this *Server) initTus() {
+
+	var (
+		err     error
+		fileLog *os.File
+	)
+
+	BIG_DIR := STORE_DIR + "/_big/" + Config().PeerId
+	os.MkdirAll(BIG_DIR, 0775)
 	store := filestore.FileStore{
-		Path: STORE_DIR,
+		Path: BIG_DIR,
 	}
-	bigDir := "/big/"
+
+	if fileLog, err = os.OpenFile(LOG_DIR+"/tusd.log", os.O_CREATE|os.O_RDWR, 0666); err != nil {
+		log.Error(err)
+		fmt.Println(err)
+		panic("initTus")
+	}
+
+	go func() {
+		for {
+			if fi, err := fileLog.Stat(); err != nil {
+				log.Error(err)
+
+			} else {
+				if fi.Size() > 1024*1024*500 { //500M
+					this.util.CopyFile(LOG_DIR+"/tusd.log", LOG_DIR+"/tusd.log.2")
+					fileLog.Truncate(0)
+					fileLog.Seek(0, 0)
+				}
+			}
+			time.Sleep(time.Second * 30)
+		}
+	}()
+
+	l := slog.New(fileLog, "[tusd] ", slog.LstdFlags)
+
+	bigDir := "/big/upload/"
+	if Config().SupportGroupManage {
+		bigDir = fmt.Sprintf("/%s/big/upload/", Config().Group)
+	}
 	composer := tusd.NewStoreComposer()
 	store.UseIn(composer)
 	handler, err := tusd.NewHandler(tusd.Config{
-		BasePath:      bigDir,
-		StoreComposer: composer,
+		Logger:                l,
+		BasePath:              bigDir,
+		StoreComposer:         composer,
+		NotifyCompleteUploads: true,
 	})
+
+	notify := func(handler *tusd.Handler) {
+
+		for {
+			select {
+			case info := <-handler.CompleteUploads:
+				log.Info("CompleteUploads", info)
+				name := ""
+				if v, ok := info.MetaData["filename"]; ok {
+					name = v
+				}
+				var err error
+				md5sum := ""
+				oldFullPath := BIG_DIR + "/" + info.ID + ".bin"
+				if md5sum, err = this.util.GetFileSumByName(oldFullPath, Config().FileSumArithmetic); err != nil {
+					log.Error(err)
+					continue
+				}
+				if fi, err := this.GetFileInfoFromLevelDB(md5sum); err != nil {
+					log.Error(err)
+				} else {
+					if fi.Md5 != "" {
+						log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
+						continue
+					}
+				}
+				timeStamp := time.Now().Unix()
+				path := time.Now().Format("/20060102/15/04/")
+				newFullPath := STORE_DIR + "/" + Config().DefaultScene + path + Config().PeerId + "/" + md5sum + ".bin"
+				infoFullPath := STORE_DIR + "/" + Config().DefaultScene + path + Config().PeerId + "/" + info.ID + ".info"
+				path = STORE_DIR_NAME + "/" + Config().DefaultScene + path + Config().PeerId
+				os.MkdirAll(path, 0775)
+				fileInfo := &FileInfo{
+					Name:      name,
+					Path:      path,
+					ReName:    md5sum + ".bin",
+					Size:      info.Size,
+					TimeStamp: timeStamp,
+					Md5:       md5sum,
+					Peers:     []string{this.host},
+					OffSet:    -1,
+				}
+				if err = os.Rename(oldFullPath, newFullPath); err != nil {
+					log.Error(err)
+					continue
+				}
+				os.Remove(infoFullPath)
+				this.postFileToPeer(fileInfo)
+				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+			}
+		}
+	}
+
+	go notify(handler)
+
 	if err != nil {
 		log.Error(err)
 
 	}
 
-	if Config().SupportGroupManage {
-		http.Handle("/"+Config().Group+bigDir, http.StripPrefix("/"+Config().Group+bigDir, handler))
-	} else {
-		http.Handle(bigDir, http.StripPrefix(bigDir, handler))
+	http.Handle(bigDir, http.StripPrefix(bigDir, handler))
 
-	}
 }
 
 func (this *Server) FormatStatInfo() {
