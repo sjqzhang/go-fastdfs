@@ -9,6 +9,13 @@
 			"revisionTime": "2018-11-30T13:54:26Z"
 		},
 		{
+			"checksumSHA1": "KZbsm/85JwXaVdVFhE5m7bPArTo=",
+			"origin": "github.com/tus/tusd/vendor/github.com/bmizerany/pat",
+			"path": "github.com/bmizerany/pat",
+			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
+			"revisionTime": "2019-02-12T21:45:08Z"
+		},
+		{
 			"checksumSHA1": "iMU6SM/jawaCOJnyvR5/w8C/C1w=",
 			"path": "github.com/cihub/seelog/archive",
 			"revision": "f561c5e57575bb1e0a2167028b7339b3a8d16fb4",
@@ -127,6 +134,31 @@
 			"path": "github.com/syndtr/goleveldb/leveldb/util",
 			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
 			"revisionTime": "2018-11-28T10:09:59Z"
+		},
+		{
+			"checksumSHA1": "pc8UqRkYMuyXUROYTdpiDrcSmtg=",
+			"path": "github.com/tus/tusd",
+			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
+			"revisionTime": "2019-02-12T21:45:08Z"
+		},
+		{
+			"checksumSHA1": "4l/Di4i6LK2qu1Atz8OYeRTYN6o=",
+			"path": "github.com/tus/tusd/filestore",
+			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
+			"revisionTime": "2019-02-12T21:45:08Z"
+		},
+		{
+			"checksumSHA1": "PV51jijc4Ucfn3IoVSVnY//Vlzg=",
+			"path": "github.com/tus/tusd/uid",
+			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
+			"revisionTime": "2019-02-12T21:45:08Z"
+		},
+		{
+			"checksumSHA1": "6Vsts4Te6U9W5/bfhQtVlHAWxws=",
+			"origin": "github.com/tus/tusd/vendor/gopkg.in/Acconut/lockfile.v1",
+			"path": "gopkg.in/Acconut/lockfile.v1",
+			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
+			"revisionTime": "2019-02-12T21:45:08Z"
 		},
 		{
 			"checksumSHA1": "ZSWoOPUNRr5+3dhkLK3C4cZAQPk=",
