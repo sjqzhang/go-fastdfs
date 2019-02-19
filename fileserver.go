@@ -1133,7 +1133,8 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 
-	req.SetTimeout(time.Second*5, time.Second*300)
+	timeout := fileInfo.Size/1024/1024/8 + 30
+	req.SetTimeout(time.Second*5, time.Second*time.Duration(timeout))
 
 	if fileInfo.OffSet != -1 { //small file download
 		data, err = req.Bytes()
@@ -1218,7 +1219,6 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
 	isPeer = this.IsPeer(r)
-
 
 	if Config().DownloadUseToken && !isPeer {
 
@@ -3531,10 +3531,10 @@ func (this *Server) initTus() {
 
 	BIG_DIR := STORE_DIR + "/_big/" + Config().PeerId
 	os.MkdirAll(BIG_DIR, 0775)
+	os.MkdirAll(LOG_DIR, 0775)
 	store := filestore.FileStore{
 		Path: BIG_DIR,
 	}
-
 	if fileLog, err = os.OpenFile(LOG_DIR+"/tusd.log", os.O_CREATE|os.O_RDWR, 0666); err != nil {
 		log.Error(err)
 		fmt.Println(err)
@@ -3547,7 +3547,7 @@ func (this *Server) initTus() {
 				log.Error(err)
 
 			} else {
-				if fi.Size() > 1024*1204*500 { //500M
+				if fi.Size() > 1024*1024*500 { //500M
 					this.util.CopyFile(LOG_DIR+"/tusd.log", LOG_DIR+"/tusd.log.2")
 					fileLog.Seek(0, 0)
 					fileLog.Truncate(0)
@@ -3599,8 +3599,8 @@ func (this *Server) initTus() {
 				} else {
 					if fi.Md5 != "" {
 						log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
-						log.Info("remove file:",oldFullPath)
-						log.Info("remove file:",infoFullPath)
+						log.Info("remove file:", oldFullPath)
+						log.Info("remove file:", infoFullPath)
 						os.Remove(oldFullPath)
 						os.Remove(infoFullPath)
 						continue
@@ -3625,7 +3625,7 @@ func (this *Server) initTus() {
 				}
 				os.Remove(infoFullPath)
 				this.postFileToPeer(fileInfo)
-				this.SaveFileInfoToLevelDB(info.ID,fileInfo)//add fileId to ldb
+				this.SaveFileInfoToLevelDB(info.ID, fileInfo) //add fileId to ldb
 				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
 		}
