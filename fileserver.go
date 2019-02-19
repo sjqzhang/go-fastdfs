@@ -3586,22 +3586,27 @@ func (this *Server) initTus() {
 				var err error
 				md5sum := ""
 				oldFullPath := BIG_DIR + "/" + info.ID + ".bin"
+				infoFullPath := BIG_DIR + "/" + info.ID + ".info"
 				if md5sum, err = this.util.GetFileSumByName(oldFullPath, Config().FileSumArithmetic); err != nil {
 					log.Error(err)
 					continue
 				}
+				timeStamp := time.Now().Unix()
+				path := time.Now().Format("/20060102/15/04/")
+				newFullPath := STORE_DIR + "/" + Config().DefaultScene + path + Config().PeerId + "/" + md5sum + ".bin"
 				if fi, err := this.GetFileInfoFromLevelDB(md5sum); err != nil {
 					log.Error(err)
 				} else {
 					if fi.Md5 != "" {
 						log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
+						log.Info("remove file:",oldFullPath)
+						log.Info("remove file:",infoFullPath)
+						os.Remove(oldFullPath)
+						os.Remove(infoFullPath)
 						continue
 					}
 				}
-				timeStamp := time.Now().Unix()
-				path := time.Now().Format("/20060102/15/04/")
-				newFullPath := STORE_DIR + "/" + Config().DefaultScene + path + Config().PeerId + "/" + md5sum + ".bin"
-				infoFullPath := STORE_DIR + "/" + Config().DefaultScene + path + Config().PeerId + "/" + info.ID + ".info"
+
 				path = STORE_DIR_NAME + "/" + Config().DefaultScene + path + Config().PeerId
 				os.MkdirAll(path, 0775)
 				fileInfo := &FileInfo{
