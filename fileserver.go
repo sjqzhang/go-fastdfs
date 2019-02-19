@@ -3591,9 +3591,11 @@ func (this *Server) initTus() {
 					log.Error(err)
 					continue
 				}
+				ext := path.Ext(name)
+				filename := md5sum + ext
 				timeStamp := time.Now().Unix()
-				path := time.Now().Format("/20060102/15/04/")
-				newFullPath := STORE_DIR + "/" + Config().DefaultScene + path + Config().PeerId + "/" + md5sum + ".bin"
+				fpath := time.Now().Format("/20060102/15/04/")
+				newFullPath := STORE_DIR + "/" + Config().DefaultScene + fpath + Config().PeerId + "/" + filename
 				if fi, err := this.GetFileInfoFromLevelDB(md5sum); err != nil {
 					log.Error(err)
 				} else {
@@ -3607,12 +3609,12 @@ func (this *Server) initTus() {
 					}
 				}
 
-				path = STORE_DIR_NAME + "/" + Config().DefaultScene + path + Config().PeerId
-				os.MkdirAll(path, 0775)
+				fpath = STORE_DIR_NAME + "/" + Config().DefaultScene + fpath + Config().PeerId
+				os.MkdirAll(fpath, 0775)
 				fileInfo := &FileInfo{
 					Name:      name,
-					Path:      path,
-					ReName:    md5sum + ".bin",
+					Path:      fpath,
+					ReName:    filename,
 					Size:      info.Size,
 					TimeStamp: timeStamp,
 					Md5:       md5sum,
