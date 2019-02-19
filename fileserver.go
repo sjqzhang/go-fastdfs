@@ -107,11 +107,12 @@ var (
 )
 
 const (
-	STORE_DIR_NAME            = "files"
-	LOG_DIR_NAME              = "log"
-	DATA_DIR_NAME             = "data"
-	CONF_DIR_NAME             = "conf"
-	CONST_STAT_FILE_COUNT_KEY = "fileCount"
+	STORE_DIR_NAME               = "files"
+	LOG_DIR_NAME                 = "log"
+	DATA_DIR_NAME                = "data"
+	CONF_DIR_NAME                = "conf"
+	CONST_STAT_FILE_COUNT_KEY    = "fileCount"
+	CONST_BIG_UPLOAD_PATH_SUFFIX = "/big/upload/"
 
 	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
 
@@ -1211,11 +1212,13 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		length       int
 		smallPath    string
 		notFound     bool
+		//isBigFile    bool
 	)
 
 	r.ParseForm()
 
 	isPeer = this.IsPeer(r)
+
 
 	if Config().DownloadUseToken && !isPeer {
 
@@ -1244,6 +1247,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+
 	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
 
 	//fmt.Println("fullpath",fullpath)
@@ -3522,6 +3526,7 @@ func (this *Server) initTus() {
 	var (
 		err     error
 		fileLog *os.File
+		bigDir  string
 	)
 
 	BIG_DIR := STORE_DIR + "/_big/" + Config().PeerId
@@ -3542,10 +3547,12 @@ func (this *Server) initTus() {
 				log.Error(err)
 
 			} else {
-				if fi.Size() > 1024*1024*500 { //500M
+				if fi.Size() > 1024*1204*500 { //500M
 					this.util.CopyFile(LOG_DIR+"/tusd.log", LOG_DIR+"/tusd.log.2")
-					fileLog.Truncate(0)
 					fileLog.Seek(0, 0)
+					fileLog.Truncate(0)
+					fileLog.Seek(0, 2)
+
 				}
 			}
 			time.Sleep(time.Second * 30)
@@ -3554,9 +3561,9 @@ func (this *Server) initTus() {
 
 	l := slog.New(fileLog, "[tusd] ", slog.LstdFlags)
 
-	bigDir := "/big/upload/"
+	bigDir = CONST_BIG_UPLOAD_PATH_SUFFIX
 	if Config().SupportGroupManage {
-		bigDir = fmt.Sprintf("/%s/big/upload/", Config().Group)
+		bigDir = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
 	}
 	composer := tusd.NewStoreComposer()
 	store.UseIn(composer)
@@ -3568,7 +3575,6 @@ func (this *Server) initTus() {
 	})
 
 	notify := func(handler *tusd.Handler) {
-
 		for {
 			select {
 			case info := <-handler.CompleteUploads:
@@ -3625,7 +3631,6 @@ func (this *Server) initTus() {
 		log.Error(err)
 
 	}
-
 	http.Handle(bigDir, http.StripPrefix(bigDir, handler))
 
 }
