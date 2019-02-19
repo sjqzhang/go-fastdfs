@@ -3620,6 +3620,7 @@ func (this *Server) initTus() {
 				}
 				os.Remove(infoFullPath)
 				this.postFileToPeer(fileInfo)
+				this.SaveFileInfoToLevelDB(info.ID,fileInfo)//add fileId to ldb
 				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
 		}
