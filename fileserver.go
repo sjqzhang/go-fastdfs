@@ -13,8 +13,8 @@ import (
 	"github.com/json-iterator/go"
 	log "github.com/sjqzhang/seelog"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/tus/tusd"
-	"github.com/tus/tusd/filestore"
+	"github.com/sjqzhang/tusd"
+	"github.com/sjqzhang/tusd/filestore"
 	"io"
 	"io/ioutil"
 	slog "log"
@@ -3359,37 +3359,59 @@ func (this *Server) HeartBeat(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	var (
 		uploadUrl string
+		uploadBigUrl string
 	)
 	uploadUrl = "/upload"
+	uploadBigUrl=CONST_BIG_UPLOAD_PATH_SUFFIX
 	if Config().EnableWebUpload {
 		if Config().SupportGroupManage {
 			uploadUrl = fmt.Sprintf("/%s/upload", Config().Group)
+			uploadBigUrl = fmt.Sprintf("/%s%s", Config().Group,CONST_BIG_UPLOAD_PATH_SUFFIX)
 		}
 		fmt.Fprintf(w,
 			fmt.Sprintf(`<html>
-	    <head>
-	        <meta charset="utf-8"></meta>
-	        <title>Uploader</title>
-			<style>
-			form {
-				bargin
-				
-			}
-			 .form-line {
-				display:block;
-			}
-			</style>
-	    </head>
-	    <body>
-	        <form action="%s" method="post" enctype="multipart/form-data">
-	            <span class="form-line">文件(file):<input  type="file" id="file" name="file" ></span>
-				<span class="form-line">场景(scene):<input  type="text" id="scene" name="scene" value="%s"></span>
-				<span class="form-line">输出(output):<input  type="text" id="output" name="output" value="json"></span>
-				<span class="form-line">自定义路径(path):<input  type="text" id="path" name="path" value=""></span>
-	            <input type="submit" name="submit" value="upload">
-	        </form>
-	    </body>
-	</html>`, uploadUrl, Config().DefaultScene))
+			  
+			  <head>
+				<meta charset="utf-8" />
+				<title>Uploader</title>
+				<style>form { bargin } .form-line { display:block;height: 30px;margin:8px; } #stdUpload {background: #fafafa;border-radius: 10px;width: 745px; }</style>
+				<link href="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.css" rel="stylesheet"></head>
+			  
+			  <body>
+                <div>标准上传</div>
+				<div id="stdUpload">
+				  
+				  <form action="%s" method="post" enctype="multipart/form-data">
+					<span class="form-line">文件(file):
+					  <input type="file" id="file" name="file" /></span>
+					<span class="form-line">场景(scene):
+					  <input type="text" id="scene" name="scene" value="%s" /></span>
+					<span class="form-line">输出(output):
+					  <input type="text" id="output" name="output" value="json" /></span>
+					<span class="form-line">自定义路径(path):
+					  <input type="text" id="path" name="path" value="" /></span>
+					<input type="submit" name="submit" value="upload" /></form>
+				</div>
+                 <div>断点续传</div>
+				<div>
+				 
+				  <div id="drag-drop-area"></div>
+				  <script src="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.js"></script>
+				  <script>var uppy = Uppy.Core().use(Uppy.Dashboard, {
+					  inline: true,
+					  target: '#drag-drop-area'
+					}).use(Uppy.Tus, {
+					  endpoint: '%s'
+					})
+
+					uppy.on('complete', (result) => {
+					 // console.log(result) console.log('Upload complete! We’ve uploaded these files:', result.successful)
+					})
+                </script>
+				</div>
+			  </body>
+
+			</html>`, uploadUrl, Config().DefaultScene,uploadBigUrl))
 	} else {
 		w.Write([]byte("web upload deny"))
 	}
@@ -3541,6 +3563,9 @@ func (this *Server) initTus() {
 		panic("initTus")
 	}
 
+
+
+
 	go func() {
 		for {
 			if fi, err := fileLog.Stat(); err != nil {
@@ -3566,7 +3591,26 @@ func (this *Server) initTus() {
 		bigDir = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
 	}
 	composer := tusd.NewStoreComposer()
+
+    // support raw tus upload and download
+	store.GetReaderExt= func(id string) (io.Reader, error) {
+		if fi, err := this.GetFileInfoFromLevelDB(id); err != nil {
+			log.Error(err)
+			return nil, err
+		} else {
+			fp := DOCKER_DIR + fi.Path + "/" + fi.ReName
+			if this.util.FileExists(fp) {
+				log.Info(fmt.Sprintf("download:%s",fp))
+				return os.Open(fp)
+			}
+			return nil, errors.New(fmt.Sprintf("%s not found", fp))
+		}
+	}
+
+
 	store.UseIn(composer)
+
+
 	handler, err := tusd.NewHandler(tusd.Config{
 		Logger:                l,
 		BasePath:              bigDir,

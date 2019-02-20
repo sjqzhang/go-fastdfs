@@ -10,10 +10,10 @@
 		},
 		{
 			"checksumSHA1": "KZbsm/85JwXaVdVFhE5m7bPArTo=",
-			"origin": "github.com/tus/tusd/vendor/github.com/bmizerany/pat",
+			"origin": "github.com/sjqzhang/tusd/vendor/github.com/bmizerany/pat",
 			"path": "github.com/bmizerany/pat",
-			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
-			"revisionTime": "2019-02-12T21:45:08Z"
+			"revision": "a6a9d78ef54ad18312ce45ea14450f8a8d2426e8",
+			"revisionTime": "2019-02-20T03:13:06Z"
 		},
 		{
 			"checksumSHA1": "iMU6SM/jawaCOJnyvR5/w8C/C1w=",
@@ -62,6 +62,24 @@
 			"path": "github.com/sjqzhang/seelog",
 			"revision": "556439109558695b36124c93863f93f385c0a07e",
 			"revisionTime": "2018-01-04T06:17:43Z"
+		},
+		{
+			"checksumSHA1": "mAuXqiJhcgKUT+6Pc6XBa1xhSXo=",
+			"path": "github.com/sjqzhang/tusd",
+			"revision": "a6a9d78ef54ad18312ce45ea14450f8a8d2426e8",
+			"revisionTime": "2019-02-20T03:13:06Z"
+		},
+		{
+			"checksumSHA1": "SWl/bKZqpoetyEjzd89mJVahQ74=",
+			"path": "github.com/sjqzhang/tusd/filestore",
+			"revision": "a6a9d78ef54ad18312ce45ea14450f8a8d2426e8",
+			"revisionTime": "2019-02-20T03:13:06Z"
+		},
+		{
+			"checksumSHA1": "RWsjReUI3YH3YgiPz2cMXWSYrk0=",
+			"path": "github.com/sjqzhang/tusd/uid",
+			"revision": "a6a9d78ef54ad18312ce45ea14450f8a8d2426e8",
+			"revisionTime": "2019-02-20T03:13:06Z"
 		},
 		{
 			"checksumSHA1": "LV0VMVON7xY1ttV+s2ph83ntmDQ=",
@@ -136,29 +154,11 @@
 			"revisionTime": "2018-11-28T10:09:59Z"
 		},
 		{
-			"checksumSHA1": "pc8UqRkYMuyXUROYTdpiDrcSmtg=",
-			"path": "github.com/tus/tusd",
-			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
-			"revisionTime": "2019-02-12T21:45:08Z"
-		},
-		{
-			"checksumSHA1": "4l/Di4i6LK2qu1Atz8OYeRTYN6o=",
-			"path": "github.com/tus/tusd/filestore",
-			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
-			"revisionTime": "2019-02-12T21:45:08Z"
-		},
-		{
-			"checksumSHA1": "PV51jijc4Ucfn3IoVSVnY//Vlzg=",
-			"path": "github.com/tus/tusd/uid",
-			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
-			"revisionTime": "2019-02-12T21:45:08Z"
-		},
-		{
 			"checksumSHA1": "6Vsts4Te6U9W5/bfhQtVlHAWxws=",
-			"origin": "github.com/tus/tusd/vendor/gopkg.in/Acconut/lockfile.v1",
+			"origin": "github.com/sjqzhang/tusd/vendor/gopkg.in/Acconut/lockfile.v1",
 			"path": "gopkg.in/Acconut/lockfile.v1",
-			"revision": "0baa9eaf4825e5f3d2d16751b1059529e9fbde34",
-			"revisionTime": "2019-02-12T21:45:08Z"
+			"revision": "a6a9d78ef54ad18312ce45ea14450f8a8d2426e8",
+			"revisionTime": "2019-02-20T03:13:06Z"
 		},
 		{
 			"checksumSHA1": "ZSWoOPUNRr5+3dhkLK3C4cZAQPk=",
