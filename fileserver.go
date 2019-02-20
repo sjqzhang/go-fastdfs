@@ -12,9 +12,9 @@ import (
 	"github.com/deckarep/golang-set"
 	"github.com/json-iterator/go"
 	log "github.com/sjqzhang/seelog"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/sjqzhang/tusd"
 	"github.com/sjqzhang/tusd/filestore"
+	"github.com/syndtr/goleveldb/leveldb"
 	"io"
 	"io/ioutil"
 	slog "log"
@@ -36,6 +36,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"bytes"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -1632,11 +1633,11 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 
 	if filename == CONST_FILE_Md5_FILE_NAME {
 
-		if _,err:=this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo);err!=nil {
-			log.Error("saveToLevelDB",err,fileInfo)
+		if _, err := this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo); err != nil {
+			log.Error("saveToLevelDB", err, fileInfo)
 		}
-		if _,err=this.SaveFileInfoToLevelDB(this.util.MD5(fullpath), fileInfo);err!=nil {
-			log.Error("saveToLevelDB",err,fileInfo)
+		if _, err = this.SaveFileInfoToLevelDB(this.util.MD5(fullpath), fileInfo); err != nil {
+			log.Error("saveToLevelDB", err, fileInfo)
 		}
 		this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 		this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
@@ -1686,16 +1687,16 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 
 	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); fileInfo != nil {
 
-		if fileInfo.OffSet!=-1 {
+		if fileInfo.OffSet != -1 {
 			if data, err = json.Marshal(fileInfo); err != nil {
 				log.Error(err)
 			}
 			w.Write(data)
 			return
 		}
-		fpath = DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.Name
+		fpath = DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name
 		if fileInfo.ReName != "" {
-			fpath = DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.ReName
+			fpath = DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName
 		}
 		if this.util.IsExist(fpath) {
 			if data, err = json.Marshal(fileInfo); err == nil {
@@ -1705,7 +1706,7 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 				log.Error(err)
 			}
 		} else {
-			if fileInfo.OffSet==-1 {
+			if fileInfo.OffSet == -1 {
 				this.RemoveKeyFromLevelDB(md5sum) // when file delete,delete from leveldb
 			}
 		}
@@ -2562,9 +2563,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
 			fileResult = this.BuildFileResult(v, r)
 			if Config().RenameFile {
-				os.Remove(DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.ReName)
+				os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
 			} else {
-				os.Remove(DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.Name)
+				os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
 			}
 
 			if output == "json" {
@@ -3374,15 +3375,15 @@ func (this *Server) HeartBeat(w http.ResponseWriter, r *http.Request) {
 
 func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	var (
-		uploadUrl string
+		uploadUrl    string
 		uploadBigUrl string
 	)
 	uploadUrl = "/upload"
-	uploadBigUrl=CONST_BIG_UPLOAD_PATH_SUFFIX
+	uploadBigUrl = CONST_BIG_UPLOAD_PATH_SUFFIX
 	if Config().EnableWebUpload {
 		if Config().SupportGroupManage {
 			uploadUrl = fmt.Sprintf("/%s/upload", Config().Group)
-			uploadBigUrl = fmt.Sprintf("/%s%s", Config().Group,CONST_BIG_UPLOAD_PATH_SUFFIX)
+			uploadBigUrl = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
 		}
 		fmt.Fprintf(w,
 			fmt.Sprintf(`<html>
@@ -3427,7 +3428,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 				</div>
 			  </body>
 
-			</html>`, uploadUrl, Config().DefaultScene,uploadBigUrl))
+			</html>`, uploadUrl, Config().DefaultScene, uploadBigUrl))
 	} else {
 		w.Write([]byte("web upload deny"))
 	}
@@ -3579,9 +3580,6 @@ func (this *Server) initTus() {
 		panic("initTus")
 	}
 
-
-
-
 	go func() {
 		for {
 			if fi, err := fileLog.Stat(); err != nil {
@@ -3608,31 +3606,58 @@ func (this *Server) initTus() {
 	}
 	composer := tusd.NewStoreComposer()
 
-    // support raw tus upload and download
-	store.GetReaderExt= func(id string) (io.Reader, error) {
-		if fi, err := this.GetFileInfoFromLevelDB(id); err != nil {
+	// support raw tus upload and download
+	store.GetReaderExt = func(id string) (io.Reader, error) {
+		var (
+			offset int64
+			err    error
+			length int
+			buffer []byte
+			fi     *FileInfo
+		)
+		if fi, err = this.GetFileInfoFromLevelDB(id); err != nil {
 			log.Error(err)
 			return nil, err
 		} else {
 			fp := DOCKER_DIR + fi.Path + "/" + fi.ReName
 			if this.util.FileExists(fp) {
-				log.Info(fmt.Sprintf("download:%s",fp))
+				log.Info(fmt.Sprintf("download:%s", fp))
 				return os.Open(fp)
+			}
+			ps := strings.Split(fp, ",")
+			if len(ps) > 2 && this.util.FileExists(ps[0]) {
+
+				if length, err = strconv.Atoi(ps[2]); err != nil {
+					return nil, err
+				}
+				if offset, err = strconv.ParseInt(ps[1], 10, 64); err != nil {
+					return nil, err
+				}
+				if buffer, err = this.util.ReadFileByOffSet(ps[0], offset, length); err != nil {
+					return nil, err
+				}
+				if buffer[0] == '1' {
+					bufferReader := bytes.NewBuffer(buffer[1:])
+					return bufferReader, nil
+				} else {
+					msg := "data no sync"
+					log.Error(msg)
+					return nil, errors.New(msg)
+				}
+
 			}
 			return nil, errors.New(fmt.Sprintf("%s not found", fp))
 		}
+
 	}
 
-
 	store.UseIn(composer)
-
 
 	handler, err := tusd.NewHandler(tusd.Config{
 		Logger:                l,
 		BasePath:              bigDir,
 		StoreComposer:         composer,
 		NotifyCompleteUploads: true,
-
 	})
 
 	notify := func(handler *tusd.Handler) {
@@ -3663,7 +3688,7 @@ func (this *Server) initTus() {
 					log.Error(err)
 				} else {
 					if fi.Md5 != "" {
-						if _,err:=this.SaveFileInfoToLevelDB(info.ID,fi);err!=nil {
+						if _, err := this.SaveFileInfoToLevelDB(info.ID, fi); err != nil {
 							log.Error(err)
 						}
 						log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
