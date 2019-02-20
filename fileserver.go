@@ -136,7 +136,7 @@ const (
 	"组号": "用于区别不同的集群(上传或下载)与support_group_upload配合使用,带在下载路径中",
 	"group": "group1",
 	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
-	"enable_merge_small_file": false,
+	"enable_merge_small_file": true,
 	"重试同步失败文件的时间": "单位秒",
 	"refresh_interval": 1800,
 	"是否自动重命名": "默认不自动重命名,使用原文件名",
@@ -1631,8 +1631,13 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	tmpFile.WriteString(msg)
 
 	if filename == CONST_FILE_Md5_FILE_NAME {
-		this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo)
-		this.SaveFileInfoToLevelDB(this.util.MD5(fullpath), fileInfo)
+
+		if _,err:=this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo);err!=nil {
+			log.Error("saveToLevelDB",err,fileInfo)
+		}
+		if _,err=this.SaveFileInfoToLevelDB(this.util.MD5(fullpath), fileInfo);err!=nil {
+			log.Error("saveToLevelDB",err,fileInfo)
+		}
 		this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 		this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
 		this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
@@ -1680,17 +1685,29 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 	md5sum = r.FormValue("md5")
 
 	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); fileInfo != nil {
-		fpath = fileInfo.Path + "/" + fileInfo.Name
+
+		if fileInfo.OffSet!=-1 {
+			if data, err = json.Marshal(fileInfo); err != nil {
+				log.Error(err)
+			}
+			w.Write(data)
+			return
+		}
+		fpath = DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.Name
 		if fileInfo.ReName != "" {
-			fpath = fileInfo.Path + "/" + fileInfo.ReName
+			fpath = DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.ReName
 		}
 		if this.util.IsExist(fpath) {
 			if data, err = json.Marshal(fileInfo); err == nil {
 				w.Write(data)
 				return
+			} else {
+				log.Error(err)
 			}
 		} else {
-			this.RemoveKeyFromLevelDB(md5sum) // when file delete,delete from leveldb
+			if fileInfo.OffSet==-1 {
+				this.RemoveKeyFromLevelDB(md5sum) // when file delete,delete from leveldb
+			}
 		}
 	}
 	data, _ = json.Marshal(FileInfo{})
@@ -1826,7 +1843,6 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo) (*File
 		return fileInfo, err
 
 	}
-
 	if err = this.ldb.Put([]byte(key), data, nil); err != nil {
 		return fileInfo, err
 	}
@@ -2546,9 +2562,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
 			fileResult = this.BuildFileResult(v, r)
 			if Config().RenameFile {
-				os.Remove(fileInfo.Path + "/" + fileInfo.ReName)
+				os.Remove(DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.ReName)
 			} else {
-				os.Remove(fileInfo.Path + "/" + fileInfo.Name)
+				os.Remove(DOCKER_DIR+ fileInfo.Path + "/" + fileInfo.Name)
 			}
 
 			if output == "json" {
@@ -3616,12 +3632,15 @@ func (this *Server) initTus() {
 		BasePath:              bigDir,
 		StoreComposer:         composer,
 		NotifyCompleteUploads: true,
+
 	})
 
 	notify := func(handler *tusd.Handler) {
 		for {
 			select {
+
 			case info := <-handler.CompleteUploads:
+
 				log.Info("CompleteUploads", info)
 				name := ""
 				if v, ok := info.MetaData["filename"]; ok {
@@ -3644,6 +3663,9 @@ func (this *Server) initTus() {
 					log.Error(err)
 				} else {
 					if fi.Md5 != "" {
+						if _,err:=this.SaveFileInfoToLevelDB(info.ID,fi);err!=nil {
+							log.Error(err)
+						}
 						log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
 						log.Info("remove file:", oldFullPath)
 						log.Info("remove file:", infoFullPath)
