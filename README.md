@@ -6,6 +6,8 @@
 
 # go-fastdfs是一个基于http协议的分布式文件系统，它基于大道至简的设计理念，一切从简设计，使得它的运维及扩展变得更加简单，它具有高性能、高可靠、无中心、免维护等优点。
 
+### 大家担心的是这么简单的文件系统，靠不靠谱，可不可以用于生产环境？答案是肯定的，正因为简单所以稳定。如果你担心功能，那就跑单元测试，如果担心性能，那就跑压力测试，项目都自带了，跑一跑更放心^_^。
+
 
 - 支持curl命令上传
 - 支持浏览器上传
@@ -15,7 +17,7 @@
 - 支持配置自动生成
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
-- 支持继点续传([tus](https://tus.io/))
+- 支持断点续传([tus](https://tus.io/))
 - 支持docker部署
 - 支持自监控告警
 - 支持集群文件信息查看
@@ -42,7 +44,7 @@
 - 支持集群监控邮件告警
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
-- 支持继点续传([tus](https://tus.io/))
+- 支持断点续传([tus](https://tus.io/))
 - 支持docker部署
 - 支持token下载　token=md5(file_md5+timestamp)
 - 运维简单，只有一个角色（不像fastdfs有三个角色Tracker Server,Storage Server,Client），配置自动生成
@@ -391,7 +393,7 @@ http://www.hjsplit.org/
 通过http get的方式访问上传接口
 http://10.0.5.9:8080/upload?md5=filesum&output=json
 参数说明：
-md5=sum(file) 文件的摘要算法要与文件务器的算法一致（算法支持md5|sha1）
+md5=sum(file) 文件的摘要算法要与文件务器的算法一致（算法支持md5|sha1），如果是断点续传，可以使用文件的id，也就是urlolad后的id
 output=json|text 返回的格式
  
 ```
