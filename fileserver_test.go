@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/astaxie/beego/httplib"
 	"github.com/eventials/go-tus"
-	"github.com/prometheus/common/log"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
@@ -57,7 +56,7 @@ func init()  {
 
 }
 
-func uploadContinue(t *testing.T)  {
+func uploadContinueBig(t *testing.T)  {
 	f, err := os.Open(CONST_BIG_FILE_NAME)
 	if err != nil {
 		panic(err)
@@ -87,11 +86,54 @@ func uploadContinue(t *testing.T)  {
     fmt.Println(url)
 
     if md5sum,err:= testUtil.GetFileSumByName(CONST_DOWNLOAD_BIG_FILE_NAME,"");md5sum!=testBigFileMd5 {
-    	t.Error("uploadContinue download fail")
+    	t.Error("uploadContinue bigfile  download fail")
     	t.Error(err)
 	}
 
+
+
+
 }
+
+func uploadContinueSmall(t *testing.T)  {
+	f, err := os.Open(CONST_SMALL_FILE_NAME)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	client, err := tus.NewClient("http://127.0.0.1:8080/big/upload/", nil)
+	if err!=nil {
+		t.Error(err)
+	}
+	upload, err := tus.NewUploadFromFile(f)
+	if err!=nil {
+		t.Error(err)
+	}
+	uploader, err := client.CreateUpload(upload)
+	if err!=nil {
+		t.Error(err)
+	}
+	url:=uploader.Url()
+	err=uploader.Upload()
+	time.Sleep(time.Second*1)
+	if err!=nil {
+		t.Error(err)
+	}
+	if err:=httplib.Get(url).ToFile(CONST_DOWNLOAD_SMALL_FILE_NAME);err!=nil {
+		t.Error(err)
+	}
+	fmt.Println(url)
+
+	if md5sum,err:= testUtil.GetFileSumByName(CONST_DOWNLOAD_SMALL_FILE_NAME,"");md5sum!=testSmallFileMd5 {
+		t.Error("uploadContinue smallfile  download fail")
+		t.Error(err)
+	}
+
+
+
+
+}
+
 
 func uploadSmall(t *testing.T)  {
 	var obj FileResult
@@ -101,14 +143,14 @@ func uploadSmall(t *testing.T)  {
 	req.Param("scene","")
 	req.Param("path","")
 	req.ToJSON(&obj)
+	fmt.Println(obj.Url)
 	if obj.Md5!=testSmallFileMd5 {
 		t.Error("file not equal")
 	}else {
 		req=httplib.Get(obj.Url)
 		req.ToFile(CONST_DOWNLOAD_SMALL_FILE_NAME)
 		if md5sum,err:= testUtil.GetFileSumByName(CONST_DOWNLOAD_SMALL_FILE_NAME,"");md5sum!=testSmallFileMd5 {
-			log.Error(err)
-			t.Error("small file not equal")
+			t.Error("small file not equal",err)
 		}
 	}
 }
@@ -121,14 +163,15 @@ func uploadLarge(t *testing.T)  {
 	req.Param("scene","")
 	req.Param("path","")
 	req.ToJSON(&obj)
+	fmt.Println(obj.Url)
 	if obj.Md5!=testBigFileMd5 {
 		t.Error("file not equal")
 	} else {
 		req=httplib.Get(obj.Url)
 		req.ToFile(CONST_DOWNLOAD_BIG_FILE_NAME)
 		if md5sum,err:= testUtil.GetFileSumByName(CONST_DOWNLOAD_BIG_FILE_NAME,"");md5sum!=testBigFileMd5 {
-			log.Error(err)
-			t.Error("big file not equal")
+
+			t.Error("big file not equal",err)
 		}
 	}
 }
@@ -141,8 +184,6 @@ func checkFileExist(t *testing.T)  {
 	if obj.Md5!=testBigFileMd5 {
 		t.Error("file not equal testBigFileMd5")
 	}
-
-
 	req=httplib.Get("http://127.0.0.1:8080/check_file_exist?md5="+testSmallFileMd5)
 	req.ToJSON(&obj)
 	if obj.Md5!=testSmallFileMd5 {
@@ -164,7 +205,8 @@ func Test_main(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 		 go	main()
 		 time.Sleep(time.Second*1)
-		 uploadContinue(t)
+		 uploadContinueBig(t)
+		 uploadContinueSmall(t)
 		 uploadSmall(t)
 		 uploadLarge(t)
          checkFileExist(t)
