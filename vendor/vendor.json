@@ -46,6 +46,12 @@
 			"revisionTime": "2017-10-13T11:49:54Z"
 		},
 		{
+			"checksumSHA1": "jWLtXBO8ZTCPxYC+GMRCSk/Qtw0=",
+			"path": "github.com/eventials/go-tus",
+			"revision": "03d9c4b616ff3fdc12c47e8207e3b058b33054b6",
+			"revisionTime": "2018-10-20T12:00:34Z"
+		},
+		{
 			"checksumSHA1": "h1d2lPZf6j2dW/mIqVnd1RdykDo=",
 			"path": "github.com/golang/snappy",
 			"revision": "2e65f85255dbc3072edf28d6b5b8efc472979f5a",
