@@ -21,23 +21,24 @@ const (
 var testUtil = Common{}
 
 var endPoint = "http://127.0.0.1:8080"
+var endPoint2 = ""
 
 var testCfg *GloablConfig
 
 var testSmallFileMd5 = ""
 var testBigFileMd5 = ""
 
-func init() {
+func initFile(smallSize, bigSig int) {
 
 	var (
 		err error
 	)
 
-	smallBytes := make([]byte, 1025*512)
+	smallBytes := make([]byte, smallSize)
 	for i := 0; i < len(smallBytes); i++ {
 		smallBytes[i] = 'a'
 	}
-	bigBytes := make([]byte, 1025*1024*2)
+	bigBytes := make([]byte, bigSig)
 	for i := 0; i < len(smallBytes); i++ {
 		bigBytes[i] = 'a'
 	}
@@ -72,16 +73,19 @@ func uploadContinueBig(t *testing.T) {
 	upload, err := tus.NewUploadFromFile(f)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	uploader, err := client.CreateUpload(upload)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	url := uploader.Url()
 	err = uploader.Upload()
 	time.Sleep(time.Second * 1)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	if err := httplib.Get(url).ToFile(CONST_DOWNLOAD_BIG_FILE_NAME); err != nil {
 		t.Error(err)
@@ -95,6 +99,41 @@ func uploadContinueBig(t *testing.T) {
 
 }
 
+func refreshConfig(t *testing.T) {
+	var (
+		cfg    GloablConfig
+		err    error
+		cfgStr string
+		result string
+	)
+
+	if testCfg == nil {
+		return
+	}
+	cfgStr = testUtil.JsonEncodePretty(testCfg)
+	if cfg.Addr == "" {
+		return
+	}
+	fmt.Println("refreshConfig")
+	req := httplib.Post(endPoint + "/reload?action=set")
+	req.Param("cfg", cfgStr)
+	result, err = req.String()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	req = httplib.Get(endPoint + "/reload?action=reload")
+
+	result, err = req.String()
+	if err != nil {
+		t.Error(err)
+
+	}
+	fmt.Println(result)
+
+}
+
 func testConfig(t *testing.T) {
 
 	var (
@@ -103,7 +142,6 @@ func testConfig(t *testing.T) {
 		cfgStr     string
 		result     string
 		jsonResult JsonResult
-
 	)
 
 	req := httplib.Get(endPoint + "/reload?action=get")
@@ -123,6 +161,10 @@ func testConfig(t *testing.T) {
 		return
 	} else {
 		testCfg = &cfg
+	}
+
+	if cfg.Peers != nil && len(cfg.Peers) > 0 && endPoint2 == "" {
+		endPoint2 = cfg.Peers[0]
 	}
 
 	if cfg.Group == "" || cfg.Addr == "" {
@@ -149,6 +191,51 @@ func testConfig(t *testing.T) {
 	}
 	fmt.Println(result)
 
+}
+
+func testCommon(t *testing.T) {
+
+	testUtil.RemoveEmptyDir("files")
+
+	if len(testUtil.GetUUID()) != 36 {
+		t.Error("testCommon fail")
+	}
+}
+
+func testCommonMap(t *testing.T) {
+	var (
+		commonMap *CommonMap
+	)
+	commonMap = NewCommonMap(1)
+	commonMap.AddUniq("1")
+	//if len(commonMap.Keys()) != 1 {
+	//	t.Error("testCommonMap fail")
+	//}
+	commonMap.Clear()
+	if len(commonMap.Keys()) != 0 {
+		t.Error("testCommonMap fail")
+	}
+	commonMap.AddCount("count", 1)
+	commonMap.Add("count")
+	if v, ok := commonMap.GetValue("count"); ok {
+		if v.(int) != 2 {
+			t.Error("testCommonMap fail")
+		}
+	}
+	if !commonMap.Contains("count") {
+		t.Error("testCommonMap fail")
+	}
+	commonMap.Zero()
+	if v, ok := commonMap.GetValue("count"); ok {
+		if v.(int) != 0 {
+			t.Error("testCommonMap fail")
+		}
+	}
+	commonMap.Remove("count")
+
+	if _, ok := commonMap.GetValue("count"); ok {
+		t.Error("testCommonMap fail")
+	}
 
 }
 
@@ -168,6 +255,7 @@ func testApis(t *testing.T) {
 			t.Error(err)
 			continue
 		}
+		fmt.Println("#########apis#########",v)
 		fmt.Println(result)
 	}
 
@@ -275,16 +363,36 @@ func Test_main(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			testCommonMap(t)
+
 			go main()
+
 			time.Sleep(time.Second * 1)
 			testConfig(t)
+
+			initFile(1024*testUtil.RandInt(100, 512), 1024*1024*testUtil.RandInt(2, 20))
 			uploadContinueBig(t)
 			uploadContinueSmall(t)
+			initFile(1024*testUtil.RandInt(100, 512), 1024*1024*testUtil.RandInt(2, 20))
 			uploadSmall(t)
 			uploadLarge(t)
 			checkFileExist(t)
 			testApis(t)
+			if endPoint != endPoint2 && endPoint2!="" {
+				endPoint = endPoint2
+				fmt.Println("#######endPoint2######",endPoint2)
+				initFile(1024*testUtil.RandInt(100, 512), 1024*1024*testUtil.RandInt(2, 20))
+				uploadContinueBig(t)
+				uploadContinueSmall(t)
+				initFile(1024*testUtil.RandInt(100, 512), 1024*1024*testUtil.RandInt(2, 20))
+				uploadSmall(t)
+				uploadLarge(t)
+				checkFileExist(t)
+				testApis(t)
+			}
 			time.Sleep(time.Second * 2)
+			//testCommon(t)
 		})
 	}
 }
