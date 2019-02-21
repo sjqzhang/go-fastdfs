@@ -1,0 +1,3917 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/sjqzhang/go-fastdfs/fileserver.go (62.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "crypto/md5"
+        "crypto/rand"
+        "crypto/sha1"
+        "encoding/base64"
+        "errors"
+        "flag"
+        "fmt"
+        "github.com/astaxie/beego/httplib"
+        "github.com/deckarep/golang-set"
+        "github.com/json-iterator/go"
+        log "github.com/sjqzhang/seelog"
+        "github.com/sjqzhang/tusd"
+        "github.com/sjqzhang/tusd/filestore"
+        "github.com/syndtr/goleveldb/leveldb"
+        _ "github.com/eventials/go-tus"
+        "io"
+        "io/ioutil"
+        slog "log"
+        random "math/rand"
+        "mime/multipart"
+        "net"
+        "net/http"
+        _ "net/http/pprof"
+        "net/smtp"
+        "net/url"
+        "os"
+        "os/signal"
+        "path"
+        "path/filepath"
+        "reflect"
+        "regexp"
+        "runtime"
+        "runtime/debug"
+        "strconv"
+        "strings"
+        "sync"
+        "bytes"
+        "sync/atomic"
+        "syscall"
+        "time"
+        "unsafe"
+)
+
+var staticHandler http.Handler
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+var server *Server
+
+var logacc log.LoggerInterface
+
+var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
+
+var CONST_QUEUE_SIZE = 100000
+
+var (
+        FileName string
+
+        ptr unsafe.Pointer
+
+        DOCKER_DIR = ""
+
+        STORE_DIR = STORE_DIR_NAME
+
+        CONF_DIR = CONF_DIR_NAME
+
+        LOG_DIR = LOG_DIR_NAME
+
+        DATA_DIR = DATA_DIR_NAME
+
+        LARGE_DIR_NAME = "haystack"
+
+        LARGE_DIR = STORE_DIR + "/haystack"
+
+        CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
+
+        CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
+
+        CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
+
+        logConfigStr = `
+&lt;seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error"&gt;  
+        &lt;outputs formatid="common"&gt;  
+                &lt;buffered formatid="common" size="1048576" flushperiod="1000"&gt;  
+                        &lt;rollingfile type="size" filename="{DOCKER_DIR}log/fileserver.log" maxsize="104857600" maxrolls="10"/&gt;  
+                &lt;/buffered&gt;
+        &lt;/outputs&gt;            
+         &lt;formats&gt;
+                 &lt;format id="common" format="%Date %Time [%LEV] [%File:%Line] [%Func] %Msg%n" /&gt;  
+         &lt;/formats&gt;  
+&lt;/seelog&gt;
+`
+
+        logAccessConfigStr = `
+&lt;seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error"&gt;  
+        &lt;outputs formatid="common"&gt;  
+                &lt;buffered formatid="common" size="1048576" flushperiod="1000"&gt;  
+                        &lt;rollingfile type="size" filename="{DOCKER_DIR}log/access.log" maxsize="104857600" maxrolls="10"/&gt;  
+                &lt;/buffered&gt;
+        &lt;/outputs&gt;            
+         &lt;formats&gt;
+                 &lt;format id="common" format="%Date %Time [%LEV] [%File:%Line] [%Func] %Msg%n" /&gt;  
+         &lt;/formats&gt;  
+&lt;/seelog&gt;
+`
+)
+
+const (
+        STORE_DIR_NAME               = "files"
+        LOG_DIR_NAME                 = "log"
+        DATA_DIR_NAME                = "data"
+        CONF_DIR_NAME                = "conf"
+        CONST_STAT_FILE_COUNT_KEY    = "fileCount"
+        CONST_BIG_UPLOAD_PATH_SUFFIX = "/big/upload/"
+
+        CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
+
+        CONST_Md5_ERROR_FILE_NAME  = "errors.md5"
+        CONST_Md5_QUEUE_FILE_NAME  = "queue.md5"
+        CONST_FILE_Md5_FILE_NAME   = "files.md5"
+        CONST_REMOME_Md5_FILE_NAME = "removes.md5"
+        CONST_SMALL_FILE_SIZE      = 1024 * 1024
+
+        CONST_MESSAGE_CLUSTER_IP = "Can only be called by the cluster ip,current ip:%s"
+
+        cfgJson = `{
+        "绑定端号": "端口",
+        "addr": ":8080",
+        "PeerID": "集群内唯一,请使用0-9的单字符，默认自动生成",
+        "peer_id": "%s",
+        "本主机地址": "本机http地址,默认自动生成，必段为内网，自动生成不为内网请自行修改，下同",
+        "host": "%s",
+        "集群": "集群列表,注意为了高可用，IP必须不能是同一个,同一不会自动备份，且不能为127.0.0.1,且必须为内网IP，默认自动生成",
+        "peers": ["%s"],
+        "组号": "用于区别不同的集群(上传或下载)与support_group_upload配合使用,带在下载路径中",
+        "group": "group1",
+        "是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
+        "enable_merge_small_file": false,
+        "重试同步失败文件的时间": "单位秒",
+        "refresh_interval": 1800,
+        "是否自动重命名": "默认不自动重命名,使用原文件名",
+        "rename_file": false,
+        "是否支持web上传,方便调试": "默认支持web上传",
+        "enable_web_upload": true,
+        "是否支持非日期路径": "默认支持非日期路径,也即支持自定义路径,需要上传文件时指定path",
+        "enable_custom_path": true,
+        "下载域名": "用于外网下载文件的域名,不包含http://",
+        "download_domain": "",
+        "场景列表": "当设定后，用户指的场景必项在列表中，默认不做限制",
+        "scenes": [],
+        "默认场景": "默认default",
+        "default_scene": "default",
+        "是否显示目录": "默认显示,方便调试用,上线时请关闭",
+        "show_dir": true,
+        "邮件配置": "",
+        "mail": {
+                "user": "abc@163.com",
+                "password": "abc",
+                "host": "smtp.163.com:25"
+        },
+        "告警接收邮件列表": "接收人数组",
+        "alram_receivers": [],
+        "告警接收URL": "方法post,参数:subjet,message",
+        "alarm_url": "",
+        "下载是否需带token": "真假",
+        "download_use_token": false,
+        "下载token过期时间": "单位秒",
+        "download_token_expire": 600,
+        "是否自动修复": "在超过1亿文件时出现性能问题，取消此选项，请手动按天同步，请查看FAQ",
+        "auto_repair": true,
+        "文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
+        "file_sum_arithmetic": "md5",
+        "是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认不支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
+        "support_group_manage": false,
+        "管理ip列表": "用于管理集的ip白名单,",
+        "admin_ips": ["127.0.0.1"]
+
+}
+        `
+)
+
+type Common struct {
+}
+
+type Server struct {
+        ldb            *leveldb.DB
+        util           *Common
+        statMap        *CommonMap
+        sumMap         *CommonMap //map[string]mapset.Set
+        queueToPeers   chan FileInfo
+        queueFromPeers chan FileInfo
+        lockMap        *CommonMap
+
+        curDate string
+        host    string
+}
+
+type FileInfo struct {
+        Name      string   `json:"name"`
+        ReName    string   `json:"rename"`
+        Path      string   `json:"path"`
+        Md5       string   `json:"md5"`
+        Size      int64    `json:"size"`
+        Peers     []string `json:"peers"`
+        Scene     string   `json:"scene"`
+        TimeStamp int64    `json:"timeStamp"`
+        OffSet    int64    `json:"offset"`
+}
+
+type JsonResult struct {
+        Message string      `json:"message"`
+        Status  string      `json:"status"`
+        Data    interface{} `json:"data"`
+}
+
+type FileResult struct {
+        Url    string `json:"url"`
+        Md5    string `json:"md5"`
+        Path   string `json:"path"`
+        Domain string `json:"domain"`
+        Scene  string `json:"scene"`
+        //Just for Compatibility
+        Scenes  string `json:"scenes"`
+        Retmsg  string `json:"retmsg"`
+        Retcode int    `json:"retcode"`
+        Src     string `json:"src"`
+}
+
+type Mail struct {
+        User     string `json:"user"`
+        Password string `json:"password"`
+        Host     string `json:"host"`
+}
+
+type StatDateFileInfo struct {
+        Date      string `json:"date"`
+        TotalSize int64  `json:"totalSize"`
+        FileCount int64  `json:"fileCount"`
+}
+
+type GloablConfig struct {
+        Addr                 string   `json:"addr"`
+        Peers                []string `json:"peers"`
+        Group                string   `json:"group"`
+        RenameFile           bool     `json:"rename_file"`
+        ShowDir              bool     `json:"show_dir"`
+        RefreshInterval      int      `json:"refresh_interval"`
+        EnableWebUpload      bool     `json:"enable_web_upload"`
+        DownloadDomain       string   `json:"download_domain"`
+        EnableCustomPath     bool     `json:"enable_custom_path"`
+        Scenes               []string `json:"scenes"`
+        AlramReceivers       []string `json:"alram_receivers"`
+        DefaultScene         string   `json:"default_scene"`
+        Mail                 Mail     `json:"mail"`
+        AlarmUrl             string   `json:"alarm_url"`
+        DownloadUseToken     bool     `json:"download_use_token"`
+        DownloadTokenExpire  int      `json:"download_token_expire"`
+        QueueSize            int      `json:"queue_size"`
+        AutoRepair           bool     `json:"auto_repair"`
+        Host                 string   `json:"host"`
+        FileSumArithmetic    string   `json:"file_sum_arithmetic"`
+        PeerId               string   `json:"peer_id"`
+        SupportGroupManage   bool     `json:"support_group_manage"`
+        AdminIps             []string `json:"admin_ips"`
+        EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
+}
+
+func NewServer() *Server <span class="cov8" title="1">{
+
+        var (
+                ldb    *leveldb.DB
+                server *Server
+                err    error
+        )
+
+        server = &amp;Server{
+                util:           &amp;Common{},
+                statMap:        NewCommonMap(0),
+                lockMap:        NewCommonMap(0),
+                queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
+                queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
+                sumMap:         NewCommonMap(363 * 3),
+        }
+        settins := httplib.BeegoHTTPSettings{
+                UserAgent:        "go-fastdfs",
+                ConnectTimeout:   10 * time.Second,
+                ReadWriteTimeout: 10 * time.Second,
+                Gzip:             true,
+                DumpBody:         true,
+        }
+        httplib.SetDefaultSetting(settins)
+        server.statMap.Put(CONST_STAT_FILE_COUNT_KEY, int64(0))
+        server.statMap.Put(CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
+        server.statMap.Put(server.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY, int64(0))
+        server.statMap.Put(server.util.GetToDay()+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
+
+        server.curDate = server.util.GetToDay()
+
+        //o := &amp;opt.Options{
+        //        Filter: filter.NewBloomFilter(160),
+        //
+        //}
+
+        ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println(err)
+                panic(err)</span>
+                <span class="cov0" title="0">log.Error(err)</span>
+        }
+        <span class="cov8" title="1">server.ldb = ldb
+
+        return server</span>
+
+}
+
+type CommonMap struct {
+        sync.Mutex
+        m map[string]interface{}
+}
+
+func NewCommonMap(size int) *CommonMap <span class="cov8" title="1">{
+        if size &gt; 0 </span><span class="cov8" title="1">{
+                return &amp;CommonMap{m: make(map[string]interface{}, size)}
+        }</span><span class="cov8" title="1"> else {
+                return &amp;CommonMap{m: make(map[string]interface{})}
+        }</span>
+}
+
+func (s *CommonMap) GetValue(k string) (interface{}, bool) <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        v, ok := s.m[k]
+        return v, ok
+}</span>
+
+func (s *CommonMap) Put(k string, v interface{}) <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        s.m[k] = v
+}</span>
+
+func (s *CommonMap) LockKey(k string) <span class="cov8" title="1">{
+        s.Lock()
+        if v, ok := s.m[k]; ok </span><span class="cov0" title="0">{
+                s.m[k+"_lock_"] = true
+                s.Unlock()
+                v.(*sync.Mutex).Lock()
+
+        }</span><span class="cov8" title="1"> else {
+                s.m[k] = &amp;sync.Mutex{}
+                v = s.m[k]
+                s.m[k+"_lock_"] = true
+                s.Unlock()
+                v.(*sync.Mutex).Lock()
+        }</span>
+}
+func (s *CommonMap) UnLockKey(k string) <span class="cov8" title="1">{
+        s.Lock()
+        if v, ok := s.m[k]; ok </span><span class="cov8" title="1">{
+                v.(*sync.Mutex).Unlock()
+                s.m[k+"_lock_"] = false
+        }</span>
+        <span class="cov8" title="1">s.Unlock()</span>
+}
+
+func (s *CommonMap) IsLock(k string) bool <span class="cov8" title="1">{
+        s.Lock()
+        if v, ok := s.m[k+"_lock_"]; ok </span><span class="cov0" title="0">{
+                s.Unlock()
+                return v.(bool)
+        }</span>
+        <span class="cov8" title="1">s.Unlock()
+        return false</span>
+}
+
+func (s *CommonMap) Keys() []string <span class="cov8" title="1">{
+
+        s.Lock()
+        keys := make([]string, len(s.m))
+        defer s.Unlock()
+        for k, _ := range s.m </span><span class="cov0" title="0">{
+                keys = append(keys, k)
+        }</span>
+        <span class="cov8" title="1">return keys</span>
+}
+
+func (s *CommonMap) Clear() <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        s.m = make(map[string]interface{})
+}</span>
+
+func (s *CommonMap) Remove(key string) <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        if _, ok := s.m[key]; ok </span><span class="cov8" title="1">{
+                delete(s.m, key)
+        }</span>
+}
+
+func (s *CommonMap) AddUniq(key string) <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        if _, ok := s.m[key]; !ok </span><span class="cov8" title="1">{
+                s.m[key] = nil
+        }</span>
+}
+
+func (s *CommonMap) AddCount(key string, count int) <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        if _v, ok := s.m[key]; ok </span><span class="cov0" title="0">{
+                v := _v.(int)
+                v = v + count
+                s.m[key] = v
+        }</span><span class="cov8" title="1"> else {
+                s.m[key] = 1
+        }</span>
+}
+
+func (s *CommonMap) AddCountInt64(key string, count int64) <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+
+        if _v, ok := s.m[key]; ok </span><span class="cov8" title="1">{
+                v := _v.(int64)
+                v = v + count
+                s.m[key] = v
+        }</span><span class="cov0" title="0"> else {
+
+                s.m[key] = count
+        }</span>
+}
+
+func (s *CommonMap) Add(key string) <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        if _v, ok := s.m[key]; ok </span><span class="cov8" title="1">{
+                v := _v.(int)
+                v = v + 1
+                s.m[key] = v
+        }</span><span class="cov0" title="0"> else {
+
+                s.m[key] = 1
+
+        }</span>
+}
+
+func (s *CommonMap) Zero() <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        for k := range s.m </span><span class="cov8" title="1">{
+
+                s.m[k] = 0
+        }</span>
+}
+
+func (s *CommonMap) Contains(i ...interface{}) bool <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+
+        for _, val := range i </span><span class="cov8" title="1">{
+                if _, ok := s.m[val.(string)]; !ok </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+        }
+        <span class="cov8" title="1">return true</span>
+
+}
+
+func (s *CommonMap) Get() map[string]interface{} <span class="cov8" title="1">{
+        s.Lock()
+        defer s.Unlock()
+        m := make(map[string]interface{})
+        for k, v := range s.m </span><span class="cov8" title="1">{
+                m[k] = v
+        }</span>
+        <span class="cov8" title="1">return m</span>
+}
+
+func Config() *GloablConfig <span class="cov8" title="1">{
+        return (*GloablConfig)(atomic.LoadPointer(&amp;ptr))
+}</span>
+
+func ParseConfig(filePath string) <span class="cov8" title="1">{
+        var (
+                data []byte
+        )
+
+        if filePath == "" </span><span class="cov0" title="0">{
+                data = []byte(strings.TrimSpace(cfgJson))
+        }</span><span class="cov8" title="1"> else {
+                file, err := os.Open(filePath)
+                if err != nil </span><span class="cov0" title="0">{
+                        panic(fmt.Sprintln("open file path:", filePath, "error:", err))</span>
+                }
+
+                <span class="cov8" title="1">defer file.Close()
+
+                FileName = filePath
+
+                data, err = ioutil.ReadAll(file)
+                if err != nil </span><span class="cov0" title="0">{
+                        panic(fmt.Sprintln("file path:", filePath, " read all error:", err))</span>
+                }
+        }
+
+        <span class="cov8" title="1">var c GloablConfig
+        if err := json.Unmarshal(data, &amp;c); err != nil </span><span class="cov0" title="0">{
+                panic(fmt.Sprintln("file path:", filePath, "json unmarshal error:", err))</span>
+        }
+
+        <span class="cov8" title="1">log.Info(c)
+
+        atomic.StorePointer(&amp;ptr, unsafe.Pointer(&amp;c))
+
+        log.Info("config parse success")</span>
+}
+
+func (this *Common) GetUUID() string <span class="cov8" title="1">{
+
+        b := make([]byte, 48)
+        if _, err := io.ReadFull(rand.Reader, b); err != nil </span><span class="cov0" title="0">{
+                return ""
+        }</span>
+
+        <span class="cov8" title="1">id := this.MD5(base64.URLEncoding.EncodeToString(b))
+        return fmt.Sprintf("%s-%s-%s-%s-%s", id[0:8], id[8:12], id[12:16], id[16:20], id[20:])</span>
+
+}
+
+func (this *Common) CopyFile(src, dst string) (int64, error) <span class="cov0" title="0">{
+        sourceFileStat, err := os.Stat(src)
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, err
+        }</span>
+
+        <span class="cov0" title="0">if !sourceFileStat.Mode().IsRegular() </span><span class="cov0" title="0">{
+                return 0, fmt.Errorf("%s is not a regular file", src)
+        }</span>
+
+        <span class="cov0" title="0">source, err := os.Open(src)
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, err
+        }</span>
+        <span class="cov0" title="0">defer source.Close()
+
+        destination, err := os.Create(dst)
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, err
+        }</span>
+        <span class="cov0" title="0">defer destination.Close()
+        nBytes, err := io.Copy(destination, source)
+        return nBytes, err</span>
+}
+
+func (this *Common) RandInt(min, max int) int <span class="cov8" title="1">{
+
+        return func(min, max int) int </span><span class="cov8" title="1">{
+
+                r := random.New(random.NewSource(time.Now().UnixNano()))
+                if min &gt;= max </span><span class="cov0" title="0">{
+                        return max
+                }</span>
+                <span class="cov8" title="1">return r.Intn(max-min) + min</span>
+        }(min, max)
+
+}
+
+func (this *Common) GetToDay() string <span class="cov8" title="1">{
+
+        return time.Now().Format("20060102")
+
+}</span>
+
+func (this *Common) UrlEncode(v interface{}) string <span class="cov0" title="0">{
+
+        switch v.(type) </span>{
+        case string:<span class="cov0" title="0">
+                m := make(map[string]string)
+                m["name"] = v.(string)
+                return strings.Replace(this.UrlEncodeFromMap(m), "name=", "", 1)</span>
+        case map[string]string:<span class="cov0" title="0">
+                return this.UrlEncodeFromMap(v.(map[string]string))</span>
+        default:<span class="cov0" title="0">
+                return fmt.Sprintf("%v", v)</span>
+        }
+
+}
+
+func (this *Common) UrlEncodeFromMap(m map[string]string) string <span class="cov0" title="0">{
+        vv := url.Values{}
+        for k, v := range m </span><span class="cov0" title="0">{
+                vv.Add(k, v)
+        }</span>
+        <span class="cov0" title="0">return vv.Encode()</span>
+}
+
+func (this *Common) UrlDecodeToMap(body string) (map[string]string, error) <span class="cov0" title="0">{
+        var (
+                err error
+                m   map[string]string
+                v   url.Values
+        )
+
+        m = make(map[string]string)
+
+        if v, err = url.ParseQuery(body); err != nil </span><span class="cov0" title="0">{
+                return m, err
+        }</span>
+        <span class="cov0" title="0">for _k, _v := range v </span><span class="cov0" title="0">{
+
+                if len(_v) &gt; 0 </span><span class="cov0" title="0">{
+                        m[_k] = _v[0]
+                }</span>
+
+        }
+        <span class="cov0" title="0">return m, nil</span>
+
+}
+
+func (this *Common) GetDayFromTimeStamp(timeStamp int64) string <span class="cov8" title="1">{
+
+        return time.Unix(timeStamp, 0).Format("20060102")
+
+}</span>
+
+func (this *Common) StrToMapSet(str string, sep string) mapset.Set <span class="cov8" title="1">{
+        result := mapset.NewSet()
+        for _, v := range strings.Split(str, sep) </span><span class="cov8" title="1">{
+                result.Add(v)
+        }</span>
+        <span class="cov8" title="1">return result</span>
+}
+
+func (this *Common) MapSetToStr(set mapset.Set, sep string) string <span class="cov8" title="1">{
+
+        var (
+                ret []string
+        )
+
+        for v := range set.Iter() </span><span class="cov8" title="1">{
+                ret = append(ret, v.(string))
+        }</span>
+        <span class="cov8" title="1">return strings.Join(ret, sep)</span>
+
+}
+
+func (this *Common) GetPulicIP() string <span class="cov8" title="1">{
+
+        var (
+                err  error
+                conn net.Conn
+        )
+        if conn, err = net.Dial("udp", "8.8.8.8:80"); err != nil </span><span class="cov0" title="0">{
+                return "127.0.0.1"
+        }</span>
+        <span class="cov8" title="1">defer conn.Close()
+        localAddr := conn.LocalAddr().String()
+        idx := strings.LastIndex(localAddr, ":")
+        return localAddr[0:idx]</span>
+}
+
+func (this *Common) MD5(str string) string <span class="cov8" title="1">{
+
+        md := md5.New()
+        md.Write([]byte(str))
+        return fmt.Sprintf("%x", md.Sum(nil))
+}</span>
+
+func (this *Common) GetFileMd5(file *os.File) string <span class="cov8" title="1">{
+        file.Seek(0, 0)
+        md5h := md5.New()
+        io.Copy(md5h, file)
+        sum := fmt.Sprintf("%x", md5h.Sum(nil))
+        return sum
+}</span>
+
+func (this *Common) GetFileSum(file *os.File, alg string) string <span class="cov8" title="1">{
+        alg = strings.ToLower(alg)
+        if alg == "sha1" </span><span class="cov0" title="0">{
+                return this.GetFileSha1Sum(file)
+        }</span><span class="cov8" title="1"> else {
+                return this.GetFileMd5(file)
+        }</span>
+
+}
+func (this *Common) GetFileSumByName(filepath string, alg string) (string, error) <span class="cov8" title="1">{
+        var (
+                err  error
+                file *os.File
+        )
+        file, err = os.Open(filepath)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        <span class="cov8" title="1">defer file.Close()
+        alg = strings.ToLower(alg)
+        if alg == "sha1" </span><span class="cov0" title="0">{
+                return this.GetFileSha1Sum(file), nil
+        }</span><span class="cov8" title="1"> else {
+                return this.GetFileMd5(file), nil
+        }</span>
+
+}
+
+func (this *Common) GetFileSha1Sum(file *os.File) string <span class="cov0" title="0">{
+        file.Seek(0, 0)
+        md5h := sha1.New()
+        io.Copy(md5h, file)
+        sum := fmt.Sprintf("%x", md5h.Sum(nil))
+        return sum
+}</span>
+
+func (this *Common) WriteFileByOffSet(filepath string, offset int64, data []byte) (error) <span class="cov8" title="1">{
+        var (
+                err   error
+                file  *os.File
+                count int
+        )
+        file, err = os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0666)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer file.Close()
+
+        count, err = file.WriteAt(data, offset)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">if count != len(data) </span><span class="cov0" title="0">{
+                return errors.New(fmt.Sprintf("write %s error", filepath))
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (this *Common) ReadFileByOffSet(filepath string, offset int64, length int) ([]byte, error) <span class="cov8" title="1">{
+        var (
+                err    error
+                file   *os.File
+                result []byte
+                count  int
+        )
+        file, err = os.Open(filepath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">defer file.Close()
+        result = make([]byte, length)
+
+        count, err = file.ReadAt(result, offset)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">if count != length </span><span class="cov0" title="0">{
+                return nil, errors.New("read error")
+        }</span>
+        <span class="cov8" title="1">return result, nil</span>
+
+}
+
+func (this *Common) Contains(obj interface{}, arrayobj interface{}) bool <span class="cov8" title="1">{
+        targetValue := reflect.ValueOf(arrayobj)
+        switch reflect.TypeOf(arrayobj).Kind() </span>{
+        case reflect.Slice, reflect.Array:<span class="cov8" title="1">
+                for i := 0; i &lt; targetValue.Len(); i++ </span><span class="cov8" title="1">{
+                        if targetValue.Index(i).Interface() == obj </span><span class="cov8" title="1">{
+                                return true
+                        }</span>
+                }
+        case reflect.Map:<span class="cov0" title="0">
+                if targetValue.MapIndex(reflect.ValueOf(obj)).IsValid() </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+func (this *Common) FileExists(fileName string) bool <span class="cov8" title="1">{
+        _, err := os.Stat(fileName)
+        return err == nil
+}</span>
+
+func (this *Common) WriteFile(path string, data string) bool <span class="cov8" title="1">{
+        if err := ioutil.WriteFile(path, []byte(data), 0775); err == nil </span><span class="cov8" title="1">{
+                return true
+        }</span><span class="cov0" title="0"> else {
+                return false
+        }</span>
+}
+
+func (this *Common) WriteBinFile(path string, data []byte) bool <span class="cov8" title="1">{
+        if err := ioutil.WriteFile(path, data, 0775); err == nil </span><span class="cov8" title="1">{
+                return true
+        }</span><span class="cov0" title="0"> else {
+                return false
+        }</span>
+}
+
+func (this *Common) IsExist(filename string) bool <span class="cov8" title="1">{
+        _, err := os.Stat(filename)
+        return err == nil || os.IsExist(err)
+}</span>
+
+func (this *Common) Match(matcher string, content string) []string <span class="cov8" title="1">{
+        var result []string
+        if reg, err := regexp.Compile(matcher); err == nil </span><span class="cov8" title="1">{
+
+                result = reg.FindAllString(content, -1)
+
+        }</span>
+        <span class="cov8" title="1">return result</span>
+}
+
+func (this *Common) ReadBinFile(path string) ([]byte, error) <span class="cov8" title="1">{
+        if this.IsExist(path) </span><span class="cov8" title="1">{
+                fi, err := os.Open(path)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov8" title="1">defer fi.Close()
+                return ioutil.ReadAll(fi)</span>
+        }<span class="cov0" title="0"> else {
+                return nil, errors.New("not found")
+        }</span>
+}
+func (this *Common) RemoveEmptyDir(pathname string) <span class="cov8" title="1">{
+        defer func() </span><span class="cov8" title="1">{
+                if re := recover(); re != nil </span><span class="cov0" title="0">{
+                        buffer := debug.Stack()
+                        log.Error("postFileToPeer")
+                        log.Error(re)
+                        log.Error(string(buffer))
+                }</span>
+        }()
+
+        <span class="cov8" title="1">handlefunc := func(file_path string, f os.FileInfo, err error) error </span><span class="cov8" title="1">{
+
+                if f.IsDir() </span><span class="cov8" title="1">{
+
+                        files, _ := ioutil.ReadDir(file_path)
+                        if len(files) == 0 &amp;&amp; file_path != pathname </span><span class="cov8" title="1">{
+                                os.Remove(file_path)
+                        }</span>
+
+                }
+
+                <span class="cov8" title="1">return nil</span>
+        }
+
+        <span class="cov8" title="1">fi, _ := os.Stat(pathname)
+        if fi.IsDir() </span><span class="cov8" title="1">{
+                filepath.Walk(pathname, handlefunc)
+        }</span>
+
+}
+
+func (this *Common) JsonEncodePretty(o interface{}) string <span class="cov8" title="1">{
+
+        resp := ""
+        switch o.(type) </span>{
+        case map[string]interface{}:<span class="cov8" title="1">
+                if data, err := json.Marshal(o); err == nil </span><span class="cov8" title="1">{
+                        resp = string(data)
+                }</span>
+        case map[string]string:<span class="cov0" title="0">
+                if data, err := json.Marshal(o); err == nil </span><span class="cov0" title="0">{
+                        resp = string(data)
+                }</span>
+        case []interface{}:<span class="cov0" title="0">
+                if data, err := json.Marshal(o); err == nil </span><span class="cov0" title="0">{
+                        resp = string(data)
+                }</span>
+        case []string:<span class="cov0" title="0">
+                if data, err := json.Marshal(o); err == nil </span><span class="cov0" title="0">{
+                        resp = string(data)
+                }</span>
+        case string:<span class="cov0" title="0">
+                resp = o.(string)</span>
+
+        default:<span class="cov8" title="1">
+                if data, err := json.Marshal(o); err == nil </span><span class="cov8" title="1">{
+                        resp = string(data)
+                }</span>
+
+        }
+        <span class="cov8" title="1">var v interface{}
+        if ok := json.Unmarshal([]byte(resp), &amp;v); ok == nil </span><span class="cov8" title="1">{
+                if buf, ok := json.MarshalIndent(v, "", "  "); ok == nil </span><span class="cov8" title="1">{
+                        resp = string(buf)
+                }</span>
+        }
+        <span class="cov8" title="1">return resp</span>
+
+}
+
+func (this *Common) GetClientIp(r *http.Request) string <span class="cov8" title="1">{
+
+        client_ip := ""
+        headers := []string{"X_Forwarded_For", "X-Forwarded-For", "X-Real-Ip",
+                "X_Real_Ip", "Remote_Addr", "Remote-Addr"}
+        for _, v := range headers </span><span class="cov8" title="1">{
+                if _v, ok := r.Header[v]; ok </span><span class="cov0" title="0">{
+                        if len(_v) &gt; 0 </span><span class="cov0" title="0">{
+                                client_ip = _v[0]
+                                break</span>
+                        }
+                }
+        }
+        <span class="cov8" title="1">if client_ip == "" </span><span class="cov8" title="1">{
+                clients := strings.Split(r.RemoteAddr, ":")
+                client_ip = clients[0]
+        }</span>
+        <span class="cov8" title="1">return client_ip</span>
+
+}
+
+func (this *Server) RepairStat() <span class="cov8" title="1">{
+
+        defer func() </span><span class="cov8" title="1">{
+                if re := recover(); re != nil </span><span class="cov0" title="0">{
+                        buffer := debug.Stack()
+                        log.Error("RepairStat")
+                        log.Error(re)
+                        log.Error(string(buffer))
+
+                }</span>
+        }()
+
+        <span class="cov8" title="1">if this.lockMap.IsLock("RepairStat") </span><span class="cov0" title="0">{
+                log.Warn("Lock RepairStat")
+                return
+        }</span>
+
+        <span class="cov8" title="1">this.lockMap.LockKey("RepairStat")
+        defer this.lockMap.UnLockKey("RepairStat")
+
+        this.statMap.Put(CONST_STAT_FILE_COUNT_KEY, int64(0))
+        this.statMap.Put(CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
+
+        handlefunc := func(file_path string, f os.FileInfo, err error) error </span><span class="cov8" title="1">{
+
+                var (
+                        files     []os.FileInfo
+                        date      []string
+                        data      []byte
+                        content   string
+                        lines     []string
+                        count     int64
+                        totalSize int64
+                        line      string
+                        cols      []string
+                        size      int64
+                )
+
+                if f.IsDir() </span><span class="cov8" title="1">{
+
+                        if files, err = ioutil.ReadDir(file_path); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov8" title="1">for _, file := range files </span><span class="cov8" title="1">{
+                                count = 0
+                                size = 0
+                                if file.Name() == CONST_FILE_Md5_FILE_NAME </span><span class="cov8" title="1">{
+                                        if data, err = ioutil.ReadFile(file_path + "/" + file.Name()); err != nil </span><span class="cov0" title="0">{
+                                                log.Error(err)
+                                                continue</span>
+                                        }
+                                        <span class="cov8" title="1">date = this.util.Match("\\d{8}", file_path)
+                                        if len(date) &lt; 1 </span><span class="cov0" title="0">{
+                                                continue</span>
+                                        }
+                                        <span class="cov8" title="1">content = string(data)
+                                        lines = strings.Split(content, "\n")
+                                        count = int64(len(lines))
+                                        if count &gt; 1 </span><span class="cov8" title="1">{
+                                                count = count - 1
+                                        }</span>
+                                        <span class="cov8" title="1">count = 0
+                                        for _, line = range lines </span><span class="cov8" title="1">{
+
+                                                cols = strings.Split(line, "|")
+                                                if len(cols) &gt; 2 </span><span class="cov8" title="1">{
+                                                        count = count + 1
+                                                        if size, err = strconv.ParseInt(cols[1], 10, 64); err != nil </span><span class="cov0" title="0">{
+                                                                size = 0
+                                                                continue</span>
+                                                        }
+                                                        <span class="cov8" title="1">totalSize = totalSize + size</span>
+                                                }
+
+                                        }
+                                        <span class="cov8" title="1">this.statMap.Put(date[0]+"_"+CONST_STAT_FILE_COUNT_KEY, count)
+                                        this.statMap.Put(date[0]+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)
+                                        this.statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, count)
+                                        this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, totalSize)</span>
+
+                                }
+
+                        }
+
+                }
+
+                <span class="cov8" title="1">return nil</span>
+        }
+
+        <span class="cov8" title="1">filepath.Walk(DATA_DIR, handlefunc)
+
+        this.SaveStat()</span>
+
+}
+
+func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool <span class="cov8" title="1">{
+        var (
+                err  error
+                info *FileInfo
+        )
+
+        if info, err = this.GetFileInfoFromLevelDB(md5s); err != nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov0" title="0">if info != nil &amp;&amp; info.Md5 != "" </span><span class="cov0" title="0">{
+                if fileInfo != nil </span><span class="cov0" title="0">{
+                        if fileInfo.Path != info.Path </span><span class="cov0" title="0">{
+                                return false
+                        }</span>
+                }
+                <span class="cov0" title="0">return true</span>
+        }<span class="cov0" title="0"> else {
+                return false
+        }</span>
+
+}
+
+func (this *Server) RepairFileInfoFromFile() <span class="cov0" title="0">{
+        defer func() </span><span class="cov0" title="0">{
+                if re := recover(); re != nil </span><span class="cov0" title="0">{
+                        buffer := debug.Stack()
+                        log.Error("RepairFileInfoFromFile")
+                        log.Error(re)
+                        log.Error(string(buffer))
+                }</span>
+        }()
+
+        <span class="cov0" title="0">if this.lockMap.IsLock("RepairFileInfoFromFile") </span><span class="cov0" title="0">{
+                log.Warn("Lock RepairFileInfoFromFile")
+                return
+        }</span>
+        <span class="cov0" title="0">this.lockMap.LockKey("RepairFileInfoFromFile")
+        defer this.lockMap.UnLockKey("RepairFileInfoFromFile")
+
+        handlefunc := func(file_path string, f os.FileInfo, err error) error </span><span class="cov0" title="0">{
+
+                var (
+                        files    []os.FileInfo
+                        fi       os.FileInfo
+                        fileInfo FileInfo
+                        sum      string
+                )
+
+                if f.IsDir() </span><span class="cov0" title="0">{
+
+                        files, err = ioutil.ReadDir(file_path)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov0" title="0">for _, fi = range files </span><span class="cov0" title="0">{
+
+                                if fi.IsDir() || fi.Size() == 0 </span><span class="cov0" title="0">{
+                                        continue</span>
+                                }
+
+                                <span class="cov0" title="0">sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+                                if err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                        continue</span>
+                                }
+                                <span class="cov0" title="0">fileInfo = FileInfo{
+                                        Size:      fi.Size(),
+                                        Name:      fi.Name(),
+                                        Path:      strings.Replace(file_path, "\\", "/", -1),
+                                        Md5:       sum,
+                                        TimeStamp: fi.ModTime().Unix(),
+                                }
+                                this.SaveFileMd5Log(&amp;fileInfo, CONST_FILE_Md5_FILE_NAME)</span>
+                        }
+
+                }
+
+                <span class="cov0" title="0">return nil</span>
+        }
+
+        <span class="cov0" title="0">pathname := STORE_DIR
+        fi, _ := os.Stat(pathname)
+        if fi.IsDir() </span><span class="cov0" title="0">{
+                filepath.Walk(pathname, handlefunc)
+        }</span>
+
+}
+
+func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) <span class="cov8" title="1">{
+        var (
+                err      error
+                filename string
+                fpath    string
+                fi       os.FileInfo
+                sum      string
+                data     []byte
+        )
+
+        if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if _, err = os.Stat(fileInfo.Path); err != nil </span><span class="cov0" title="0">{
+                os.MkdirAll(DOCKER_DIR+fileInfo.Path, 0775)
+        }</span>
+
+        <span class="cov8" title="1">filename = fileInfo.Name
+        if fileInfo.ReName != "" </span><span class="cov8" title="1">{
+                filename = fileInfo.ReName
+        }</span>
+
+        //fmt.Println("downloadFromPeer",fileInfo)
+        <span class="cov8" title="1">p := strings.Replace(fileInfo.Path, STORE_DIR_NAME+"/", "", 1)
+
+        //filename=this.util.UrlEncode(filename)
+        req := httplib.Get(peer + "/" + Config().Group + "/" + p + "/" + filename)
+
+        fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
+
+        timeout := fileInfo.Size/1024/1024/8 + 30
+        req.SetTimeout(time.Second*5, time.Second*time.Duration(timeout))
+
+        if fileInfo.OffSet != -1 </span><span class="cov8" title="1">{ //small file download
+                data, err = req.Bytes()
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        return
+                }</span>
+                <span class="cov8" title="1">data2 := make([]byte, len(data)+1)
+                data2[0] = '1'
+                for i, v := range data </span><span class="cov8" title="1">{
+                        data2[i+1] = v
+                }</span>
+                <span class="cov8" title="1">data = data2
+                if int64(len(data)) != fileInfo.Size </span><span class="cov0" title="0">{
+                        log.Warn("file size is error")
+                        return
+                }</span>
+
+                <span class="cov8" title="1">fpath = strings.Split(fpath, ",")[0]
+
+                err = this.util.WriteFileByOffSet(fpath, fileInfo.OffSet, data)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Warn(err)
+                }</span>
+                <span class="cov8" title="1">this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+                return</span>
+        }
+
+        <span class="cov8" title="1">if err = req.ToFile(fpath); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">if fi, err = os.Stat(fpath); err != nil </span><span class="cov0" title="0">{
+                os.Remove(fpath)
+                return
+        }</span>
+
+        <span class="cov8" title="1">if sum, err = this.util.GetFileSumByName(fpath, Config().FileSumArithmetic); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">if fi.Size() != fileInfo.Size || sum != fileInfo.Md5 </span><span class="cov0" title="0">{
+                log.Error("file sum check error")
+                os.Remove(fpath)
+                return
+        }</span>
+
+        <span class="cov8" title="1">if this.util.IsExist(fpath) </span><span class="cov8" title="1">{
+                this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+        }</span>
+}
+
+func (this *Server) Download(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                err          error
+                pathMd5      string
+                info         os.FileInfo
+                peer         string
+                fileInfo     *FileInfo
+                fullpath     string
+                pathval      url.Values
+                token        string
+                timestamp    string
+                maxTimestamp int64
+                minTimestamp int64
+                ts           int64
+                md5sum       string
+                fp           *os.File
+                isPeer       bool
+                isSmallFile  bool
+                data         []byte
+                offset       int64
+                length       int
+                smallPath    string
+                notFound     bool
+                //isBigFile    bool
+        )
+
+        r.ParseForm()
+
+        isPeer = this.IsPeer(r)
+
+        if Config().DownloadUseToken &amp;&amp; !isPeer </span><span class="cov0" title="0">{
+
+                token = r.FormValue("token")
+                timestamp = r.FormValue("timestamp")
+
+                if token == "" || timestamp == "" </span><span class="cov0" title="0">{
+                        w.Write([]byte("unvalid request"))
+                        return
+                }</span>
+
+                <span class="cov0" title="0">maxTimestamp = time.Now().Add(time.Second *
+                        time.Duration(Config().DownloadTokenExpire)).Unix()
+                minTimestamp = time.Now().Add(-time.Second *
+                        time.Duration(Config().DownloadTokenExpire)).Unix()
+                if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil </span><span class="cov0" title="0">{
+                        w.Write([]byte("unvalid timestamp"))
+                        return
+                }</span>
+
+                <span class="cov0" title="0">if ts &gt; maxTimestamp || ts &lt; minTimestamp </span><span class="cov0" title="0">{
+                        w.Write([]byte("timestamp expire"))
+                        return
+                }</span>
+
+        }
+
+        <span class="cov8" title="1">fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+
+        fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
+
+        //fmt.Println("fullpath",fullpath)
+
+        if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") </span><span class="cov8" title="1">{
+                isSmallFile = true
+                smallPath = fullpath //notice order
+                fullpath = strings.Split(fullpath, ",")[0]
+
+        }</span>
+        <span class="cov8" title="1">_ = isSmallFile
+        _ = smallPath
+
+        fullpath = strings.Replace(fullpath, "&amp;", "$$$$", -1)
+
+        if pathval, err = url.ParseQuery(fullpath); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+        }</span><span class="cov8" title="1"> else {
+
+                for k, v := range pathval </span><span class="cov8" title="1">{
+                        if k != "" </span><span class="cov8" title="1">{
+                                if len(v) &gt; 0 &amp;&amp; v[0] != "" </span><span class="cov0" title="0">{
+                                        fullpath = k + "=" + v[0]
+                                }</span><span class="cov8" title="1"> else {
+                                        fullpath = k
+                                }</span>
+                        }
+
+                }
+
+        }
+        <span class="cov8" title="1">fullpath = strings.Replace(fullpath, "$$$$", "&amp;", -1)
+
+        CheckToken := func(token string, md5sum string, timestamp string) bool </span><span class="cov0" title="0">{
+                if this.util.MD5(md5sum+timestamp) != token </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+                <span class="cov0" title="0">return true</span>
+        }
+
+        <span class="cov8" title="1">if Config().DownloadUseToken &amp;&amp; !isPeer </span><span class="cov0" title="0">{
+                if isSmallFile </span><span class="cov0" title="0">{
+                        pathMd5 = this.util.MD5(smallPath)
+                }</span><span class="cov0" title="0"> else {
+                        fullpath = strings.Split(fullpath, "?")[0]
+                        pathMd5 = this.util.MD5(fullpath)
+                }</span>
+                <span class="cov0" title="0">if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        if this.util.FileExists(fullpath) </span><span class="cov0" title="0">{
+                                if fp, err = os.Create(fullpath); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                }</span>
+                                <span class="cov0" title="0">if fp != nil </span><span class="cov0" title="0">{
+                                        defer fp.Close()
+                                }</span>
+                                <span class="cov0" title="0">md5sum = this.util.GetFileSum(fp, Config().FileSumArithmetic)
+                                if !CheckToken(token, md5sum, timestamp) </span><span class="cov0" title="0">{
+                                        w.Write([]byte("unvalid request,error token"))
+                                        return
+                                }</span>
+                        }
+                }<span class="cov0" title="0"> else {
+                        if !CheckToken(token, fileInfo.Md5, timestamp) </span><span class="cov0" title="0">{
+                                w.Write([]byte("unvalid request,error token"))
+                                return
+                        }</span>
+                }
+
+        }
+
+        <span class="cov8" title="1">if isSmallFile </span><span class="cov8" title="1">{
+                pos := strings.Split(r.RequestURI, ",")
+                if len(pos) &lt; 3 </span><span class="cov0" title="0">{
+                        w.Write([]byte("(error) uri invalid"))
+                        return
+                }</span>
+                <span class="cov8" title="1">offset, err = strconv.ParseInt(pos[1], 10, 64)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        return
+                }</span>
+                <span class="cov8" title="1">if length, err = strconv.Atoi(pos[2]); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if length &gt; CONST_SMALL_FILE_SIZE || offset &lt; 0 </span><span class="cov0" title="0">{
+                        log.Warn("invalid filesize or offset")
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if info, err = os.Stat(fullpath); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if info.Size() &lt; offset+int64(length) </span><span class="cov0" title="0">{
+                        notFound = true
+                }</span><span class="cov8" title="1"> else {
+
+                        data, err = this.util.ReadFileByOffSet(fullpath, offset, length)
+                        if err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                                return
+                        }</span>
+                        <span class="cov8" title="1">if string(data[0]) == "1" </span><span class="cov8" title="1">{
+                                w.Write(data[1:])
+                                return
+                        }</span><span class="cov0" title="0"> else {
+                                notFound = true
+                        }</span>
+
+                }
+        }
+
+        <span class="cov8" title="1">if info, err = os.Stat(fullpath); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                if isSmallFile &amp;&amp; notFound </span><span class="cov0" title="0">{
+                        pathMd5 = this.util.MD5(smallPath)
+                }</span><span class="cov0" title="0"> else {
+                        pathMd5 = this.util.MD5(fullpath)
+                }</span>
+                <span class="cov0" title="0">for _, peer = range Config().Peers </span><span class="cov0" title="0">{
+
+                        if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                                continue</span>
+                        }
+
+                        <span class="cov0" title="0">if fileInfo.Md5 != "" </span><span class="cov0" title="0">{
+
+                                if Config().DownloadUseToken &amp;&amp; !isPeer </span><span class="cov0" title="0">{
+                                        if !CheckToken(token, fileInfo.Md5, timestamp) </span><span class="cov0" title="0">{
+                                                w.Write([]byte("unvalid request,error token"))
+                                                return
+                                        }</span>
+                                }
+
+                                <span class="cov0" title="0">go this.DownloadFromPeer(peer, fileInfo)
+
+                                http.Redirect(w, r, peer+r.RequestURI, 302)
+                                return</span>
+                        }
+
+                }
+                <span class="cov0" title="0">w.WriteHeader(404)
+                return</span>
+        }
+
+        <span class="cov8" title="1">if !Config().ShowDir &amp;&amp; info.IsDir() </span><span class="cov0" title="0">{
+                w.Write([]byte("list dir deny"))
+                return
+        }</span>
+
+        <span class="cov8" title="1">log.Info("download:" + r.RequestURI)
+        staticHandler.ServeHTTP(w, r)</span>
+}
+
+func (this *Server) GetServerURI(r *http.Request) string <span class="cov0" title="0">{
+        return fmt.Sprintf("http://%s/", r.Host)
+}</span>
+
+func (this *Server) CheckFileAndSendToPeer(date string, filename string, isForceUpload bool) <span class="cov8" title="1">{
+
+        var (
+                md5set mapset.Set
+                err    error
+                md5s   []interface{}
+        )
+
+        defer func() </span><span class="cov8" title="1">{
+                if re := recover(); re != nil </span><span class="cov0" title="0">{
+                        buffer := debug.Stack()
+                        log.Error("CheckFileAndSendToPeer")
+                        log.Error(re)
+                        log.Error(string(buffer))
+                }</span>
+        }()
+
+        <span class="cov8" title="1">if md5set, err = this.GetMd5sByDate(date, filename); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">md5s = md5set.ToSlice()
+
+        for _, md := range md5s </span><span class="cov8" title="1">{
+
+                if md == nil </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">if fileInfo, _ := this.GetFileInfoFromLevelDB(md.(string)); fileInfo != nil &amp;&amp; fileInfo.Md5 != "" </span><span class="cov8" title="1">{
+                        if isForceUpload </span><span class="cov8" title="1">{
+                                fileInfo.Peers = []string{}
+                        }</span>
+
+                        <span class="cov8" title="1">if len(fileInfo.Peers) &gt; len(Config().Peers) </span><span class="cov8" title="1">{
+                                continue</span>
+                        }
+
+                        <span class="cov8" title="1">if !this.util.Contains(this.host, fileInfo.Peers) </span><span class="cov8" title="1">{
+                                fileInfo.Peers = append(fileInfo.Peers, this.host) // peer is null
+                        }</span>
+
+                        <span class="cov8" title="1">if filename == CONST_Md5_QUEUE_FILE_NAME </span><span class="cov0" title="0">{
+                                this.AppendToDownloadQueue(fileInfo)
+                        }</span><span class="cov8" title="1"> else {
+
+                                this.AppendToQueue(fileInfo)
+                        }</span>
+
+                }
+        }
+
+}
+
+func (this *Server) postFileToPeer(fileInfo *FileInfo) <span class="cov8" title="1">{
+
+        var (
+                err      error
+                peer     string
+                filename string
+                info     *FileInfo
+                postURL  string
+                result   string
+                fi       os.FileInfo
+                i        int
+                data     []byte
+                fpath    string
+        )
+
+        defer func() </span><span class="cov8" title="1">{
+                if re := recover(); re != nil </span><span class="cov0" title="0">{
+                        buffer := debug.Stack()
+                        log.Error("postFileToPeer")
+                        log.Error(re)
+                        log.Error(string(buffer))
+                }</span>
+        }()
+
+        //fmt.Println("postFile",fileInfo)
+
+        <span class="cov8" title="1">for i, peer = range Config().Peers </span><span class="cov8" title="1">{
+
+                _ = i
+
+                if fileInfo.Peers == nil </span><span class="cov0" title="0">{
+                        fileInfo.Peers = []string{}
+                }</span>
+
+                <span class="cov8" title="1">if this.util.Contains(peer, fileInfo.Peers) </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">filename = fileInfo.Name
+
+                if fileInfo.ReName != "" </span><span class="cov8" title="1">{
+                        filename = fileInfo.ReName
+                        if fileInfo.OffSet != -1 </span><span class="cov8" title="1">{
+                                filename = strings.Split(fileInfo.ReName, ",")[0]
+                        }</span>
+                }
+
+                <span class="cov8" title="1">fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
+                if !this.util.FileExists(fpath) </span><span class="cov0" title="0">{
+                        log.Warn(fmt.Sprintf("file '%s' not found", fpath))
+                        continue</span>
+                }<span class="cov8" title="1"> else {
+                        if fileInfo.Size == 0 </span><span class="cov0" title="0">{
+                                if fi, err = os.Stat(fpath); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                }</span><span class="cov0" title="0"> else {
+                                        fileInfo.Size = fi.Size()
+                                }</span>
+                        }
+                }
+
+                <span class="cov8" title="1">if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" </span><span class="cov8" title="1">{
+
+                        fileInfo.Peers = append(fileInfo.Peers, peer)
+
+                        if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                        }</span>
+
+                        <span class="cov8" title="1">continue</span>
+                }
+
+                <span class="cov8" title="1">postURL = fmt.Sprintf("%s%s", peer, this.getRequestURI("syncfile_info"))
+                b := httplib.Post(postURL)
+                b.SetTimeout(time.Second*5, time.Second*5)
+
+                if data, err = json.Marshal(fileInfo); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        return
+                }</span>
+                <span class="cov8" title="1">b.Param("fileInfo", string(data))
+
+                result, err = b.String()
+
+                if !strings.HasPrefix(result, "http://") || err != nil </span><span class="cov0" title="0">{
+
+                        this.SaveFileMd5Log(fileInfo, CONST_Md5_ERROR_FILE_NAME)
+
+                }</span>
+
+                <span class="cov8" title="1">if strings.HasPrefix(result, "http://") </span><span class="cov8" title="1">{
+
+                        log.Info(result)
+
+                        if !this.util.Contains(peer, fileInfo.Peers) </span><span class="cov8" title="1">{
+                                fileInfo.Peers = append(fileInfo.Peers, peer)
+
+                                if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                }</span>
+                        }
+
+                }
+                <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                }</span>
+
+        }
+
+}
+
+func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) <span class="cov8" title="1">{
+        var (
+                err      error
+                msg      string
+                tmpFile  *os.File
+                logpath  string
+                outname  string
+                logDate  string
+                ok       bool
+                sumKey   string
+                sumset   mapset.Set
+                fullpath string
+                v        interface{}
+        )
+
+        logDate = this.util.GetDayFromTimeStamp(fileInfo.TimeStamp)
+
+        sumKey = fmt.Sprintf("%s_%s", logDate, filename)
+
+        if v, ok = this.sumMap.GetValue(sumKey); !ok </span><span class="cov8" title="1">{
+                if sumset, err = this.GetMd5sByDate(logDate, filename); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                }</span>
+                <span class="cov8" title="1">if sumset != nil </span><span class="cov8" title="1">{
+                        this.sumMap.Put(sumKey, sumset)
+                }</span>
+        }<span class="cov8" title="1"> else {
+                sumset = v.(mapset.Set)
+                if sumset.Cardinality() == 0 </span><span class="cov0" title="0">{
+                        sumset, err = this.GetMd5sByDate(logDate, filename)
+                }</span>
+        }
+
+        <span class="cov8" title="1">if sumset.Contains(fileInfo.Md5) </span><span class="cov0" title="0">{
+                return
+        }</span>
+        <span class="cov8" title="1">outname = fileInfo.Name
+        if fileInfo.ReName != "" </span><span class="cov8" title="1">{
+                outname = fileInfo.ReName
+        }</span>
+        <span class="cov8" title="1">fullpath = fileInfo.Path + "/" + outname
+
+        logpath = DATA_DIR + "/" + time.Unix(fileInfo.TimeStamp, 0).Format("20060102")
+        if _, err = os.Stat(logpath); err != nil </span><span class="cov0" title="0">{
+                os.MkdirAll(logpath, 0775)
+        }</span>
+        <span class="cov8" title="1">msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fullpath)
+        if tmpFile, err = os.OpenFile(logpath+"/"+filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                return
+        }</span>
+        <span class="cov8" title="1">defer tmpFile.Close()
+        tmpFile.WriteString(msg)
+
+        if filename == CONST_FILE_Md5_FILE_NAME </span><span class="cov8" title="1">{
+
+                if _, err := this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo); err != nil </span><span class="cov0" title="0">{
+                        log.Error("saveToLevelDB", err, fileInfo)
+                }</span>
+                <span class="cov8" title="1">if _, err = this.SaveFileInfoToLevelDB(this.util.MD5(fullpath), fileInfo); err != nil </span><span class="cov0" title="0">{
+                        log.Error("saveToLevelDB", err, fileInfo)
+                }</span>
+                <span class="cov8" title="1">this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
+                this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
+                this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
+                this.statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
+
+                this.SaveStat()</span>
+        }
+
+        <span class="cov8" title="1">sumset.Add(fileInfo.Md5)</span>
+
+}
+
+func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, error) <span class="cov8" title="1">{
+
+        var (
+                err      error
+                fileInfo FileInfo
+        )
+
+        req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", peer, this.getRequestURI("check_file_exist"), md5sum))
+
+        req.SetTimeout(time.Second*5, time.Second*10)
+
+        if err = req.ToJSON(&amp;fileInfo); err != nil </span><span class="cov0" title="0">{
+                return &amp;FileInfo{}, err
+        }</span>
+
+        <span class="cov8" title="1">if fileInfo.Md5 == "" </span><span class="cov8" title="1">{
+                return &amp;fileInfo, errors.New("not found")
+        }</span>
+
+        <span class="cov8" title="1">return &amp;fileInfo, nil</span>
+
+}
+
+func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        var (
+                data     []byte
+                err      error
+                fileInfo *FileInfo
+                fpath    string
+        )
+        r.ParseForm()
+        md5sum := ""
+        md5sum = r.FormValue("md5")
+
+        if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); fileInfo != nil </span><span class="cov8" title="1">{
+
+                if fileInfo.OffSet != -1 </span><span class="cov8" title="1">{
+                        if data, err = json.Marshal(fileInfo); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                        }</span>
+                        <span class="cov8" title="1">w.Write(data)
+                        return</span>
+                }
+                <span class="cov8" title="1">fpath = DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name
+                if fileInfo.ReName != "" </span><span class="cov0" title="0">{
+                        fpath = DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName
+                }</span>
+                <span class="cov8" title="1">if this.util.IsExist(fpath) </span><span class="cov8" title="1">{
+                        if data, err = json.Marshal(fileInfo); err == nil </span><span class="cov8" title="1">{
+                                w.Write(data)
+                                return
+                        }</span><span class="cov0" title="0"> else {
+                                log.Error(err)
+                        }</span>
+                }<span class="cov0" title="0"> else {
+                        if fileInfo.OffSet == -1 </span><span class="cov0" title="0">{
+                                this.RemoveKeyFromLevelDB(md5sum) // when file delete,delete from leveldb
+                        }</span>
+                }
+        }
+        <span class="cov8" title="1">data, _ = json.Marshal(FileInfo{})
+        w.Write(data)
+        return</span>
+
+}
+
+func (this *Server) Sync(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                result JsonResult
+        )
+
+        r.ParseForm()
+        result.Status = "fail"
+        if !this.IsPeer(r) </span><span class="cov0" title="0">{
+
+                result.Message = "client must be in cluster"
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+                return
+        }</span>
+
+        <span class="cov8" title="1">date := ""
+
+        force := ""
+        isForceUpload := false
+
+        force = r.FormValue("force")
+        date = r.FormValue("date")
+
+        if force == "1" </span><span class="cov8" title="1">{
+                isForceUpload = true
+        }</span>
+
+        <span class="cov8" title="1">if date == "" </span><span class="cov0" title="0">{
+                result.Message = "require paramete date &amp;force , ?date=20181230"
+
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+                return
+        }</span>
+        <span class="cov8" title="1">date = strings.Replace(date, ".", "", -1)
+
+        if isForceUpload </span><span class="cov8" title="1">{
+
+                go this.CheckFileAndSendToPeer(date, CONST_FILE_Md5_FILE_NAME, isForceUpload)
+
+        }</span><span class="cov0" title="0"> else {
+
+                go this.CheckFileAndSendToPeer(date, CONST_Md5_ERROR_FILE_NAME, isForceUpload)
+
+        }</span>
+        <span class="cov8" title="1">result.Status = "ok"
+        result.Message = "job is running"
+        w.Write([]byte(this.util.JsonEncodePretty(result)))</span>
+
+}
+
+func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) <span class="cov8" title="1">{
+        var (
+                err  error
+                data []byte
+
+                fileInfo FileInfo
+        )
+
+        if data, err = this.ldb.Get([]byte(key), nil); err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if err = json.Unmarshal(data, &amp;fileInfo); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;fileInfo, nil</span>
+
+}
+
+func (this *Server) SaveStat() <span class="cov8" title="1">{
+
+        SaveStatFunc := func() </span><span class="cov8" title="1">{
+
+                defer func() </span><span class="cov8" title="1">{
+                        if re := recover(); re != nil </span><span class="cov0" title="0">{
+                                buffer := debug.Stack()
+                                log.Error("SaveStatFunc")
+                                log.Error(re)
+                                log.Error(string(buffer))
+                        }</span>
+                }()
+
+                <span class="cov8" title="1">stat := this.statMap.Get()
+                if v, ok := stat[CONST_STAT_FILE_COUNT_KEY]; ok </span><span class="cov8" title="1">{
+                        switch v.(type) </span>{
+                        case int64, int32, int, float64, float32:<span class="cov8" title="1">
+                                if v.(int64) &gt;= 0 </span><span class="cov8" title="1">{
+
+                                        if data, err := json.Marshal(stat); err != nil </span><span class="cov0" title="0">{
+                                                log.Error(err)
+                                        }</span><span class="cov8" title="1"> else {
+                                                this.util.WriteBinFile(CONST_STAT_FILE_NAME, data)
+                                        }</span>
+
+                                }
+                        }
+
+                }
+
+        }
+
+        <span class="cov8" title="1">SaveStatFunc()</span>
+
+}
+
+func (this *Server) RemoveKeyFromLevelDB(key string) (error) <span class="cov0" title="0">{
+        var (
+                err error
+        )
+
+        err = this.ldb.Delete([]byte(key), nil)
+        return err
+
+}</span>
+
+func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo) (*FileInfo, error) <span class="cov8" title="1">{
+        var (
+                err  error
+                data []byte
+        )
+
+        if data, err = json.Marshal(fileInfo); err != nil </span><span class="cov0" title="0">{
+
+                return fileInfo, err
+
+        }</span>
+        <span class="cov8" title="1">if err = this.ldb.Put([]byte(key), data, nil); err != nil </span><span class="cov0" title="0">{
+                return fileInfo, err
+        }</span>
+
+        <span class="cov8" title="1">return fileInfo, nil</span>
+
+}
+
+func (this *Server) IsPeer(r *http.Request) bool <span class="cov8" title="1">{
+        var (
+                ip    string
+                peer  string
+                bflag bool
+        )
+
+        //return true
+        ip = this.util.GetClientIp(r)
+
+        if ip == "127.0.0.1" || ip == this.util.GetPulicIP() </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        <span class="cov8" title="1">if this.util.Contains(ip, Config().AdminIps) </span><span class="cov0" title="0">{
+                return true
+        }</span>
+
+        <span class="cov8" title="1">ip = "http://" + ip
+        bflag = false
+
+        for _, peer = range Config().Peers </span><span class="cov8" title="1">{
+                if strings.HasPrefix(peer, ip) </span><span class="cov8" title="1">{
+                        bflag = true
+                        break</span>
+                }
+        }
+        <span class="cov8" title="1">return bflag</span>
+}
+
+func (this *Server) ReceiveMd5s(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                err      error
+                md5str   string
+                fileInfo *FileInfo
+                md5s     []string
+        )
+
+        if !this.IsPeer(r) </span><span class="cov0" title="0">{
+                log.Warn(fmt.Sprintf("ReceiveMd5s %s", this.util.GetClientIp(r)))
+                w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+                return
+        }</span>
+
+        <span class="cov8" title="1">r.ParseForm()
+        md5str = r.FormValue("md5s")
+        md5s = strings.Split(md5str, ",")
+
+        AppendFunc := func(md5s []string) </span><span class="cov8" title="1">{
+                for _, m := range md5s </span><span class="cov8" title="1">{
+                        if m != "" </span><span class="cov8" title="1">{
+                                if fileInfo, err = this.GetFileInfoFromLevelDB(m); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                        continue</span>
+                                }
+                                <span class="cov8" title="1">this.AppendToQueue(fileInfo)</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">go AppendFunc(md5s)</span>
+
+}
+
+func (this *Server) GetClusterNotPermitMessage(r *http.Request) string <span class="cov0" title="0">{
+        var (
+                message string
+        )
+        message = fmt.Sprintf(CONST_MESSAGE_CLUSTER_IP, this.util.GetClientIp(r))
+        return message
+}</span>
+
+func (this *Server) GetMd5sForWeb(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                date   string
+                err    error
+                result mapset.Set
+                lines  []string
+                md5s   []interface{}
+        )
+
+        if !this.IsPeer(r) </span><span class="cov0" title="0">{
+                w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+                return
+
+        }</span>
+        <span class="cov8" title="1">date = r.FormValue("date")
+
+        if result, err = this.GetMd5sByDate(date, CONST_FILE_Md5_FILE_NAME); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">md5s = result.ToSlice()
+
+        for _, line := range md5s </span><span class="cov8" title="1">{
+                if line != nil &amp;&amp; line != "" </span><span class="cov8" title="1">{
+                        lines = append(lines, line.(string))
+                }</span>
+        }
+        <span class="cov8" title="1">w.Write([]byte( strings.Join(lines, ",") ))</span>
+
+}
+
+func (this *Server) GetMd5File(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+
+        var (
+                date  string
+                fpath string
+                data  []byte
+                err   error
+        )
+        if !this.IsPeer(r) </span><span class="cov0" title="0">{
+
+                return
+
+        }</span>
+
+        <span class="cov0" title="0">fpath = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
+
+        if !this.util.FileExists(fpath) </span><span class="cov0" title="0">{
+                w.WriteHeader(404)
+                return
+        }</span>
+        <span class="cov0" title="0">if data, err = ioutil.ReadFile(fpath); err != nil </span><span class="cov0" title="0">{
+                w.WriteHeader(500)
+                return
+        }</span>
+        <span class="cov0" title="0">w.Write(data)</span>
+
+}
+
+func (this *Server) GetMd5sMapByDate(date string, filename string) (*CommonMap, error) <span class="cov0" title="0">{
+
+        var (
+                err     error
+                result  *CommonMap
+                fpath   string
+                content string
+                lines   []string
+                line    string
+                cols    []string
+                data    []byte
+        )
+
+        result = &amp;CommonMap{m: make(map[string]interface{})}
+        if filename == "" </span><span class="cov0" title="0">{
+                fpath = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
+        }</span><span class="cov0" title="0"> else {
+                fpath = DATA_DIR + "/" + date + "/" + filename
+        }</span>
+
+        <span class="cov0" title="0">if !this.util.FileExists(fpath) </span><span class="cov0" title="0">{
+                return result, errors.New(fmt.Sprintf("fpath %s not found", fpath))
+        }</span>
+
+        <span class="cov0" title="0">if data, err = ioutil.ReadFile(fpath); err != nil </span><span class="cov0" title="0">{
+                return result, err
+        }</span>
+        <span class="cov0" title="0">content = string(data)
+        lines = strings.Split(content, "\n")
+        for _, line = range lines </span><span class="cov0" title="0">{
+
+                cols = strings.Split(line, "|")
+                if len(cols) &gt; 2 </span><span class="cov0" title="0">{
+                        if _, err = strconv.ParseInt(cols[1], 10, 64); err != nil </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov0" title="0">result.Add(cols[0])</span>
+
+                }
+        }
+        <span class="cov0" title="0">return result, nil</span>
+}
+
+func (this *Server) GetMd5sByDate(date string, filename string) (mapset.Set, error) <span class="cov8" title="1">{
+
+        var (
+                err     error
+                result  mapset.Set
+                fpath   string
+                content string
+                lines   []string
+                line    string
+                cols    []string
+                data    []byte
+                sumkey  string
+                ok      bool
+                mds     []interface{}
+                v       interface{}
+        )
+
+        sumkey = fmt.Sprintf("%s_%s", date, filename)
+
+        if v, ok = this.sumMap.GetValue(sumkey); ok </span><span class="cov8" title="1">{
+                result = v.(mapset.Set)
+
+                if result.Cardinality() &gt; 0 </span><span class="cov8" title="1">{
+                        return result, nil
+                }</span>
+
+        }
+
+        <span class="cov8" title="1">result = mapset.NewSet()
+        if filename == "" </span><span class="cov0" title="0">{
+                fpath = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
+        }</span><span class="cov8" title="1"> else {
+                fpath = DATA_DIR + "/" + date + "/" + filename
+        }</span>
+
+        <span class="cov8" title="1">if !this.util.FileExists(fpath) </span><span class="cov0" title="0">{
+                os.MkdirAll(DATA_DIR+"/"+date, 0775)
+                log.Warn(fmt.Sprintf("fpath %s not found", fpath))
+                return result, nil
+        }</span>
+
+        <span class="cov8" title="1">if data, err = ioutil.ReadFile(fpath); err != nil </span><span class="cov0" title="0">{
+                return result, err
+        }</span>
+        <span class="cov8" title="1">content = string(data)
+        lines = strings.Split(content, "\n")
+        if len(lines) &gt; 0 </span><span class="cov8" title="1">{
+                mds = make([]interface{}, len(lines)-1)
+        }</span><span class="cov0" title="0"> else {
+                return result, nil
+        }</span>
+        <span class="cov8" title="1">for _, line = range lines </span><span class="cov8" title="1">{
+
+                cols = strings.Split(line, "|")
+                if len(cols) &gt; 2 </span><span class="cov8" title="1">{
+                        if _, err = strconv.ParseInt(cols[1], 10, 64); err != nil </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov8" title="1">mds = append(mds, cols[0])</span>
+
+                }
+        }
+        <span class="cov8" title="1">result = mapset.NewSetFromSlice(mds)
+        this.sumMap.Put(sumkey, result)
+        return result, nil</span>
+}
+
+func (this *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                err         error
+                fileInfo    FileInfo
+                fileInfoStr string
+                filename    string
+        )
+        r.ParseForm()
+
+        if !this.IsPeer(r) </span><span class="cov0" title="0">{
+                return
+        }</span>
+        <span class="cov8" title="1">fileInfoStr = r.FormValue("fileInfo")
+
+        if err = json.Unmarshal([]byte(fileInfoStr), &amp;fileInfo); err != nil </span><span class="cov0" title="0">{
+                w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+                log.Error(err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">this.SaveFileMd5Log(&amp;fileInfo, CONST_Md5_QUEUE_FILE_NAME)
+
+        go this.AppendToDownloadQueue(&amp;fileInfo)
+
+        filename = fileInfo.Name
+
+        if fileInfo.ReName != "" </span><span class="cov8" title="1">{
+                filename = fileInfo.ReName
+        }</span>
+
+        <span class="cov8" title="1">p := strings.Replace(fileInfo.Path, STORE_DIR+"/", "", 1)
+
+        downloadUrl := fmt.Sprintf("http://%s/%s", r.Host, Config().Group+"/"+p+"/"+filename)
+
+        w.Write([]byte(downloadUrl))</span>
+
+}
+
+
+func (this *Server) CheckScene(scene string) (bool, error) <span class="cov8" title="1">{
+
+        if len(Config().Scenes) == 0 </span><span class="cov8" title="1">{
+                return true, nil
+        }</span>
+
+        <span class="cov0" title="0">if !this.util.Contains(scene, Config().Scenes) </span><span class="cov0" title="0">{
+                return false, errors.New("not valid scene")
+        }</span>
+        <span class="cov0" title="0">return true, nil</span>
+
+}
+
+func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        var (
+                err      error
+                md5sum   string
+                md5path  string
+                fileInfo *FileInfo
+                fpath    string
+                delUrl   string
+                result   JsonResult
+                inner    string
+                name     string
+        )
+        _ = delUrl
+        _ = inner
+        r.ParseForm()
+
+        md5sum = r.FormValue("md5")
+        fpath = r.FormValue("path")
+        inner = r.FormValue("inner")
+        result.Status = "fail"
+
+        if fpath != "" &amp;&amp; md5sum == "" </span><span class="cov0" title="0">{
+                md5sum = this.util.MD5(fpath)
+        }</span>
+
+        <span class="cov8" title="1">if len(md5sum) &lt; 32 </span><span class="cov0" title="0">{
+                result.Message = "md5 unvalid"
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+                return
+        }</span>
+        <span class="cov8" title="1">if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); err != nil </span><span class="cov0" title="0">{
+                w.Write([]byte(err.Error()))
+                return
+        }</span>
+        <span class="cov8" title="1">name = fileInfo.Name
+        if fileInfo.ReName != "" </span><span class="cov8" title="1">{
+                name = fileInfo.ReName
+        }</span>
+        <span class="cov8" title="1">md5path = this.util.MD5(fileInfo.Path + "/" + name)
+
+        if fileInfo.ReName != "" </span><span class="cov8" title="1">{
+                fpath = fileInfo.Path + "/" + fileInfo.ReName
+        }</span><span class="cov0" title="0"> else {
+                fpath = fileInfo.Path + "/" + fileInfo.Name
+        }</span>
+
+        <span class="cov8" title="1">if fileInfo.Path != "" &amp;&amp; this.util.FileExists(fpath) </span><span class="cov0" title="0">{
+                this.ldb.Delete([]byte(fileInfo.Md5), nil)
+                this.ldb.Delete([]byte(md5path), nil)
+                if err = os.Remove(fpath); err != nil </span><span class="cov0" title="0">{
+                        w.Write([]byte(err.Error()))
+                        return
+                }</span><span class="cov0" title="0"> else {
+                        //if inner!="1" {
+                        //        for _, peer := range Config().Peers {
+                        //                delUrl = fmt.Sprintf("%s%s", peer, this.getRequestURI("delete"))
+                        //                req := httplib.Post(delUrl)
+                        //                req.Param("md5", fileInfo.Md5)
+                        //                req.Param("inner", "1")
+                        //                req.SetTimeout(time.Second*5, time.Second*10)
+                        //                if _, err = req.String(); err != nil {
+                        //                        log.Error(err)
+                        //                }
+                        //        }
+                        //}
+
+                        this.SaveFileMd5Log(fileInfo, CONST_REMOME_Md5_FILE_NAME)
+                        result.Message = "remove success"
+                        result.Status = "ok"
+                        w.Write([]byte(this.util.JsonEncodePretty(result)))
+                        return
+                }</span>
+        }
+        <span class="cov8" title="1">result.Message = "fail remove"
+        w.Write([]byte(this.util.JsonEncodePretty(result)))</span>
+
+}
+
+func (this *Server) getRequestURI(action string) string <span class="cov8" title="1">{
+        var (
+                uri string
+        )
+        if Config().SupportGroupManage </span><span class="cov0" title="0">{
+                uri = "/" + Config().Group + "/" + action
+        }</span><span class="cov8" title="1"> else {
+                uri = "/" + action
+        }</span>
+        <span class="cov8" title="1">return uri</span>
+}
+
+func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileResult <span class="cov8" title="1">{
+        var (
+                outname     string
+                fileResult  FileResult
+                p           string
+                downloadUrl string
+                domain      string
+        )
+        if Config().DownloadDomain != "" </span><span class="cov0" title="0">{
+                domain = fmt.Sprintf("http://%s", Config().DownloadDomain)
+        }</span><span class="cov8" title="1"> else {
+                domain = fmt.Sprintf("http://%s", r.Host)
+        }</span>
+        <span class="cov8" title="1">outname = fileInfo.Name
+        if fileInfo.ReName != "" </span><span class="cov8" title="1">{
+                outname = fileInfo.ReName
+        }</span>
+        <span class="cov8" title="1">p = strings.Replace(fileInfo.Path, STORE_DIR_NAME+"/", "", 1)
+        p = Config().Group + "/" + p + "/" + outname
+        downloadUrl = fmt.Sprintf("http://%s/%s", r.Host, p)
+        if Config().DownloadDomain != "" </span><span class="cov0" title="0">{
+                downloadUrl = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, p)
+        }</span>
+
+        <span class="cov8" title="1">fileResult.Url = downloadUrl
+        fileResult.Md5 = fileInfo.Md5
+        fileResult.Path = "/" + p
+        fileResult.Domain = domain
+        fileResult.Scene = fileInfo.Scene
+        // Just for Compatibility
+        fileResult.Src = fileResult.Path
+        fileResult.Scenes = fileInfo.Scene
+
+        return fileResult</span>
+}
+func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeader, fileInfo *FileInfo, r *http.Request) (*FileInfo, error) <span class="cov8" title="1">{
+        var (
+                err     error
+                outFile *os.File
+                folder  string
+                fi      os.FileInfo
+        )
+
+        defer file.Close()
+
+        fileInfo.Name = header.Filename
+
+        if Config().RenameFile </span><span class="cov0" title="0">{
+                fileInfo.ReName = this.util.MD5(this.util.GetUUID()) + path.Ext(fileInfo.Name)
+        }</span>
+
+        <span class="cov8" title="1">folder = time.Now().Format("20060102/15/04")
+        if Config().PeerId != "" </span><span class="cov8" title="1">{
+                folder = fmt.Sprintf(folder+"/%s", Config().PeerId)
+        }</span>
+        <span class="cov8" title="1">if fileInfo.Scene != "" </span><span class="cov8" title="1">{
+                folder = fmt.Sprintf(STORE_DIR+"/%s/%s", fileInfo.Scene, folder)
+        }</span><span class="cov0" title="0"> else {
+                folder = fmt.Sprintf(STORE_DIR+"/%s", folder)
+        }</span>
+        <span class="cov8" title="1">if fileInfo.Path != "" </span><span class="cov0" title="0">{
+                if strings.HasPrefix(fileInfo.Path, STORE_DIR) </span><span class="cov0" title="0">{
+                        folder = fileInfo.Path
+                }</span><span class="cov0" title="0"> else {
+                        folder = STORE_DIR + "/" + fileInfo.Path
+                }</span>
+        }
+
+        <span class="cov8" title="1">if !this.util.FileExists(folder) </span><span class="cov0" title="0">{
+                os.MkdirAll(folder, 0775)
+        }</span>
+
+        <span class="cov8" title="1">outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
+        if Config().RenameFile </span><span class="cov0" title="0">{
+                outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
+        }</span>
+
+        <span class="cov8" title="1">if this.util.FileExists(outPath) </span><span class="cov0" title="0">{
+                for i := 0; i &lt; 10000; i++ </span><span class="cov0" title="0">{
+                        outPath = fmt.Sprintf(folder+"/%d_%s", i, header.Filename)
+                        fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
+                        if !this.util.FileExists(outPath) </span><span class="cov0" title="0">{
+                                break</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">log.Info(fmt.Sprintf("upload: %s", outPath))
+
+        if outFile, err = os.Create(outPath); err != nil </span><span class="cov0" title="0">{
+                return fileInfo, err
+        }</span>
+
+        <span class="cov8" title="1">defer outFile.Close()
+
+        if err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                return fileInfo, errors.New("(error)fail," + err.Error())
+
+        }</span>
+
+        <span class="cov8" title="1">if _, err = io.Copy(outFile, file); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                return fileInfo, errors.New("(error)fail," + err.Error())
+        }</span>
+
+        <span class="cov8" title="1">if fi, err = outFile.Stat(); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+        }</span><span class="cov8" title="1"> else {
+                fileInfo.Size = fi.Size()
+        }</span>
+        <span class="cov8" title="1">if fi.Size() != header.Size </span><span class="cov0" title="0">{
+                return fileInfo, errors.New("(error)file uncomplete")
+        }</span>
+        <span class="cov8" title="1">v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+
+        fileInfo.Md5 = v
+
+        //fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
+        fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
+
+        fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", r.Host))
+
+        //fmt.Println("upload",fileInfo)
+
+        return fileInfo, nil</span>
+}
+
+func (this *Server) Upload(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                err error
+
+                //                pathname     string
+
+                md5sum       string
+                fileInfo     FileInfo
+                uploadFile   multipart.File
+                uploadHeader *multipart.FileHeader
+                scene        string
+                output       string
+                fileResult   FileResult
+                data         []byte
+        )
+
+        //r.ParseForm()
+
+        if r.Method == "POST" </span><span class="cov8" title="1">{
+                //                name := r.PostFormValue("name")
+
+                //                fileInfo.Path = r.Header.Get("Sync-Path")
+
+                md5sum = r.FormValue("md5")
+                output = r.FormValue("output")
+
+                //if strings.Contains(r.Host, "127.0.0.1") {
+                //        w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
+                //        return
+                //}
+
+                if Config().EnableCustomPath </span><span class="cov8" title="1">{
+                        fileInfo.Path = r.FormValue("path")
+                        fileInfo.Path = strings.Trim(fileInfo.Path, "/")
+                }</span>
+                <span class="cov8" title="1">scene = r.FormValue("scene")
+                if scene == "" </span><span class="cov8" title="1">{
+                        //Just for Compatibility
+                        scene = r.FormValue("scenes")
+                }</span>
+
+                <span class="cov8" title="1">fileInfo.Md5 = md5sum
+                fileInfo.OffSet = -1
+                if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        w.Write([]byte(err.Error()))
+                        return
+                }</span>
+                <span class="cov8" title="1">fileInfo.Peers = []string{}
+                fileInfo.TimeStamp = time.Now().Unix()
+
+                if scene == "" </span><span class="cov8" title="1">{
+                        scene = Config().DefaultScene
+                }</span>
+
+                <span class="cov8" title="1">if output == "" </span><span class="cov0" title="0">{
+                        output = "text"
+                }</span>
+
+                <span class="cov8" title="1">if !this.util.Contains(output, []string{"json", "text"}) </span><span class="cov0" title="0">{
+                        w.Write([]byte("output just support json or text"))
+                        return
+                }</span>
+
+                <span class="cov8" title="1">fileInfo.Scene = scene
+
+                if _, err = this.CheckScene(scene); err != nil </span><span class="cov0" title="0">{
+
+                        w.Write([]byte(err.Error()))
+
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        http.Redirect(w, r, "/", http.StatusMovedPermanently)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if _, err = this.SaveUploadFile(uploadFile, uploadHeader, &amp;fileInfo, r); err != nil </span><span class="cov0" title="0">{
+                        w.Write([]byte(err.Error()))
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil &amp;&amp; v.Md5 != "" </span><span class="cov0" title="0">{
+                        fileResult = this.BuildFileResult(v, r)
+                        if Config().RenameFile </span><span class="cov0" title="0">{
+                                os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
+                        }</span><span class="cov0" title="0"> else {
+                                os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
+                        }</span>
+
+                        <span class="cov0" title="0">if output == "json" </span><span class="cov0" title="0">{
+                                if data, err = json.Marshal(fileResult); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                        w.Write([]byte(err.Error()))
+                                }</span>
+                                <span class="cov0" title="0">w.Write(data)</span>
+
+                        }<span class="cov0" title="0"> else {
+                                w.Write([]byte(fileResult.Url))
+
+                        }</span>
+                        <span class="cov0" title="0">return</span>
+                }
+
+                <span class="cov8" title="1">if fileInfo.Md5 == "" </span><span class="cov0" title="0">{
+                        log.Warn(" fileInfo.Md5 is null")
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if md5sum != "" &amp;&amp; fileInfo.Md5 != md5sum </span><span class="cov0" title="0">{
+                        log.Warn(" fileInfo.Md5 and md5sum !=")
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if Config().EnableMergeSmallFile &amp;&amp; fileInfo.Size &lt; CONST_SMALL_FILE_SIZE </span><span class="cov8" title="1">{
+
+                        if err = this.SaveSmallFile(&amp;fileInfo); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                                return
+                        }</span>
+
+                }
+
+                <span class="cov8" title="1">go this.postFileToPeer(&amp;fileInfo)
+
+                if fileInfo.Size &lt;= 0 </span><span class="cov0" title="0">{
+                        log.Error("file size is zero")
+                        return
+                }</span>
+                <span class="cov8" title="1">fileResult = this.BuildFileResult(&amp;fileInfo, r)
+                this.SaveFileMd5Log(&amp;fileInfo, CONST_FILE_Md5_FILE_NAME)
+                if output == "json" </span><span class="cov8" title="1">{
+                        if data, err = json.Marshal(fileResult); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                                w.Write([]byte(err.Error()))
+                        }</span>
+                        <span class="cov8" title="1">w.Write(data)</span>
+
+                }<span class="cov0" title="0"> else {
+                        w.Write([]byte(fileResult.Url))
+
+                }</span>
+                <span class="cov8" title="1">return</span>
+
+        }<span class="cov0" title="0"> else {
+                md5sum = r.FormValue("md5")
+                output = r.FormValue("output")
+                if md5sum == "" </span><span class="cov0" title="0">{
+                        w.Write([]byte("(error) if you want to upload fast md5 is require" +
+                                ",and if you want to upload file,you must use post method  "))
+                        return
+
+                }</span>
+                <span class="cov0" title="0">if v, _ := this.GetFileInfoFromLevelDB(md5sum); v != nil &amp;&amp; v.Md5 != "" </span><span class="cov0" title="0">{
+                        fileResult = this.BuildFileResult(v, r)
+                        if output == "json" </span><span class="cov0" title="0">{
+                                if data, err = json.Marshal(fileResult); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                        w.Write([]byte(err.Error()))
+                                }</span>
+                                <span class="cov0" title="0">w.Write(data)</span>
+
+                        }<span class="cov0" title="0"> else {
+                                w.Write([]byte(fileResult.Url))
+
+                        }</span>
+                        <span class="cov0" title="0">return</span>
+                }
+                <span class="cov0" title="0">w.Write([]byte("(error)fail,please use post method"))
+                return</span>
+        }
+
+}
+
+func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) <span class="cov8" title="1">{
+
+        var (
+                err      error
+                filename string
+                fpath    string
+                srcFile  *os.File
+                desFile  *os.File
+                largeDir string
+                destPath string
+                reName   string
+        )
+        filename = fileInfo.Name
+        if fileInfo.ReName != "" </span><span class="cov0" title="0">{
+                filename = fileInfo.ReName
+        }</span>
+        <span class="cov8" title="1">fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
+
+        largeDir = LARGE_DIR + "/" + Config().PeerId
+
+        if !this.util.FileExists(largeDir) </span><span class="cov0" title="0">{
+                os.MkdirAll(largeDir, 0775)
+        }</span>
+
+        <span class="cov8" title="1">reName = fmt.Sprintf("%d", this.util.RandInt(100, 300))
+        destPath = largeDir + "/" + reName
+
+        this.lockMap.LockKey(destPath)
+        defer this.lockMap.UnLockKey(destPath)
+
+        if this.util.FileExists(fpath) </span><span class="cov8" title="1">{
+                srcFile, err = os.OpenFile(fpath, os.O_CREATE|os.O_RDONLY, 06666)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">defer srcFile.Close()
+
+                desFile, err = os.OpenFile(destPath, os.O_CREATE|os.O_RDWR, 06666)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">defer desFile.Close()
+
+                fileInfo.OffSet, err = desFile.Seek(0, 2)
+                if _, err = desFile.Write([]byte("1")); err != nil </span><span class="cov0" title="0">{ //first byte set 1
+                        return err
+                }</span>
+                <span class="cov8" title="1">fileInfo.OffSet, err = desFile.Seek(0, 2)
+
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">fileInfo.OffSet = fileInfo.OffSet - 1 //minus 1 byte
+                fileInfo.Size = fileInfo.Size + 1
+                fileInfo.ReName = fmt.Sprintf("%s,%d,%d", reName, fileInfo.OffSet, fileInfo.Size)
+
+                if _, err = io.Copy(desFile, srcFile); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">srcFile.Close()
+                os.Remove(fpath)
+                fileInfo.Path = strings.Replace(largeDir, DOCKER_DIR, "", 1)</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+
+}
+
+func (this *Server) SendToMail(to, subject, body, mailtype string) error <span class="cov0" title="0">{
+        host := Config().Mail.Host
+        user := Config().Mail.User
+        password := Config().Mail.Password
+        hp := strings.Split(host, ":")
+        auth := smtp.PlainAuth("", user, password, hp[0])
+        var contentType string
+        if mailtype == "html" </span><span class="cov0" title="0">{
+                contentType = "Content-Type: text/" + mailtype + "; charset=UTF-8"
+        }</span><span class="cov0" title="0"> else {
+                contentType = "Content-Type: text/plain" + "; charset=UTF-8"
+        }</span>
+
+        <span class="cov0" title="0">msg := []byte("To: " + to + "\r\nFrom: " + user + "&gt;\r\nSubject: " + "\r\n" + contentType + "\r\n\r\n" + body)
+        sendTo := strings.Split(to, ";")
+        err := smtp.SendMail(host, auth, user, sendTo, msg)
+        return err</span>
+}
+
+func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        t := time.Now()
+        batch := new(leveldb.Batch)
+
+        for i := 0; i &lt; 100000000; i++ </span><span class="cov0" title="0">{
+                f := FileInfo{}
+                f.Peers = []string{"http://192.168.0.1", "http://192.168.2.5"}
+                f.Path = "20190201/19/02"
+                s := strconv.Itoa(i)
+                s = this.util.MD5(s)
+                f.Name = s
+                f.Md5 = s
+
+                //                server.SaveFileInfoToLevelDB(s, &amp;f)
+
+                if data, err := json.Marshal(&amp;f); err == nil </span><span class="cov0" title="0">{
+                        batch.Put([]byte(s), data)
+                }</span>
+
+                <span class="cov0" title="0">if i%10000 == 0 </span><span class="cov0" title="0">{
+
+                        if batch.Len() &gt; 0 </span><span class="cov0" title="0">{
+                                server.ldb.Write(batch, nil)
+                                //                                batch = new(leveldb.Batch)
+                                batch.Reset()
+                        }</span>
+                        <span class="cov0" title="0">fmt.Println(i, time.Since(t).Seconds())</span>
+
+                }
+
+                //fmt.Println(server.GetFileInfoFromLevelDB(s))
+
+        }
+
+        <span class="cov0" title="0">this.util.WriteFile("time.txt", time.Since(t).String())
+        fmt.Println(time.Since(t).String())</span>
+}
+
+func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                result JsonResult
+        )
+        this.RepairStat()
+        result.Status = "ok"
+        w.Write([]byte(this.util.JsonEncodePretty(result)))
+
+}</span>
+
+func (this *Server) Stat(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        var (
+                result JsonResult
+                inner  string
+        )
+        r.ParseForm()
+        inner = r.FormValue("inner")
+        data := this.GetStat()
+        result.Status = "ok"
+        result.Data = data
+        if inner == "1" </span><span class="cov8" title="1">{
+                w.Write([]byte(this.util.JsonEncodePretty(data)))
+        }</span><span class="cov8" title="1"> else {
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+        }</span>
+}
+
+func (this *Server) GetStat() []StatDateFileInfo <span class="cov8" title="1">{
+        var (
+                min int64
+                max int64
+                err error
+                i   int64
+
+                rows []StatDateFileInfo
+        )
+        min = 20190101
+        max = 20190101
+        for k := range this.statMap.Get() </span><span class="cov8" title="1">{
+                ks := strings.Split(k, "_")
+                if len(ks) == 2 </span><span class="cov8" title="1">{
+                        if i, err = strconv.ParseInt(ks[0], 10, 64); err != nil </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov8" title="1">if i &gt;= max </span><span class="cov8" title="1">{
+                                max = i
+                        }</span>
+                        <span class="cov8" title="1">if i &lt; min </span><span class="cov0" title="0">{
+                                min = i
+                        }</span>
+
+                }
+
+        }
+
+        <span class="cov8" title="1">for i := min; i &lt;= max; i++ </span><span class="cov8" title="1">{
+
+                s := fmt.Sprintf("%d", i)
+                if v, ok := this.statMap.GetValue(s + "_" + CONST_STAT_FILE_TOTAL_SIZE_KEY); ok </span><span class="cov8" title="1">{
+                        var info StatDateFileInfo
+                        info.Date = s
+                        switch v.(type) </span>{
+                        case int64:<span class="cov8" title="1">
+                                info.TotalSize = v.(int64)</span>
+                        }
+
+                        <span class="cov8" title="1">if v, ok := this.statMap.GetValue(s + "_" + CONST_STAT_FILE_COUNT_KEY); ok </span><span class="cov8" title="1">{
+                                switch v.(type) </span>{
+                                case int64:<span class="cov8" title="1">
+                                        info.FileCount = v.(int64)</span>
+                                }
+                        }
+
+                        <span class="cov8" title="1">rows = append(rows, info)</span>
+
+                }
+
+        }
+
+        <span class="cov8" title="1">if v, ok := this.statMap.GetValue(CONST_STAT_FILE_COUNT_KEY); ok </span><span class="cov8" title="1">{
+                var info StatDateFileInfo
+                info.Date = "all"
+                info.FileCount = v.(int64)
+                if v, ok := this.statMap.GetValue(CONST_STAT_FILE_TOTAL_SIZE_KEY); ok </span><span class="cov8" title="1">{
+                        info.TotalSize = v.(int64)
+                }</span>
+                <span class="cov8" title="1">rows = append(rows, info)</span>
+        }
+
+        <span class="cov8" title="1">return rows</span>
+
+}
+
+func (this *Server) RegisterExit() <span class="cov0" title="0">{
+        c := make(chan os.Signal)
+        signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+        go func() </span><span class="cov0" title="0">{
+                for s := range c </span><span class="cov0" title="0">{
+                        switch s </span>{
+                        case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:<span class="cov0" title="0">
+                                this.ldb.Close()
+                                log.Info("Exit", s)
+                                os.Exit(1)</span>
+                        }
+                }
+        }()
+}
+
+func (this *Server) AppendToQueue(fileInfo *FileInfo) <span class="cov8" title="1">{
+
+        this.queueToPeers &lt;- *fileInfo
+
+}</span>
+
+func (this *Server) AppendToDownloadQueue(fileInfo *FileInfo) <span class="cov8" title="1">{
+
+        this.queueFromPeers &lt;- *fileInfo
+
+}</span>
+
+func (this *Server) ConsumerDownLoad() <span class="cov8" title="1">{
+
+        ConsumerFunc := func() </span><span class="cov8" title="1">{
+
+                for </span><span class="cov8" title="1">{
+                        fileInfo := &lt;-this.queueFromPeers
+                        if len(fileInfo.Peers) &lt;= 0 </span><span class="cov0" title="0">{
+                                log.Warn("Peer is null", fileInfo)
+                                continue</span>
+                        }
+                        <span class="cov8" title="1">for _, peer := range fileInfo.Peers </span><span class="cov8" title="1">{
+                                if strings.Contains(peer, "127.0.0.1") </span><span class="cov0" title="0">{
+                                        log.Warn("sync error with 127.0.0.1", fileInfo)
+                                        continue</span>
+                                }
+                                <span class="cov8" title="1">if peer != this.host </span><span class="cov8" title="1">{
+
+                                        this.DownloadFromPeer(peer, &amp;fileInfo)
+                                        break</span>
+                                }
+                        }
+
+                }
+
+        }
+
+        <span class="cov8" title="1">for i := 0; i &lt; 50; i++ </span><span class="cov8" title="1">{
+
+                go ConsumerFunc()
+
+        }</span>
+
+}
+
+func (this *Server) Consumer() <span class="cov8" title="1">{
+
+        ConsumerFunc := func() </span><span class="cov8" title="1">{
+
+                for </span><span class="cov8" title="1">{
+                        fileInfo := &lt;-this.queueToPeers
+                        this.postFileToPeer(&amp;fileInfo)
+                }</span>
+
+        }
+
+        <span class="cov8" title="1">for i := 0; i &lt; 50; i++ </span><span class="cov8" title="1">{
+
+                go ConsumerFunc()
+
+        }</span>
+
+}
+
+func (this *Server) AutoRepair(forceRepair bool) <span class="cov8" title="1">{
+
+        if this.lockMap.IsLock("AutoRepair") </span><span class="cov0" title="0">{
+                log.Warn("Lock AutoRepair")
+                return
+        }</span>
+        <span class="cov8" title="1">this.lockMap.LockKey("AutoRepair")
+        defer this.lockMap.UnLockKey("AutoRepair")
+
+        AutoRepairFunc := func(forceRepair bool) </span><span class="cov8" title="1">{
+
+                var (
+                        dateStats []StatDateFileInfo
+
+                        err       error
+                        countKey  string
+                        md5s      string
+                        localSet  mapset.Set
+                        remoteSet mapset.Set
+                        allSet    mapset.Set
+                        tmpSet    mapset.Set
+                        fileInfo  *FileInfo
+                )
+
+                defer func() </span><span class="cov8" title="1">{
+                        if re := recover(); re != nil </span><span class="cov0" title="0">{
+                                buffer := debug.Stack()
+                                log.Error("AutoRepair")
+                                log.Error(re)
+                                log.Error(string(buffer))
+                        }</span>
+                }()
+
+                <span class="cov8" title="1">Update := func(peer string, dateStat StatDateFileInfo) </span><span class="cov8" title="1">{ //从远端拉数据过来
+
+                        req := httplib.Get(fmt.Sprintf("%s%s?date=%s&amp;force=%s", peer, this.getRequestURI("sync"), dateStat.Date, "1"))
+                        req.SetTimeout(time.Second*5, time.Second*5)
+                        if _, err = req.String(); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+
+                        }</span>
+                        <span class="cov8" title="1">log.Info(fmt.Sprintf("syn file from %s date %s", peer, dateStat.Date))</span>
+
+                }
+
+                <span class="cov8" title="1">for _, peer := range Config().Peers </span><span class="cov8" title="1">{
+
+                        req := httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("stat")))
+                        req.Param("inner", "1")
+                        req.SetTimeout(time.Second*5, time.Second*15)
+                        if err = req.ToJSON(&amp;dateStats); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                                continue</span>
+                        }
+
+                        <span class="cov8" title="1">for _, dateStat := range dateStats </span><span class="cov8" title="1">{
+                                if dateStat.Date == "all" </span><span class="cov8" title="1">{
+                                        continue</span>
+                                }
+                                <span class="cov8" title="1">countKey = dateStat.Date + "_" + CONST_STAT_FILE_COUNT_KEY
+                                if v, ok := this.statMap.GetValue(countKey); ok </span><span class="cov8" title="1">{
+                                        switch v.(type) </span>{
+                                        case int64:<span class="cov8" title="1">
+                                                if v.(int64) != dateStat.FileCount || forceRepair </span><span class="cov8" title="1">{ //不相等,找差异
+                                                        //TODO
+                                                        req := httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("get_md5s_by_date")))
+                                                        req.SetTimeout(time.Second*15, time.Second*60)
+
+                                                        req.Param("date", dateStat.Date)
+
+                                                        if md5s, err = req.String(); err != nil </span><span class="cov0" title="0">{
+                                                                continue</span>
+                                                        }
+                                                        <span class="cov8" title="1">if localSet, err = this.GetMd5sByDate(dateStat.Date, CONST_FILE_Md5_FILE_NAME); err != nil </span><span class="cov0" title="0">{
+                                                                log.Error(err)
+                                                                continue</span>
+                                                        }
+                                                        <span class="cov8" title="1">remoteSet = this.util.StrToMapSet(md5s, ",")
+                                                        allSet = localSet.Union(remoteSet)
+                                                        md5s = this.util.MapSetToStr(allSet.Difference(localSet), ",")
+                                                        req = httplib.Post(fmt.Sprintf("%s%s", peer, this.getRequestURI("receive_md5s")))
+                                                        req.SetTimeout(time.Second*15, time.Second*60)
+                                                        req.Param("md5s", md5s)
+                                                        req.String()
+                                                        tmpSet = allSet.Difference(remoteSet)
+                                                        for v := range tmpSet.Iter() </span><span class="cov8" title="1">{
+                                                                if v != nil </span><span class="cov8" title="1">{
+                                                                        if fileInfo, err = this.GetFileInfoFromLevelDB(v.(string)); err != nil </span><span class="cov0" title="0">{
+
+                                                                                log.Error(err)
+                                                                                continue</span>
+                                                                        }
+                                                                        <span class="cov8" title="1">this.AppendToQueue(fileInfo)</span>
+                                                                }
+                                                        }
+
+                                                        //Update(peer,dateStat)
+                                                }
+                                        }
+                                }<span class="cov8" title="1"> else {
+                                        Update(peer, dateStat)
+
+                                }</span>
+
+                        }
+
+                }
+
+        }
+
+        <span class="cov8" title="1">AutoRepairFunc(forceRepair)</span>
+}
+
+func (this *Server) CleanMd5SumCache() <span class="cov8" title="1">{
+
+        Clean := func() </span><span class="cov8" title="1">{
+
+                defer func() </span><span class="cov8" title="1">{
+                        if re := recover(); re != nil </span><span class="cov0" title="0">{
+                                buffer := debug.Stack()
+                                log.Error("Check")
+                                log.Error(re)
+                                log.Error(string(buffer))
+                        }</span>
+                }()
+
+                <span class="cov8" title="1">var (
+                        today   string
+                        memstat *runtime.MemStats
+                        keys    []string
+                )
+
+                memstat = new(runtime.MemStats)
+
+                runtime.ReadMemStats(memstat)
+
+                _ = memstat
+
+                today = this.util.GetToDay()
+
+                _ = today
+
+                keys = this.sumMap.Keys()
+
+                for _, k := range keys </span><span class="cov0" title="0">{
+                        if strings.HasPrefix(k, today) </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov0" title="0">if v, ok := this.sumMap.GetValue(k); ok </span><span class="cov0" title="0">{
+                                v.(mapset.Set).Clear()
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">go func() </span><span class="cov8" title="1">{
+                for </span><span class="cov8" title="1">{
+                        Clean()
+                        time.Sleep(time.Minute * 10)
+
+                }</span>
+        }()
+
+}
+
+func (this *Server) Check() <span class="cov8" title="1">{
+
+        check := func() </span><span class="cov8" title="1">{
+
+                defer func() </span><span class="cov8" title="1">{
+                        if re := recover(); re != nil </span><span class="cov0" title="0">{
+                                buffer := debug.Stack()
+                                log.Error("Check")
+                                log.Error(re)
+                                log.Error(string(buffer))
+                        }</span>
+                }()
+
+                <span class="cov8" title="1">var (
+                        status  JsonResult
+                        err     error
+                        subject string
+                        body    string
+                        req     *httplib.BeegoHTTPRequest
+                )
+
+                for _, peer := range Config().Peers </span><span class="cov8" title="1">{
+
+                        req = httplib.Get(fmt.Sprintf("%s%s", peer, this.getRequestURI("status")))
+                        req.SetTimeout(time.Second*5, time.Second*5)
+                        err = req.ToJSON(&amp;status)
+
+                        if status.Status != "ok" </span><span class="cov0" title="0">{
+
+                                for _, to := range Config().AlramReceivers </span><span class="cov0" title="0">{
+                                        subject = "fastdfs server error"
+
+                                        if err != nil </span><span class="cov0" title="0">{
+                                                body = fmt.Sprintf("%s\nserver:%s\nerror:\n%s", subject, peer, err.Error())
+                                        }</span><span class="cov0" title="0"> else {
+                                                body = fmt.Sprintf("%s\nserver:%s\n", subject, peer)
+                                        }</span>
+                                        <span class="cov0" title="0">if err = this.SendToMail(to, subject, body, "text"); err != nil </span><span class="cov0" title="0">{
+                                                log.Error(err)
+                                        }</span>
+                                }
+
+                                <span class="cov0" title="0">if Config().AlarmUrl != "" </span><span class="cov0" title="0">{
+                                        req = httplib.Post(Config().AlarmUrl)
+                                        req.SetTimeout(time.Second*10, time.Second*10)
+                                        req.Param("message", body)
+                                        req.Param("subject", subject)
+                                        if _, err = req.String(); err != nil </span><span class="cov0" title="0">{
+                                                log.Error(err)
+                                        }</span>
+
+                                }
+
+                        }
+                }
+
+        }
+
+        <span class="cov8" title="1">go func() </span><span class="cov8" title="1">{
+                for </span><span class="cov8" title="1">{
+                        check()
+                        time.Sleep(time.Minute * 10)
+                }</span>
+        }()
+
+}
+func (this *Server) RepairFileInfo(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        var (
+                result JsonResult
+        )
+        if !this.IsPeer(r) </span><span class="cov0" title="0">{
+                w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+                return
+        }</span>
+        <span class="cov0" title="0">result.Status = "ok"
+        result.Message = "repair job start,don't try again"
+        go this.RepairFileInfoFromFile()
+        w.Write([]byte(this.util.JsonEncodePretty(result)))</span>
+}
+
+func (this *Server) Reload(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                err  error
+                data []byte
+
+                cfg     GloablConfig
+                action  string
+                cfgjson string
+                result  JsonResult
+        )
+
+        result.Status = "fail"
+
+        r.ParseForm()
+        if !this.IsPeer(r) </span><span class="cov0" title="0">{
+                w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+                return
+        }</span>
+
+        <span class="cov8" title="1">cfgjson = r.FormValue("cfg")
+        action = r.FormValue("action")
+        _ = cfgjson
+
+        if action == "get" </span><span class="cov8" title="1">{
+                result.Data = Config()
+                result.Status = "ok"
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+                return
+
+        }</span>
+
+        <span class="cov8" title="1">if action == "set" </span><span class="cov8" title="1">{
+                if cfgjson == "" </span><span class="cov0" title="0">{
+                        result.Message = "(error)parameter cfg(json) require"
+                        w.Write([]byte(this.util.JsonEncodePretty(result)))
+                        return
+                }</span>
+                <span class="cov8" title="1">if err = json.Unmarshal([]byte(cfgjson), &amp;cfg); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        result.Message = err.Error()
+                        w.Write([]byte(this.util.JsonEncodePretty(result)))
+                        return
+                }</span>
+                <span class="cov8" title="1">result.Status = "ok"
+                cfgjson = this.util.JsonEncodePretty(cfg)
+                this.util.WriteFile(CONST_CONF_FILE_NAME, cfgjson)
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+                return</span>
+        }
+
+        <span class="cov8" title="1">if action == "reload" </span><span class="cov8" title="1">{
+
+                if data, err = ioutil.ReadFile(CONST_CONF_FILE_NAME); err != nil </span><span class="cov0" title="0">{
+                        result.Message = err.Error()
+                        w.Write([]byte(this.util.JsonEncodePretty(result)))
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if err = json.Unmarshal(data, &amp;cfg); err != nil </span><span class="cov0" title="0">{
+                        result.Message = err.Error()
+                        w.Write([]byte(this.util.JsonEncodePretty(result)))
+                        return
+                }</span>
+
+                <span class="cov8" title="1">ParseConfig(CONST_CONF_FILE_NAME)
+
+                this.initComponent(true)
+                result.Status = "ok"
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+                return</span>
+
+        }
+        <span class="cov0" title="0">if action == "" </span><span class="cov0" title="0">{
+                w.Write([]byte("(error)action support set(json) get reload"))
+        }</span>
+
+}
+
+func (this *Server) Repair(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                force       string
+                forceRepair bool
+                result      JsonResult
+        )
+        result.Status = "ok"
+        r.ParseForm()
+        force = r.FormValue("force")
+        if force == "1" </span><span class="cov8" title="1">{
+                forceRepair = true
+        }</span>
+        <span class="cov8" title="1">if this.IsPeer(r) </span><span class="cov8" title="1">{
+                go this.AutoRepair(forceRepair)
+                result.Message = "repair job start..."
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+        }</span><span class="cov0" title="0"> else {
+                result.Message = this.GetClusterNotPermitMessage(r)
+                w.Write([]byte(this.util.JsonEncodePretty(result)))
+        }</span>
+
+}
+
+func (this *Server) Status(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+
+        var (
+                status JsonResult
+                err    error
+                data   []byte
+                sts    map[string]interface{}
+                today  string
+                sumset mapset.Set
+                ok     bool
+                v      interface{}
+        )
+        memStat := new(runtime.MemStats)
+        runtime.ReadMemStats(memStat)
+        today = this.util.GetToDay()
+
+        sts = make(map[string]interface{})
+        sts["Fs.QueueFromPeers"] = len(this.queueFromPeers)
+        sts["Fs.QueueToPeers"] = len(this.queueToPeers)
+        for _, k := range []string{CONST_FILE_Md5_FILE_NAME, CONST_Md5_ERROR_FILE_NAME, CONST_Md5_QUEUE_FILE_NAME} </span><span class="cov8" title="1">{
+                k2 := fmt.Sprintf("%s_%s", today, k)
+                if v, ok = this.sumMap.GetValue(k2); ok </span><span class="cov8" title="1">{
+                        sumset = v.(mapset.Set)
+                        if k == CONST_Md5_QUEUE_FILE_NAME </span><span class="cov0" title="0">{
+
+                                sts["Fs.QueueSetSize"] = sumset.Cardinality()
+                        }</span>
+                        <span class="cov8" title="1">if k == CONST_Md5_ERROR_FILE_NAME </span><span class="cov8" title="1">{
+                                sts["Fs.ErrorSetSize"] = sumset.Cardinality()
+                        }</span>
+                        <span class="cov8" title="1">if k == CONST_FILE_Md5_FILE_NAME </span><span class="cov8" title="1">{
+                                sts["Fs.FileSetSize"] = sumset.Cardinality()
+
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">sts["Fs.AutoRepair"] = Config().AutoRepair
+        sts["Fs.RefreshInterval"] = Config().RefreshInterval
+        sts["Fs.Peers"] = Config().Peers
+        sts["Fs.Local"] = this.host
+        sts["Fs.FileStats"] = this.GetStat()
+        sts["Fs.ShowDir"] = Config().ShowDir
+        sts["Sys.NumGoroutine"] = runtime.NumGoroutine()
+        sts["Sys.NumCpu"] = runtime.NumCPU()
+        sts["Sys.Alloc"] = memStat.Alloc
+        sts["Sys.TotalAlloc"] = memStat.TotalAlloc
+        sts["Sys.HeapAlloc"] = memStat.HeapAlloc
+        sts["Sys.Frees"] = memStat.Frees
+        sts["Sys.HeapObjects"] = memStat.HeapObjects
+        sts["Sys.NumGC"] = memStat.NumGC
+        sts["Sys.GCCPUFraction"] = memStat.GCCPUFraction
+        sts["Sys.GCSys"] = memStat.GCSys
+        //sts["Sys.MemInfo"] = memStat
+
+        status.Status = "ok"
+        status.Data = sts
+
+        w.Write([]byte(this.util.JsonEncodePretty(status)))
+        return
+
+        if data, err = json.Marshal(&amp;status); err != nil </span><span class="cov0" title="0">{
+                status.Status = "fail"
+                status.Message = err.Error()
+                w.Write(data)
+                return
+        }</span>
+        <span class="cov0" title="0">w.Write(data)</span>
+
+}
+
+func (this *Server) HeartBeat(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+
+}</span>
+
+func (this *Server) Index(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        var (
+                uploadUrl    string
+                uploadBigUrl string
+        )
+        uploadUrl = "/upload"
+        uploadBigUrl = CONST_BIG_UPLOAD_PATH_SUFFIX
+        if Config().EnableWebUpload </span><span class="cov8" title="1">{
+                if Config().SupportGroupManage </span><span class="cov0" title="0">{
+                        uploadUrl = fmt.Sprintf("/%s/upload", Config().Group)
+                        uploadBigUrl = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
+                }</span>
+                <span class="cov8" title="1">fmt.Fprintf(w,
+                        fmt.Sprintf(`&lt;html&gt;
+                          
+                          &lt;head&gt;
+                                &lt;meta charset="utf-8" /&gt;
+                                &lt;title&gt;Uploader&lt;/title&gt;
+                                &lt;style&gt;form { bargin } .form-line { display:block;height: 30px;margin:8px; } #stdUpload {background: #fafafa;border-radius: 10px;width: 745px; }&lt;/style&gt;
+                                &lt;link href="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.css" rel="stylesheet"&gt;&lt;/head&gt;
+                          
+                          &lt;body&gt;
+                &lt;div&gt;标准上传(强列建议使用这种方式)&lt;/div&gt;
+                                &lt;div id="stdUpload"&gt;
+                                  
+                                  &lt;form action="%s" method="post" enctype="multipart/form-data"&gt;
+                                        &lt;span class="form-line"&gt;文件(file):
+                                          &lt;input type="file" id="file" name="file" /&gt;&lt;/span&gt;
+                                        &lt;span class="form-line"&gt;场景(scene):
+                                          &lt;input type="text" id="scene" name="scene" value="%s" /&gt;&lt;/span&gt;
+                                        &lt;span class="form-line"&gt;输出(output):
+                                          &lt;input type="text" id="output" name="output" value="json" /&gt;&lt;/span&gt;
+                                        &lt;span class="form-line"&gt;自定义路径(path):
+                                          &lt;input type="text" id="path" name="path" value="" /&gt;&lt;/span&gt;
+                                        &lt;input type="submit" name="submit" value="upload" /&gt;&lt;/form&gt;
+                                &lt;/div&gt;
+                 &lt;div&gt;断点续传（如果文件很大时可以考虑）&lt;/div&gt;
+                                &lt;div&gt;
+                                 
+                                  &lt;div id="drag-drop-area"&gt;&lt;/div&gt;
+                                  &lt;script src="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.js"&gt;&lt;/script&gt;
+                                  &lt;script&gt;var uppy = Uppy.Core().use(Uppy.Dashboard, {
+                                          inline: true,
+                                          target: '#drag-drop-area'
+                                        }).use(Uppy.Tus, {
+                                          endpoint: '%s'
+                                        })
+
+                                        uppy.on('complete', (result) =&gt; {
+                                         // console.log(result) console.log('Upload complete! We’ve uploaded these files:', result.successful)
+                                        })
+                &lt;/script&gt;
+                                &lt;/div&gt;
+                          &lt;/body&gt;
+
+                        &lt;/html&gt;`, uploadUrl, Config().DefaultScene, uploadBigUrl))</span>
+        }<span class="cov0" title="0"> else {
+                w.Write([]byte("web upload deny"))
+        }</span>
+}
+
+func init() <span class="cov8" title="1">{
+
+        DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
+        if DOCKER_DIR != "" </span><span class="cov0" title="0">{
+                if !strings.HasSuffix(DOCKER_DIR, "/") </span><span class="cov0" title="0">{
+                        DOCKER_DIR = DOCKER_DIR + "/"
+                }</span>
+        }
+        <span class="cov8" title="1">STORE_DIR = DOCKER_DIR + STORE_DIR_NAME
+        CONF_DIR = DOCKER_DIR + CONF_DIR_NAME
+        DATA_DIR = DOCKER_DIR + DATA_DIR_NAME
+        LOG_DIR = DOCKER_DIR + LOG_DIR_NAME
+        LARGE_DIR_NAME = "haystack"
+        LARGE_DIR = STORE_DIR + "/haystack"
+        CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
+        CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
+        CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
+        FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
+
+        logAccessConfigStr = strings.Replace(logAccessConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
+        logConfigStr = strings.Replace(logConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
+
+        for _, folder := range FOLDERS </span><span class="cov8" title="1">{
+                os.MkdirAll(folder, 0775)
+        }</span>
+
+        <span class="cov8" title="1">server = NewServer()
+
+        flag.Parse()
+
+        peerId := fmt.Sprintf("%d", server.util.RandInt(0, 9))
+
+        if !server.util.FileExists(CONST_CONF_FILE_NAME) </span><span class="cov0" title="0">{
+
+                peer := "http://" + server.util.GetPulicIP() + ":8080"
+
+                cfg := fmt.Sprintf(cfgJson, peerId, peer, peer)
+
+                server.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
+        }</span>
+
+        <span class="cov8" title="1">if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil </span><span class="cov0" title="0">{
+                panic(err)</span>
+
+        }<span class="cov8" title="1"> else {
+                log.ReplaceLogger(logger)
+        }</span>
+
+        <span class="cov8" title="1">if _logacc, err := log.LoggerFromConfigAsBytes([]byte(logAccessConfigStr)); err == nil </span><span class="cov8" title="1">{
+                logacc = _logacc
+                log.Info("succes init log access")
+
+        }</span><span class="cov0" title="0"> else {
+                log.Error(err.Error())
+        }</span>
+
+        <span class="cov8" title="1">ParseConfig(CONST_CONF_FILE_NAME)
+
+        if Config().QueueSize == 0 </span><span class="cov0" title="0">{
+                Config().QueueSize = CONST_QUEUE_SIZE
+        }</span>
+
+        <span class="cov8" title="1">if Config().PeerId == "" </span><span class="cov0" title="0">{
+                Config().PeerId = peerId
+        }</span>
+
+        <span class="cov8" title="1">staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
+
+        server.initComponent(false)</span>
+}
+
+func (this *Server) test() <span class="cov0" title="0">{
+
+        testLock := func() </span><span class="cov0" title="0">{
+                tt := func(i int) </span><span class="cov0" title="0">{
+
+                        if server.lockMap.IsLock("xx") </span><span class="cov0" title="0">{
+                                return
+                        }</span>
+
+                        <span class="cov0" title="0">server.lockMap.LockKey("xx")
+                        defer server.lockMap.UnLockKey("xx")
+
+                        //time.Sleep(time.Nanosecond*1)
+                        fmt.Println("xx", i)</span>
+                }
+
+                <span class="cov0" title="0">for i := 0; i &lt; 10000; i++ </span><span class="cov0" title="0">{
+                        go tt(i)
+                }</span>
+
+                <span class="cov0" title="0">time.Sleep(time.Second * 3)
+
+                go tt(999999)
+                go tt(999999)
+                go tt(999999)</span>
+        }
+        <span class="cov0" title="0">_ = testLock
+
+        testFile := func() </span><span class="cov0" title="0">{
+
+                var (
+                        err error
+                        f   *os.File
+                )
+
+                f, err = os.OpenFile("tt", os.O_CREATE|os.O_RDWR, 0777)
+                if err != nil </span><span class="cov0" title="0">{
+                        fmt.Println(err)
+                }</span>
+
+                <span class="cov0" title="0">f.WriteAt([]byte("1"), 100)
+                f.Seek(0, 2)
+                f.Write([]byte("2"))</span>
+                //fmt.Println(f.Seek(0, 2))
+                //fmt.Println(f.Seek(3, 2))
+                //fmt.Println(f.Seek(3, 0))
+                //fmt.Println(f.Seek(3, 1))
+                //fmt.Println(f.Seek(3, 0))
+                //f.Write([]byte("1"))
+        }
+        <span class="cov0" title="0">_ = testFile</span>
+        //testFile()
+
+}
+
+func (this *Server) initTus() <span class="cov8" title="1">{
+
+        var (
+                err     error
+                fileLog *os.File
+                bigDir  string
+        )
+
+        BIG_DIR := STORE_DIR + "/_big/" + Config().PeerId
+        os.MkdirAll(BIG_DIR, 0775)
+        os.MkdirAll(LOG_DIR, 0775)
+        store := filestore.FileStore{
+                Path: BIG_DIR,
+        }
+        if fileLog, err = os.OpenFile(LOG_DIR+"/tusd.log", os.O_CREATE|os.O_RDWR, 0666); err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+                fmt.Println(err)
+                panic("initTus")</span>
+        }
+
+        <span class="cov8" title="1">go func() </span><span class="cov8" title="1">{
+                for </span><span class="cov8" title="1">{
+                        if fi, err := fileLog.Stat(); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+
+                        }</span><span class="cov8" title="1"> else {
+                                if fi.Size() &gt; 1024*1024*500 </span><span class="cov0" title="0">{ //500M
+                                        this.util.CopyFile(LOG_DIR+"/tusd.log", LOG_DIR+"/tusd.log.2")
+                                        fileLog.Seek(0, 0)
+                                        fileLog.Truncate(0)
+                                        fileLog.Seek(0, 2)
+
+                                }</span>
+                        }
+                        <span class="cov8" title="1">time.Sleep(time.Second * 30)</span>
+                }
+        }()
+
+        <span class="cov8" title="1">l := slog.New(fileLog, "[tusd] ", slog.LstdFlags)
+
+        bigDir = CONST_BIG_UPLOAD_PATH_SUFFIX
+        if Config().SupportGroupManage </span><span class="cov0" title="0">{
+                bigDir = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
+        }</span>
+        <span class="cov8" title="1">composer := tusd.NewStoreComposer()
+
+        // support raw tus upload and download
+        store.GetReaderExt = func(id string) (io.Reader, error) </span><span class="cov8" title="1">{
+                var (
+                        offset int64
+                        err    error
+                        length int
+                        buffer []byte
+                        fi     *FileInfo
+                )
+                if fi, err = this.GetFileInfoFromLevelDB(id); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                        return nil, err
+                }</span><span class="cov8" title="1"> else {
+                        fp := DOCKER_DIR + fi.Path + "/" + fi.ReName
+                        if this.util.FileExists(fp) </span><span class="cov8" title="1">{
+                                log.Info(fmt.Sprintf("download:%s", fp))
+                                return os.Open(fp)
+                        }</span>
+                        <span class="cov8" title="1">ps := strings.Split(fp, ",")
+                        if len(ps) &gt; 2 &amp;&amp; this.util.FileExists(ps[0]) </span><span class="cov8" title="1">{
+
+                                if length, err = strconv.Atoi(ps[2]); err != nil </span><span class="cov0" title="0">{
+                                        return nil, err
+                                }</span>
+                                <span class="cov8" title="1">if offset, err = strconv.ParseInt(ps[1], 10, 64); err != nil </span><span class="cov0" title="0">{
+                                        return nil, err
+                                }</span>
+                                <span class="cov8" title="1">if buffer, err = this.util.ReadFileByOffSet(ps[0], offset, length); err != nil </span><span class="cov0" title="0">{
+                                        return nil, err
+                                }</span>
+                                <span class="cov8" title="1">if buffer[0] == '1' </span><span class="cov8" title="1">{
+                                        bufferReader := bytes.NewBuffer(buffer[1:])
+                                        return bufferReader, nil
+                                }</span><span class="cov0" title="0"> else {
+                                        msg := "data no sync"
+                                        log.Error(msg)
+                                        return nil, errors.New(msg)
+                                }</span>
+
+                        }
+                        <span class="cov0" title="0">return nil, errors.New(fmt.Sprintf("%s not found", fp))</span>
+                }
+
+        }
+
+        <span class="cov8" title="1">store.UseIn(composer)
+
+        handler, err := tusd.NewHandler(tusd.Config{
+                Logger:                l,
+                BasePath:              bigDir,
+                StoreComposer:         composer,
+                NotifyCompleteUploads: true,
+        })
+
+        notify := func(handler *tusd.Handler) </span><span class="cov8" title="1">{
+                for </span><span class="cov8" title="1">{
+                        select </span>{
+
+                        case info := &lt;-handler.CompleteUploads:<span class="cov8" title="1">
+
+                                log.Info("CompleteUploads", info)
+                                name := ""
+                                if v, ok := info.MetaData["filename"]; ok </span><span class="cov8" title="1">{
+                                        name = v
+                                }</span>
+                                <span class="cov8" title="1">var err error
+                                md5sum := ""
+                                oldFullPath := BIG_DIR + "/" + info.ID + ".bin"
+                                infoFullPath := BIG_DIR + "/" + info.ID + ".info"
+                                if md5sum, err = this.util.GetFileSumByName(oldFullPath, Config().FileSumArithmetic); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                        continue</span>
+                                }
+                                <span class="cov8" title="1">ext := path.Ext(name)
+                                filename := md5sum + ext
+                                timeStamp := time.Now().Unix()
+                                fpath := time.Now().Format("/20060102/15/04/")
+                                newFullPath := STORE_DIR + "/" + Config().DefaultScene + fpath + Config().PeerId + "/" + filename
+                                if fi, err := this.GetFileInfoFromLevelDB(md5sum); err != nil </span><span class="cov8" title="1">{
+                                        log.Error(err)
+                                }</span><span class="cov8" title="1"> else {
+                                        if fi.Md5 != "" </span><span class="cov8" title="1">{
+                                                if _, err := this.SaveFileInfoToLevelDB(info.ID, fi); err != nil </span><span class="cov0" title="0">{
+                                                        log.Error(err)
+                                                }</span>
+                                                <span class="cov8" title="1">log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
+                                                log.Info("remove file:", oldFullPath)
+                                                log.Info("remove file:", infoFullPath)
+                                                os.Remove(oldFullPath)
+                                                os.Remove(infoFullPath)
+                                                continue</span>
+                                        }
+                                }
+
+                                <span class="cov8" title="1">fpath = STORE_DIR_NAME + "/" + Config().DefaultScene + fpath + Config().PeerId
+                                os.MkdirAll(fpath, 0775)
+                                fileInfo := &amp;FileInfo{
+                                        Name:      name,
+                                        Path:      fpath,
+                                        ReName:    filename,
+                                        Size:      info.Size,
+                                        TimeStamp: timeStamp,
+                                        Md5:       md5sum,
+                                        Peers:     []string{this.host},
+                                        OffSet:    -1,
+                                }
+                                if err = os.Rename(oldFullPath, newFullPath); err != nil </span><span class="cov0" title="0">{
+                                        log.Error(err)
+                                        continue</span>
+                                }
+                                <span class="cov8" title="1">os.Remove(infoFullPath)
+                                this.postFileToPeer(fileInfo)
+                                this.SaveFileInfoToLevelDB(info.ID, fileInfo) //add fileId to ldb
+                                this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">go notify(handler)
+
+        if err != nil </span><span class="cov0" title="0">{
+                log.Error(err)
+
+        }</span>
+        <span class="cov8" title="1">http.Handle(bigDir, http.StripPrefix(bigDir, handler))</span>
+
+}
+
+func (this *Server) FormatStatInfo() <span class="cov8" title="1">{
+        var (
+                data  []byte
+                err   error
+                count int64
+                stat  map[string]interface{}
+        )
+
+        if this.util.FileExists(CONST_STAT_FILE_NAME) </span><span class="cov8" title="1">{
+                if data, err = this.util.ReadBinFile(CONST_STAT_FILE_NAME); err != nil </span><span class="cov0" title="0">{
+                        log.Error(err)
+                }</span><span class="cov8" title="1"> else {
+
+                        if err = json.Unmarshal(data, &amp;stat); err != nil </span><span class="cov0" title="0">{
+                                log.Error(err)
+                        }</span><span class="cov8" title="1"> else {
+                                for k, v := range stat </span><span class="cov8" title="1">{
+                                        switch v.(type) </span>{
+                                        case float64:<span class="cov8" title="1">
+                                                vv := strings.Split(fmt.Sprintf("%f", v), ".")[0]
+
+                                                if count, err = strconv.ParseInt(vv, 10, 64); err != nil </span><span class="cov0" title="0">{
+                                                        log.Error(err)
+                                                }</span><span class="cov8" title="1"> else {
+                                                        this.statMap.Put(k, count)
+                                                }</span>
+
+                                        default:<span class="cov0" title="0">
+                                                this.statMap.Put(k, v)</span>
+
+                                        }
+
+                                }
+                        }
+                }
+
+        }<span class="cov0" title="0"> else {
+                this.RepairStat()
+        }</span>
+
+}
+func (this *Server) initComponent(isReload bool) <span class="cov8" title="1">{
+        var (
+                ip string
+        )
+        ip = this.util.GetPulicIP()
+
+        if Config().Host == "" </span><span class="cov0" title="0">{
+                if len(strings.Split(Config().Addr, ":")) == 2 </span><span class="cov0" title="0">{
+                        server.host = fmt.Sprintf("http://%s:%s", ip, strings.Split(Config().Addr, ":")[1])
+                        Config().Host = server.host
+                }</span>
+        }<span class="cov8" title="1"> else {
+                server.host = Config().Host
+        }</span>
+
+        <span class="cov8" title="1">ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")
+        var peers []string
+        for _, peer := range Config().Peers </span><span class="cov8" title="1">{
+                if this.util.Contains(ip, ex.FindAllString(peer, -1)) ||
+                        this.util.Contains("127.0.0.1", ex.FindAllString(peer, -1)) </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">if strings.HasPrefix(peer, "http") </span><span class="cov8" title="1">{
+                        peers = append(peers, peer)
+                }</span><span class="cov0" title="0"> else {
+                        peers = append(peers, "http://"+peer)
+                }</span>
+        }
+        <span class="cov8" title="1">Config().Peers = peers
+
+        if !isReload </span><span class="cov8" title="1">{
+                this.FormatStatInfo()
+                this.initTus()
+        }</span>
+        //Timer
+
+        // int tus
+
+}
+
+type HttpHandler struct {
+}
+
+func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) <span class="cov8" title="1">{
+        status_code := "200"
+        defer func(t time.Time) </span><span class="cov8" title="1">{
+                logStr := fmt.Sprintf("[Access] %s | %v | %s | %s | %s | %s |%s",
+                        time.Now().Format("2006/01/02 - 15:04:05"),
+                        res.Header(),
+                        time.Since(t).String(),
+                        server.util.GetClientIp(req),
+                        req.Method,
+                        status_code,
+                        req.RequestURI,
+                )
+
+                logacc.Info(logStr)
+        }</span>(time.Now())
+
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{
+                if err := recover(); err != nil </span><span class="cov0" title="0">{
+                        status_code = "500"
+                        res.WriteHeader(500)
+                        print(err)
+                        buff := debug.Stack()
+                        log.Error(err)
+                        log.Error(string(buff))
+
+                }</span>
+        }()
+
+        <span class="cov8" title="1">http.DefaultServeMux.ServeHTTP(res, req)</span>
+}
+
+func (this *Server) Main() <span class="cov8" title="1">{
+
+        go func() </span><span class="cov8" title="1">{
+                for </span><span class="cov8" title="1">{
+                        this.CheckFileAndSendToPeer(this.util.GetToDay(), CONST_Md5_ERROR_FILE_NAME, false)
+                        //fmt.Println("CheckFileAndSendToPeer")
+                        time.Sleep(time.Second * time.Duration(Config().RefreshInterval))
+                        //this.util.RemoveEmptyDir(STORE_DIR)
+                }</span>
+        }()
+
+        <span class="cov8" title="1">go this.CleanMd5SumCache()
+        go this.Check()
+        go this.Consumer()
+        go this.ConsumerDownLoad()
+        if Config().AutoRepair </span><span class="cov8" title="1">{
+                go func() </span><span class="cov8" title="1">{
+                        for </span><span class="cov8" title="1">{
+                                time.Sleep(time.Minute * 3)
+                                this.AutoRepair(false)
+                                time.Sleep(time.Minute * 60)
+                        }</span>
+                }()
+
+        }
+
+        <span class="cov8" title="1">if Config().SupportGroupManage </span><span class="cov0" title="0">{
+                http.HandleFunc(fmt.Sprintf("/%s", Config().Group), this.Index)
+                http.HandleFunc(fmt.Sprintf("/%s/check_file_exist", Config().Group), this.CheckFileExist)
+                http.HandleFunc(fmt.Sprintf("/%s/upload", Config().Group), this.Upload)
+                http.HandleFunc(fmt.Sprintf("/%s/delete", Config().Group), this.RemoveFile)
+                http.HandleFunc(fmt.Sprintf("/%s/sync", Config().Group), this.Sync)
+                http.HandleFunc(fmt.Sprintf("/%s/stat", Config().Group), this.Stat)
+                http.HandleFunc(fmt.Sprintf("/%s/repair_stat", Config().Group), this.RepairStatWeb)
+                http.HandleFunc(fmt.Sprintf("/%s/status", Config().Group), this.Status)
+                http.HandleFunc(fmt.Sprintf("/%s/repair", Config().Group), this.Repair)
+                http.HandleFunc(fmt.Sprintf("/%s/repair_fileinfo", Config().Group), this.RepairFileInfo)
+                http.HandleFunc(fmt.Sprintf("/%s/reload", Config().Group), this.Reload)
+                http.HandleFunc(fmt.Sprintf("/%s/syncfile_info", Config().Group), this.SyncFileInfo)
+                http.HandleFunc(fmt.Sprintf("/%s/get_md5s_by_date", Config().Group), this.GetMd5sForWeb)
+                http.HandleFunc(fmt.Sprintf("/%s/receive_md5s", Config().Group), this.ReceiveMd5s)
+
+        }</span><span class="cov8" title="1"> else {
+                http.HandleFunc("/", this.Index)
+                http.HandleFunc("/check_file_exist", this.CheckFileExist)
+                http.HandleFunc("/upload", this.Upload)
+                http.HandleFunc("/delete", this.RemoveFile)
+                http.HandleFunc("/sync", this.Sync)
+                http.HandleFunc("/stat", this.Stat)
+                http.HandleFunc("/repair_stat", this.RepairStatWeb)
+                http.HandleFunc("/status", this.Status)
+                http.HandleFunc("/repair", this.Repair)
+                http.HandleFunc("/repair_fileinfo", this.RepairFileInfo)
+                http.HandleFunc("/reload", this.Reload)
+                http.HandleFunc("/syncfile_info", this.SyncFileInfo)
+                http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
+                http.HandleFunc("/receive_md5s", this.ReceiveMd5s)
+        }</span>
+
+        <span class="cov8" title="1">http.HandleFunc("/"+Config().Group+"/", this.Download)
+        fmt.Println("Listen on " + Config().Addr)
+        err := http.ListenAndServe(Config().Addr, new(HttpHandler))
+        log.Error(err)
+        fmt.Println(err)</span>
+}
+
+func main() <span class="cov8" title="1">{
+
+        server.Main()
+
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
