@@ -15,6 +15,7 @@ import (
 	"github.com/sjqzhang/tusd"
 	"github.com/sjqzhang/tusd/filestore"
 	"github.com/syndtr/goleveldb/leveldb"
+	_ "github.com/eventials/go-tus"
 	"io"
 	"io/ioutil"
 	slog "log"
@@ -137,7 +138,7 @@ const (
 	"组号": "用于区别不同的集群(上传或下载)与support_group_upload配合使用,带在下载路径中",
 	"group": "group1",
 	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
-	"enable_merge_small_file": true,
+	"enable_merge_small_file": false,
 	"重试同步失败文件的时间": "单位秒",
 	"refresh_interval": 1800,
 	"是否自动重命名": "默认不自动重命名,使用原文件名",

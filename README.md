@@ -6,7 +6,7 @@
 
 # go-fastdfs是一个基于http协议的分布式文件系统，它基于大道至简的设计理念，一切从简设计，使得它的运维及扩展变得更加简单，它具有高性能、高可靠、无中心、免维护等优点。
 
-### 大家担心的是这么简单的文件系统，靠不靠谱，可不可以用于生产环境？答案是肯定的，正因为简单所以稳定。如果你担心功能，那就跑单元测试，如果担心性能，那就跑压力测试，项目都自带了，跑一跑更放心^_^。
+### 大家担心的是这么简单的文件系统，靠不靠谱，可不可以用于生产环境？答案是肯定的，正因为简单所以高效，因为简单所以稳定。如果你担心功能，那就跑单元测试，如果担心性能，那就跑压力测试，项目都自带了，跑一跑更放心^_^。
 
 
 - 支持curl命令上传
@@ -44,6 +44,7 @@
 - 支持集群监控邮件告警
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
+- 低资源开销
 - 支持断点续传([tus](https://tus.io/))
 - 支持docker部署
 - 支持token下载　token=md5(file_md5+timestamp)
@@ -324,6 +325,29 @@ sts["Fs.ErrorSetSize"] = this.errorset.Cardinality()  这个会导致内存增�
 
 ```
 
+
+- 如何编译？
+```
+git clone https://github.com/sjqzhang/go-fastdfs.git
+cd go-fastdfs
+mv vendor src
+pwd=`pwd`
+GOPATH=$pwd go build -o fileserver fileserver.go
+```
+
+- 如何跑单元测试 (尽量在linux下进行)？
+```
+
+git clone https://github.com/sjqzhang/go-fastdfs.git
+cd go-fastdfs
+mv vendor src
+pwd=`pwd`
+GOPATH=$pwd go test -v fileserver.go fileserver_test.go
+
+```
+
+
+
 - 如何压测？
 ```
 先用gen_file.py产生大量文件（注意如果要生成大文件，自已在内容中乘上一个大的数即可）
@@ -411,6 +435,7 @@ output=json|text 返回的格式
 issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代码逻辑及运维都增加复杂度，暂时没有加入这特性。
 
 ```
+
 
 - 访问限制问题
 ```
