@@ -3396,7 +3396,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 				<link href="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.css" rel="stylesheet"></head>
 			  
 			  <body>
-                <div>标准上传</div>
+                <div>标准上传(强列建议使用这种方式)</div>
 				<div id="stdUpload">
 				  
 				  <form action="%s" method="post" enctype="multipart/form-data">
@@ -3410,7 +3410,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					  <input type="text" id="path" name="path" value="" /></span>
 					<input type="submit" name="submit" value="upload" /></form>
 				</div>
-                 <div>断点续传</div>
+                 <div>断点续传（如果文件很大时可以考虑）</div>
 				<div>
 				 
 				  <div id="drag-drop-area"></div>
