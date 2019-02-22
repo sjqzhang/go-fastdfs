@@ -2175,7 +2175,7 @@ func (this *Server) SyncFile(w http.ResponseWriter, r *http.Request) {
 
 		defer uploadFile.Close()
 
-		os.MkdirAll(fileInfo.Path, 0775)
+		os.MkdirAll(DOCKER_DIR+fileInfo.Path, 0775)
 
 		outPath = fileInfo.Path + "/" + fileInfo.Name
 
@@ -3702,7 +3702,7 @@ func (this *Server) initTus() {
 				}
 
 				fpath = STORE_DIR_NAME + "/" + Config().DefaultScene + fpath + Config().PeerId
-				os.MkdirAll(fpath, 0775)
+				os.MkdirAll(DOCKER_DIR+fpath, 0775)
 				fileInfo := &FileInfo{
 					Name:      name,
 					Path:      fpath,
