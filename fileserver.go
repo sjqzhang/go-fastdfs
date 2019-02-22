@@ -2278,6 +2278,7 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	result.Status = "fail"
 
 	if fpath != "" && md5sum == "" {
+		fpath = strings.Replace(fpath, "/"+Config().Group+"/", STORE_DIR_NAME+"/", 1)
 		md5sum = this.util.MD5(fpath)
 	}
 
@@ -2287,20 +2288,23 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); err != nil {
-		w.Write([]byte(err.Error()))
+		result.Message = err.Error()
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 	}
+
+	if fileInfo.OffSet != -1 {
+		result.Message = "small delete not support"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+
 	name = fileInfo.Name
 	if fileInfo.ReName != "" {
 		name = fileInfo.ReName
 	}
-	md5path = this.util.MD5(fileInfo.Path + "/" + name)
-
-	if fileInfo.ReName != "" {
-		fpath = fileInfo.Path + "/" + fileInfo.ReName
-	} else {
-		fpath = fileInfo.Path + "/" + fileInfo.Name
-	}
+	fpath = fileInfo.Path + "/" + name
+	md5path = this.util.MD5(fpath)
 
 	if fileInfo.Path != "" && this.util.FileExists(DOCKER_DIR+fpath) {
 		if err = this.RemoveKeyFromLevelDB(fileInfo.Md5); err != nil {
@@ -2310,22 +2314,22 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 		}
 		if err = os.Remove(DOCKER_DIR + fpath); err != nil {
-			w.Write([]byte(err.Error()))
+			result.Message = err.Error()
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		} else {
-			//if inner!="1" {
-			//	for _, peer := range Config().Peers {
-			//		delUrl = fmt.Sprintf("%s%s", peer, this.getRequestURI("delete"))
-			//		req := httplib.Post(delUrl)
-			//		req.Param("md5", fileInfo.Md5)
-			//		req.Param("inner", "1")
-			//		req.SetTimeout(time.Second*5, time.Second*10)
-			//		if _, err = req.String(); err != nil {
-			//			log.Error(err)
-			//		}
-			//	}
-			//}
-
+			if inner != "1" {
+				for _, peer := range Config().Peers {
+					delUrl = fmt.Sprintf("%s%s", peer, this.getRequestURI("delete"))
+					req := httplib.Post(delUrl)
+					req.Param("md5", fileInfo.Md5)
+					req.Param("inner", "1")
+					req.SetTimeout(time.Second*5, time.Second*10)
+					if _, err = req.String(); err != nil {
+						log.Error(err)
+					}
+				}
+			}
 			this.SaveFileMd5Log(fileInfo, CONST_REMOME_Md5_FILE_NAME)
 			result.Message = "remove success"
 			result.Status = "ok"
