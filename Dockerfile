@@ -8,7 +8,6 @@ RUN set -xe; \
 	cd /go/src/; \
 	git clone https://github.com/sjqzhang/go-fastdfs.git; \
 	cd go-fastdfs; \
-	git checkout v${VERSION}; \
 	go get; \
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o fileserver; \
 	ls -lh .;
