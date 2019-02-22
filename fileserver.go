@@ -2302,14 +2302,14 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		fpath = fileInfo.Path + "/" + fileInfo.Name
 	}
 
-	if fileInfo.Path != "" && this.util.FileExists(fpath) {
+	if fileInfo.Path != "" && this.util.FileExists(DOCKER_DIR+fpath) {
 		if err = this.RemoveKeyFromLevelDB(fileInfo.Md5); err != nil {
 			log.Error(err)
 		}
 		if err = this.RemoveKeyFromLevelDB(md5path); err != nil {
 			log.Error(err)
 		}
-		if err = os.Remove(fpath); err != nil {
+		if err = os.Remove(DOCKER_DIR + fpath); err != nil {
 			w.Write([]byte(err.Error()))
 			return
 		} else {
@@ -2564,6 +2564,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
+
 			fileResult = this.BuildFileResult(v, r)
 			if Config().RenameFile {
 				os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
