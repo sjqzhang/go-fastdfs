@@ -2305,8 +2305,12 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if fileInfo.Path != "" && this.util.FileExists(fpath) {
-		this.ldb.Delete([]byte(fileInfo.Md5), nil)
-		this.ldb.Delete([]byte(md5path), nil)
+		if err=this.RemoveKeyFromLevelDB(fileInfo.Md5);err!=nil {
+			log.Error(err)
+		}
+		if err=this.RemoveKeyFromLevelDB(md5path);err!=nil{
+			log.Error(err)
+		}
 		if err = os.Remove(fpath); err != nil {
 			w.Write([]byte(err.Error()))
 			return
