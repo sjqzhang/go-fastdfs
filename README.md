@@ -178,6 +178,8 @@ func main() {
 # 重要说明
 ## 在issue中有很多实际使用的问题及回答（很多已关闭，请查看已关闭的issue）
 
+## 项目从v1.1.8开始进入稳定状态
+
 
 # Q&A
 - 在微信讨论群中大家都问到go-fastdfs性能怎样？
@@ -326,7 +328,7 @@ sts["Fs.ErrorSetSize"] = this.errorset.Cardinality()  这个会导致内存增�
 ```
 
 
-- 如何编译？
+- 如何编译(go1.9.2+)？
 ```
 git clone https://github.com/sjqzhang/go-fastdfs.git
 cd go-fastdfs
@@ -381,13 +383,17 @@ culr -C - http://10.1.5.9:8080/group1/default/20190128/16/10/2G
 
 - Docker如何部署？
 ```
-
-
 步骤：
-一、构建镜像
-docker build . -t fastdfs
-二、运行容器（使用环境变量 GO_FASTDFS_DIR 指向存储目录。）
-docker run --name fastdfs -v ~:/data/fastdfs -e GO_FASTDFS_DIR=/data/fastdfs fastdfs 
+方式一、
+    一、构建镜像
+    docker build . -t fastdfs
+    二、运行容器（使用环境变量 GO_FASTDFS_DIR 指向存储目录。）
+    docker run --name fastdfs -v /data/fastdfs_data:/data -e GO_FASTDFS_DIR=/data fastdfs 
+方式二、
+    一、拉取镜像
+    docker pull sjqzhang/go-fastdfs
+    二、运行容器
+    docker run --name fastdfs -v /data/fastdfs_data:/data -e GO_FASTDFS_DIR=/data fastdfs 
 
 ```
 

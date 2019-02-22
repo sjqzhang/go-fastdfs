@@ -1114,17 +1114,17 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		data     []byte
 	)
 
-	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) {
+	filename = fileInfo.Name
+	if fileInfo.ReName != "" {
+		filename = fileInfo.ReName
+	}
+
+	if this.util.FileExists(DOCKER_DIR+fileInfo.Path+"/"+filename) && this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) {
 		return
 	}
 
 	if _, err = os.Stat(fileInfo.Path); err != nil {
 		os.MkdirAll(DOCKER_DIR+fileInfo.Path, 0775)
-	}
-
-	filename = fileInfo.Name
-	if fileInfo.ReName != "" {
-		filename = fileInfo.ReName
 	}
 
 	//fmt.Println("downloadFromPeer",fileInfo)
@@ -1343,7 +1343,8 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if info, err = os.Stat(fullpath); err != nil {
-			log.Error(err)
+			notFound = true
+			goto NotFound // if return can't not repair file
 			return
 		}
 
@@ -1365,8 +1366,8 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 
 		}
 	}
-
-	if info, err = os.Stat(fullpath); err != nil {
+NotFound:
+	if info, err = os.Stat(fullpath); err != nil || info.Size() == 0 {
 		log.Error(err)
 		if isSmallFile && notFound {
 			pathMd5 = this.util.MD5(smallPath)
@@ -1379,7 +1380,6 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				log.Error(err)
 				continue
 			}
-
 			if fileInfo.Md5 != "" {
 
 				if Config().DownloadUseToken && !isPeer {
@@ -1388,9 +1388,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 				}
-
 				go this.DownloadFromPeer(peer, fileInfo)
-
 				http.Redirect(w, r, peer+r.RequestURI, 302)
 				return
 			}
@@ -2305,10 +2303,10 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if fileInfo.Path != "" && this.util.FileExists(fpath) {
-		if err=this.RemoveKeyFromLevelDB(fileInfo.Md5);err!=nil {
+		if err = this.RemoveKeyFromLevelDB(fileInfo.Md5); err != nil {
 			log.Error(err)
 		}
-		if err=this.RemoveKeyFromLevelDB(md5path);err!=nil{
+		if err = this.RemoveKeyFromLevelDB(md5path); err != nil {
 			log.Error(err)
 		}
 		if err = os.Remove(fpath); err != nil {
@@ -2668,8 +2666,10 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		largeDir string
 		destPath string
 		reName   string
+		fileExt  string
 	)
 	filename = fileInfo.Name
+	fileExt = path.Ext(filename)
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
@@ -2711,7 +2711,8 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		}
 		fileInfo.OffSet = fileInfo.OffSet - 1 //minus 1 byte
 		fileInfo.Size = fileInfo.Size + 1
-		fileInfo.ReName = fmt.Sprintf("%s,%d,%d", reName, fileInfo.OffSet, fileInfo.Size)
+
+		fileInfo.ReName = fmt.Sprintf("%s,%d,%d,%s", reName, fileInfo.OffSet, fileInfo.Size, fileExt)
 
 		if _, err = io.Copy(desFile, srcFile); err != nil {
 			return err
@@ -3581,7 +3582,7 @@ func (this *Server) initTus() {
 	}
 	if fileLog, err = os.OpenFile(LOG_DIR+"/tusd.log", os.O_CREATE|os.O_RDWR, 0666); err != nil {
 		log.Error(err)
-		fmt.Println(err)
+
 		panic("initTus")
 	}
 
