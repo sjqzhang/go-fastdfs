@@ -941,7 +941,7 @@ func (this *Server) RepairStat() {
 		log.Warn("Lock RepairStat")
 		return
 	}
-
+	
 	this.lockMap.LockKey("RepairStat")
 	defer this.lockMap.UnLockKey("RepairStat")
 
@@ -1619,6 +1619,11 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 			log.Error(string(buffer))
 		}
 	}()
+
+	if fileInfo == nil || fileInfo.Md5 == "" || filename == "" {
+		log.Warn("saveFileMd5Log", fileInfo, filename)
+		return
+	}
 
 	logDate = this.util.GetDayFromTimeStamp(fileInfo.TimeStamp)
 
@@ -2855,6 +2860,7 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 	)
 	this.RepairStat()
 	result.Status = "ok"
+
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
 
 }
@@ -3273,8 +3279,9 @@ func (this *Server) RepairFileInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result.Status = "ok"
-	result.Message = "repair job start,don't try again"
-	go this.RepairFileInfoFromFile()
+	//result.Message = "repair job start,don't try again"
+	result.Message = "very danger , disable by system"
+	//go this.RepairFileInfoFromFile()
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
 }
 
