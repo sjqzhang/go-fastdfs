@@ -946,6 +946,9 @@ func (this *Server) RepairStatByDate(date string) {
 		fileInfo  FileInfo
 		fileCount int64
 		fileSize  int64
+		logs      []string
+		msg       string
+		name      string
 	)
 	keyPrefix = "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, CONST_FILE_Md5_FILE_NAME)
@@ -956,11 +959,21 @@ func (this *Server) RepairStatByDate(date string) {
 		}
 		fileCount = fileCount + 1
 		fileSize = fileSize + fileInfo.Size
+		name = fileInfo.Name
+		if fileInfo.ReName != "" {
+			name = fileInfo.ReName
+		}
+		msg = fmt.Sprintf("%s|%d|%d|%s", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+name)
+		logs = append(logs, msg)
 	}
 	iter.Release()
 	this.statMap.Put(date+"_"+CONST_STAT_FILE_COUNT_KEY, fileCount)
 	this.statMap.Put(date+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileSize)
 	this.SaveStat()
+	if len(logs) > 0 {
+		os.MkdirAll(DATA_DIR+"/"+date, 0775)
+		this.util.WriteFile(DATA_DIR+"/"+date+"/"+CONST_FILE_Md5_FILE_NAME, strings.Join(logs, "\n"))
+	}
 
 }
 
@@ -1551,42 +1564,33 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 
 	logKey = fmt.Sprintf("%s_%s_%s", logDate, filename, fileInfo.Md5)
 	if filename == CONST_FILE_Md5_FILE_NAME {
-
 		if ok, err = this.IsExistFromLevelDB(fileInfo.Md5, this.ldb); !ok {
-
-			this.SaveFileInfoToLevelDB(logKey, fileInfo, this.logDB)
-
-			if _, err := this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
-				log.Error("saveToLevelDB", err, fileInfo)
-			}
-			if _, err = this.SaveFileInfoToLevelDB(this.util.MD5(fullpath), fileInfo, this.ldb); err != nil {
-				log.Error("saveToLevelDB", err, fileInfo)
-			}
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
-			this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
-			this.statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, 1)
-
 			this.SaveStat()
-
+		}
+		this.SaveFileInfoToLevelDB(logKey, fileInfo, this.logDB)
+		if _, err := this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
+			log.Error("saveToLevelDB", err, fileInfo)
+		}
+		if _, err = this.SaveFileInfoToLevelDB(this.util.MD5(fullpath), fileInfo, this.ldb); err != nil {
+			log.Error("saveToLevelDB", err, fileInfo)
 		}
 		return
 	}
 	if filename == CONST_REMOME_Md5_FILE_NAME {
 		if ok, err = this.IsExistFromLevelDB(fileInfo.Md5, this.ldb); ok {
-			this.RemoveKeyFromLevelDB(logKey, this.logDB)
-			md5Path = this.util.MD5(fullpath)
-			if err := this.RemoveKeyFromLevelDB(fileInfo.Md5, this.ldb); err != nil {
-				log.Error("RemoveKeyFromLevelDB", err, fileInfo)
-			}
-			if err = this.RemoveKeyFromLevelDB(md5Path, this.ldb); err != nil {
-				log.Error("RemoveKeyFromLevelDB", err, fileInfo)
-			}
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, -1)
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, -fileInfo.Size)
-			this.statMap.AddCountInt64(CONST_STAT_FILE_TOTAL_SIZE_KEY, -fileInfo.Size)
-			this.statMap.AddCountInt64(CONST_STAT_FILE_COUNT_KEY, -1)
 			this.SaveStat()
+		}
+		this.RemoveKeyFromLevelDB(logKey, this.logDB)
+		md5Path = this.util.MD5(fullpath)
+		if err := this.RemoveKeyFromLevelDB(fileInfo.Md5, this.ldb); err != nil {
+			log.Error("RemoveKeyFromLevelDB", err, fileInfo)
+		}
+		if err = this.RemoveKeyFromLevelDB(md5Path, this.ldb); err != nil {
+			log.Error("RemoveKeyFromLevelDB", err, fileInfo)
 		}
 		return
 	}
@@ -1669,7 +1673,6 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
 	)
-
 	r.ParseForm()
 	result.Status = "fail"
 	if !this.IsPeer(r) {
@@ -1678,17 +1681,28 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 	}
-
 	date := ""
-
 	force := ""
+	inner := ""
 	isForceUpload := false
-
 	force = r.FormValue("force")
 	date = r.FormValue("date")
+	inner = r.FormValue("inner")
 
 	if force == "1" {
 		isForceUpload = true
+	}
+
+	if inner != "1" {
+		for _, peer := range Config().Peers {
+			req := httplib.Post(peer + this.getRequestURI("sync"))
+			req.Param("force", force)
+			req.Param("inner", "1")
+			req.Param("date", date)
+			if _, err := req.String(); err != nil {
+				log.Error(err)
+			}
+		}
 	}
 
 	if date == "" {
@@ -2623,7 +2637,8 @@ func (this *Server) GetStat() []StatDateFileInfo {
 		err error
 		i   int64
 
-		rows []StatDateFileInfo
+		rows  []StatDateFileInfo
+		total StatDateFileInfo
 	)
 	min = 20190101
 	max = 20190101
@@ -2653,12 +2668,14 @@ func (this *Server) GetStat() []StatDateFileInfo {
 			switch v.(type) {
 			case int64:
 				info.TotalSize = v.(int64)
+				total.TotalSize = total.TotalSize + v.(int64)
 			}
 
 			if v, ok := this.statMap.GetValue(s + "_" + CONST_STAT_FILE_COUNT_KEY); ok {
 				switch v.(type) {
 				case int64:
 					info.FileCount = v.(int64)
+					total.FileCount = total.FileCount + v.(int64)
 				}
 			}
 
@@ -2668,15 +2685,8 @@ func (this *Server) GetStat() []StatDateFileInfo {
 
 	}
 
-	if v, ok := this.statMap.GetValue(CONST_STAT_FILE_COUNT_KEY); ok {
-		var info StatDateFileInfo
-		info.Date = "all"
-		info.FileCount = v.(int64)
-		if v, ok := this.statMap.GetValue(CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
-			info.TotalSize = v.(int64)
-		}
-		rows = append(rows, info)
-	}
+	total.Date = "all"
+	rows = append(rows, total)
 
 	return rows
 
@@ -3572,7 +3582,6 @@ func (this *Server) initTus() {
 						continue
 					}
 				}
-
 				fpath = STORE_DIR_NAME + "/" + Config().DefaultScene + fpath + Config().PeerId
 				os.MkdirAll(DOCKER_DIR+fpath, 0775)
 				fileInfo := &FileInfo{
@@ -3590,9 +3599,9 @@ func (this *Server) initTus() {
 					continue
 				}
 				os.Remove(infoFullPath)
-				this.postFileToPeer(fileInfo)
-				this.SaveFileInfoToLevelDB(info.ID, fileInfo, this.ldb) //add fileId to ldb
+				this.SaveFileInfoToLevelDB(info.ID, fileInfo, this.ldb) //assosiate file id
 				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+				go this.postFileToPeer(fileInfo)
 			}
 		}
 	}
