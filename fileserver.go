@@ -928,12 +928,79 @@ func (this *Common) GetClientIp(r *http.Request) string {
 
 }
 
+func (this *Server) BackUpMetaDataByDate(date string) {
+	defer func() {
+		if re := recover(); re != nil {
+			buffer := debug.Stack()
+			log.Error("BackUpMetaDataByDate")
+			log.Error(re)
+			log.Error(string(buffer))
+
+		}
+	}()
+	var (
+		err          error
+		keyPrefix    string
+		msg          string
+		name         string
+		fileInfo     FileInfo
+		logFileName  string
+		fileLog      *os.File
+		fileMeta     *os.File
+		metaFileName string
+	)
+	this.lockMap.LockKey(logFileName)
+	defer this.lockMap.UnLockKey(logFileName)
+	logFileName = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
+	metaFileName = DATA_DIR + "/" + date + "/" + "meta.data"
+	os.MkdirAll(DATA_DIR+"/"+date, 0775)
+	if this.util.IsExist(logFileName) {
+		os.Remove(logFileName)
+	}
+	if this.util.IsExist(metaFileName) {
+		os.Remove(metaFileName)
+	}
+	fileLog, err = os.OpenFile(logFileName, os.O_CREATE|os.O_APPEND, 0664)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	defer fileLog.Close()
+	fileMeta, err = os.OpenFile(metaFileName, os.O_CREATE|os.O_APPEND, 0664)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	defer fileMeta.Close()
+	keyPrefix = "%s_%s_"
+	keyPrefix = fmt.Sprintf(keyPrefix, date, CONST_FILE_Md5_FILE_NAME)
+	iter := server.logDB.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	defer iter.Release()
+	for iter.Next() {
+		if err = json.Unmarshal(iter.Value(), &fileInfo); err != nil {
+			continue
+		}
+		name = fileInfo.Name
+		if fileInfo.ReName != "" {
+			name = fileInfo.ReName
+		}
+		msg = fmt.Sprintf("%s\t%s\n", fileInfo.Md5, string(iter.Value()))
+		fileMeta.WriteString(msg)
+		msg = fmt.Sprintf("%s\t%s\n", this.util.MD5(fileInfo.Path+"/"+name), string(iter.Value()))
+		fileMeta.WriteString(msg)
+		msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+name)
+		fileLog.WriteString(msg)
+
+	}
+
+}
+
 func (this *Server) RepairStatByDate(date string) {
 
 	defer func() {
 		if re := recover(); re != nil {
 			buffer := debug.Stack()
-			log.Error("RepairStat")
+			log.Error("RepairStatByDate")
 			log.Error(re)
 			log.Error(string(buffer))
 
@@ -946,34 +1013,23 @@ func (this *Server) RepairStatByDate(date string) {
 		fileInfo  FileInfo
 		fileCount int64
 		fileSize  int64
-		logs      []string
-		msg       string
-		name      string
 	)
+
 	keyPrefix = "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, CONST_FILE_Md5_FILE_NAME)
 	iter := server.logDB.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	defer iter.Release()
 	for iter.Next() {
 		if err = json.Unmarshal(iter.Value(), &fileInfo); err != nil {
 			continue
 		}
 		fileCount = fileCount + 1
 		fileSize = fileSize + fileInfo.Size
-		name = fileInfo.Name
-		if fileInfo.ReName != "" {
-			name = fileInfo.ReName
-		}
-		msg = fmt.Sprintf("%s|%d|%d|%s", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+name)
-		logs = append(logs, msg)
+
 	}
-	iter.Release()
 	this.statMap.Put(date+"_"+CONST_STAT_FILE_COUNT_KEY, fileCount)
 	this.statMap.Put(date+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileSize)
 	this.SaveStat()
-	if len(logs) > 0 {
-		os.MkdirAll(DATA_DIR+"/"+date, 0775)
-		this.util.WriteFile(DATA_DIR+"/"+date+"/"+CONST_FILE_Md5_FILE_NAME, strings.Join(logs, "\n"))
-	}
 
 }
 
@@ -2204,15 +2260,11 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 		folder  string
 		fi      os.FileInfo
 	)
-
 	defer file.Close()
-
 	fileInfo.Name = header.Filename
-
 	if Config().RenameFile {
 		fileInfo.ReName = this.util.MD5(this.util.GetUUID()) + path.Ext(fileInfo.Name)
 	}
-
 	folder = time.Now().Format("20060102/15/04")
 	if Config().PeerId != "" {
 		folder = fmt.Sprintf(folder+"/%s", Config().PeerId)
@@ -2229,16 +2281,13 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 			folder = STORE_DIR + "/" + fileInfo.Path
 		}
 	}
-
 	if !this.util.FileExists(folder) {
 		os.MkdirAll(folder, 0775)
 	}
-
 	outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
 	if Config().RenameFile {
 		outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
 	}
-
 	if this.util.FileExists(outPath) {
 		for i := 0; i < 10000; i++ {
 			outPath = fmt.Sprintf(folder+"/%d_%s", i, header.Filename)
@@ -2248,26 +2297,20 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 			}
 		}
 	}
-
 	log.Info(fmt.Sprintf("upload: %s", outPath))
 
 	if outFile, err = os.Create(outPath); err != nil {
 		return fileInfo, err
 	}
-
 	defer outFile.Close()
-
 	if err != nil {
 		log.Error(err)
 		return fileInfo, errors.New("(error)fail," + err.Error())
-
 	}
-
 	if _, err = io.Copy(outFile, file); err != nil {
 		log.Error(err)
 		return fileInfo, errors.New("(error)fail," + err.Error())
 	}
-
 	if fi, err = outFile.Stat(); err != nil {
 		log.Error(err)
 	} else {
@@ -2277,16 +2320,11 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 		return fileInfo, errors.New("(error)file uncomplete")
 	}
 	v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
-
 	fileInfo.Md5 = v
-
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
-
 	fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", r.Host))
-
 	//fmt.Println("upload",fileInfo)
-
 	return fileInfo, nil
 }
 
@@ -2311,9 +2349,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
-
 		//		fileInfo.Path = r.Header.Get("Sync-Path")
-
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
 
@@ -2321,7 +2357,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		//	w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
 		//	return
 		//}
-
 		if Config().EnableCustomPath {
 			fileInfo.Path = r.FormValue("path")
 			fileInfo.Path = strings.Trim(fileInfo.Path, "/")
@@ -2331,7 +2366,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			//Just for Compatibility
 			scene = r.FormValue("scenes")
 		}
-
 		fileInfo.Md5 = md5sum
 		fileInfo.OffSet = -1
 		if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
@@ -2341,84 +2375,63 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 		fileInfo.Peers = []string{}
 		fileInfo.TimeStamp = time.Now().Unix()
-
 		if scene == "" {
 			scene = Config().DefaultScene
 		}
-
 		if output == "" {
 			output = "text"
 		}
-
 		if !this.util.Contains(output, []string{"json", "text"}) {
 			w.Write([]byte("output just support json or text"))
 			return
 		}
-
 		fileInfo.Scene = scene
-
 		if _, err = this.CheckScene(scene); err != nil {
-
 			w.Write([]byte(err.Error()))
-
 			return
 		}
-
 		if err != nil {
 			log.Error(err)
 			http.Redirect(w, r, "/", http.StatusMovedPermanently)
 			return
 		}
-
 		if _, err = this.SaveUploadFile(uploadFile, uploadHeader, &fileInfo, r); err != nil {
 			w.Write([]byte(err.Error()))
 			return
 		}
-
 		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
-
 			fileResult = this.BuildFileResult(v, r)
 			if Config().RenameFile {
 				os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
 			} else {
 				os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
 			}
-
 			if output == "json" {
 				if data, err = json.Marshal(fileResult); err != nil {
 					log.Error(err)
 					w.Write([]byte(err.Error()))
 				}
 				w.Write(data)
-
 			} else {
 				w.Write([]byte(fileResult.Url))
-
 			}
 			return
 		}
-
 		if fileInfo.Md5 == "" {
 			log.Warn(" fileInfo.Md5 is null")
 			return
 		}
-
 		if md5sum != "" && fileInfo.Md5 != md5sum {
 			log.Warn(" fileInfo.Md5 and md5sum !=")
 			return
 		}
-
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
-
 			if err = this.SaveSmallFile(&fileInfo); err != nil {
 				log.Error(err)
 				return
 			}
-
 		}
-
 		go this.postFileToPeer(&fileInfo)
-
 		if fileInfo.Size <= 0 {
 			log.Error("file size is zero")
 			return
@@ -2431,13 +2444,10 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte(err.Error()))
 			}
 			w.Write(data)
-
 		} else {
 			w.Write([]byte(fileResult.Url))
-
 		}
 		return
-
 	} else {
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
@@ -2445,7 +2455,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("(error) if you want to upload fast md5 is require" +
 				",and if you want to upload file,you must use post method  "))
 			return
-
 		}
 		if v, _ := this.GetFileInfoFromLevelDB(md5sum); v != nil && v.Md5 != "" {
 			fileResult = this.BuildFileResult(v, r)
@@ -2458,18 +2467,15 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 			} else {
 				w.Write([]byte(fileResult.Url))
-
 			}
 			return
 		}
 		w.Write([]byte("(error)fail,please use post method"))
 		return
 	}
-
 }
 
 func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
-
 	var (
 		err      error
 		filename string
@@ -2524,9 +2530,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		}
 		fileInfo.OffSet = fileInfo.OffSet - 1 //minus 1 byte
 		fileInfo.Size = fileInfo.Size + 1
-
 		fileInfo.ReName = fmt.Sprintf("%s,%d,%d,%s", reName, fileInfo.OffSet, fileInfo.Size, fileExt)
-
 		if _, err = io.Copy(desFile, srcFile); err != nil {
 			return err
 		}
@@ -2534,9 +2538,7 @@ func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
 		os.Remove(fpath)
 		fileInfo.Path = strings.Replace(largeDir, DOCKER_DIR, "", 1)
 	}
-
 	return nil
-
 }
 
 func (this *Server) SendToMail(to, subject, body, mailtype string) error {
@@ -2551,7 +2553,6 @@ func (this *Server) SendToMail(to, subject, body, mailtype string) error {
 	} else {
 		contentType = "Content-Type: text/plain" + "; charset=UTF-8"
 	}
-
 	msg := []byte("To: " + to + "\r\nFrom: " + user + ">\r\nSubject: " + "\r\n" + contentType + "\r\n\r\n" + body)
 	sendTo := strings.Split(to, ";")
 	err := smtp.SendMail(host, auth, user, sendTo, msg)
@@ -2561,7 +2562,6 @@ func (this *Server) SendToMail(to, subject, body, mailtype string) error {
 func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 	t := time.Now()
 	batch := new(leveldb.Batch)
-
 	for i := 0; i < 100000000; i++ {
 		f := FileInfo{}
 		f.Peers = []string{"http://192.168.0.1", "http://192.168.2.5"}
@@ -2570,34 +2570,24 @@ func (this *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 		s = this.util.MD5(s)
 		f.Name = s
 		f.Md5 = s
-
-		//		server.SaveFileInfoToLevelDB(s, &f)
-
 		if data, err := json.Marshal(&f); err == nil {
 			batch.Put([]byte(s), data)
 		}
-
 		if i%10000 == 0 {
-
 			if batch.Len() > 0 {
 				server.ldb.Write(batch, nil)
 				//				batch = new(leveldb.Batch)
 				batch.Reset()
 			}
 			fmt.Println(i, time.Since(t).Seconds())
-
 		}
-
 		//fmt.Println(server.GetFileInfoFromLevelDB(s))
-
 	}
-
 	this.util.WriteFile("time.txt", time.Since(t).String())
 	fmt.Println(time.Since(t).String())
 }
 
 func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
-
 	var (
 		result JsonResult
 		date   string
@@ -2608,9 +2598,7 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 	}
 	this.RepairStatByDate(date)
 	result.Status = "ok"
-
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
-
 }
 
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
@@ -2654,13 +2642,10 @@ func (this *Server) GetStat() []StatDateFileInfo {
 			if i < min {
 				min = i
 			}
-
 		}
-
 	}
 
 	for i := min; i <= max; i++ {
-
 		s := fmt.Sprintf("%d", i)
 		if v, ok := this.statMap.GetValue(s + "_" + CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
 			var info StatDateFileInfo
@@ -2670,7 +2655,6 @@ func (this *Server) GetStat() []StatDateFileInfo {
 				info.TotalSize = v.(int64)
 				total.TotalSize = total.TotalSize + v.(int64)
 			}
-
 			if v, ok := this.statMap.GetValue(s + "_" + CONST_STAT_FILE_COUNT_KEY); ok {
 				switch v.(type) {
 				case int64:
@@ -2678,18 +2662,12 @@ func (this *Server) GetStat() []StatDateFileInfo {
 					total.FileCount = total.FileCount + v.(int64)
 				}
 			}
-
 			rows = append(rows, info)
-
 		}
-
 	}
-
 	total.Date = "all"
 	rows = append(rows, total)
-
 	return rows
-
 }
 
 func (this *Server) RegisterExit() {
@@ -2708,9 +2686,7 @@ func (this *Server) RegisterExit() {
 }
 
 func (this *Server) AppendToQueue(fileInfo *FileInfo) {
-
 	this.queueToPeers <- *fileInfo
-
 }
 
 func (this *Server) AppendToDownloadQueue(fileInfo *FileInfo) {
@@ -2720,9 +2696,7 @@ func (this *Server) AppendToDownloadQueue(fileInfo *FileInfo) {
 }
 
 func (this *Server) ConsumerDownLoad() {
-
 	ConsumerFunc := func() {
-
 		for {
 			fileInfo := <-this.queueFromPeers
 			if len(fileInfo.Peers) <= 0 {
@@ -2735,22 +2709,15 @@ func (this *Server) ConsumerDownLoad() {
 					continue
 				}
 				if peer != this.host {
-
 					this.DownloadFromPeer(peer, &fileInfo)
 					break
 				}
 			}
-
 		}
-
 	}
-
 	for i := 0; i < 50; i++ {
-
 		go ConsumerFunc()
-
 	}
-
 }
 
 func (this *Server) ConsumerLog() {
@@ -2766,22 +2733,15 @@ func (this *Server) ConsumerLog() {
 }
 
 func (this *Server) Consumer() {
-
 	ConsumerFunc := func() {
-
 		for {
 			fileInfo := <-this.queueToPeers
 			this.postFileToPeer(&fileInfo)
 		}
-
 	}
-
 	for i := 0; i < 50; i++ {
-
 		go ConsumerFunc()
-
 	}
-
 }
 
 func (this *Server) AutoRepair(forceRepair bool) {
@@ -2794,10 +2754,8 @@ func (this *Server) AutoRepair(forceRepair bool) {
 	defer this.lockMap.UnLockKey("AutoRepair")
 
 	AutoRepairFunc := func(forceRepair bool) {
-
 		var (
 			dateStats []StatDateFileInfo
-
 			err       error
 			countKey  string
 			md5s      string
@@ -2807,7 +2765,6 @@ func (this *Server) AutoRepair(forceRepair bool) {
 			tmpSet    mapset.Set
 			fileInfo  *FileInfo
 		)
-
 		defer func() {
 			if re := recover(); re != nil {
 				buffer := debug.Stack()
@@ -2930,21 +2887,25 @@ func (this *Server) CleanLevelDBByDate(date string, filename string) {
 
 }
 
-func (this *Server) CleanYesterdayLog() {
+func (this *Server) CleanAndBackUp() {
 	Clean := func() {
 		var (
-			keys      []string
+			filenames []string
 			yesterday string
 		)
-		keys = []string{CONST_Md5_QUEUE_FILE_NAME, CONST_Md5_ERROR_FILE_NAME, CONST_REMOME_Md5_FILE_NAME}
-		yesterday = this.util.GetDayFromTimeStamp(time.Now().AddDate(0, 0, -1).Unix())
-		for _, key := range keys {
-			this.CleanLevelDBByDate(yesterday, key)
+		if this.curDate != this.util.GetToDay() {
+			filenames = []string{CONST_Md5_QUEUE_FILE_NAME, CONST_Md5_ERROR_FILE_NAME, CONST_REMOME_Md5_FILE_NAME}
+			yesterday = this.util.GetDayFromTimeStamp(time.Now().AddDate(0, 0, -1).Unix())
+			for _, filename := range filenames {
+				this.CleanLevelDBByDate(yesterday, filename)
+			}
+			this.BackUpMetaDataByDate(yesterday)
+			this.curDate=this.util.GetToDay()
 		}
 	}
 	go func() {
 		for {
-			time.Sleep(time.Minute * 10)
+			time.Sleep(time.Hour * 6)
 			Clean()
 
 		}
@@ -3155,6 +3116,26 @@ func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
+	var (
+		date   string
+		result JsonResult
+	)
+	result.Status = "ok"
+	r.ParseForm()
+	date = r.FormValue("date")
+	if date == "" {
+		date = this.util.GetToDay()
+	}
+	if this.IsPeer(r) {
+		go this.BackUpMetaDataByDate(date)
+		result.Message = "back job start..."
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	} else {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	}
+}
 
 func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 
@@ -3259,6 +3240,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	var (
 		uploadUrl    string
 		uploadBigUrl string
+		uppy string
 	)
 	uploadUrl = "/upload"
 	uploadBigUrl = CONST_BIG_UPLOAD_PATH_SUFFIX
@@ -3267,8 +3249,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 			uploadUrl = fmt.Sprintf("/%s/upload", Config().Group)
 			uploadBigUrl = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
 		}
-		fmt.Fprintf(w,
-			fmt.Sprintf(`<html>
+		uppy=`<html>
 			  
 			  <head>
 				<meta charset="utf-8" />
@@ -3310,7 +3291,9 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 				</div>
 			  </body>
 
-			</html>`, uploadUrl, Config().DefaultScene, uploadBigUrl))
+			</html>`
+		fmt.Fprintf(w,
+			fmt.Sprintf(uppy, uploadUrl, Config().DefaultScene, uploadBigUrl))
 	} else {
 		w.Write([]byte("web upload deny"))
 	}
@@ -3742,7 +3725,7 @@ func (this *Server) Main() {
 		}
 	}()
 
-	go this.CleanYesterdayLog()
+	go this.CleanAndBackUp()
 	go this.Check()
 	go this.LoadQueue()
 	go this.Consumer()
@@ -3769,6 +3752,7 @@ func (this *Server) Main() {
 		http.HandleFunc(fmt.Sprintf("/%s/repair_stat", Config().Group), this.RepairStatWeb)
 		http.HandleFunc(fmt.Sprintf("/%s/status", Config().Group), this.Status)
 		http.HandleFunc(fmt.Sprintf("/%s/repair", Config().Group), this.Repair)
+		http.HandleFunc(fmt.Sprintf("/%s/BackUp", Config().Group), this.BackUp)
 		http.HandleFunc(fmt.Sprintf("/%s/repair_fileinfo", Config().Group), this.RepairFileInfo)
 		http.HandleFunc(fmt.Sprintf("/%s/reload", Config().Group), this.Reload)
 		http.HandleFunc(fmt.Sprintf("/%s/syncfile_info", Config().Group), this.SyncFileInfo)
@@ -3785,6 +3769,7 @@ func (this *Server) Main() {
 		http.HandleFunc("/repair_stat", this.RepairStatWeb)
 		http.HandleFunc("/status", this.Status)
 		http.HandleFunc("/repair", this.Repair)
+		http.HandleFunc("/backup", this.BackUp)
 		http.HandleFunc("/repair_fileinfo", this.RepairFileInfo)
 		http.HandleFunc("/reload", this.Reload)
 		http.HandleFunc("/syncfile_info", this.SyncFileInfo)
