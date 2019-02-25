@@ -50,7 +50,7 @@ var json = jsoniter.ConfigCompatibleWithStandardLibrary
 var server *Server
 var logacc log.LoggerInterface
 var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
-var CONST_QUEUE_SIZE = 100000
+var CONST_QUEUE_SIZE = 10000
 var (
 	FileName                    string
 	ptr                         unsafe.Pointer
@@ -255,15 +255,23 @@ func NewServer() *Server {
 		lockMap:        NewCommonMap(0),
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
-		queueFileLog:   make(chan *FileLog, 500),
+		queueFileLog:   make(chan *FileLog, CONST_QUEUE_SIZE),
 		sumMap:         NewCommonMap(365 * 3),
 	}
+
+	defaultTransport := &http.Transport{
+		DisableKeepAlives:   true,
+		Dial:                httplib.TimeoutDialer(time.Second*6, time.Second*60),
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+	}
 	settins := httplib.BeegoHTTPSettings{
-		UserAgent:        "go-fastdfs",
+		UserAgent:        "Go-FastDFS",
 		ConnectTimeout:   10 * time.Second,
 		ReadWriteTimeout: 10 * time.Second,
 		Gzip:             true,
 		DumpBody:         true,
+		Transport:        defaultTransport,
 	}
 	httplib.SetDefaultSetting(settins)
 	server.statMap.Put(CONST_STAT_FILE_COUNT_KEY, int64(0))
@@ -803,9 +811,9 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 		fileMeta     *os.File
 		metaFileName string
 	)
+	logFileName = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
 	this.lockMap.LockKey(logFileName)
 	defer this.lockMap.UnLockKey(logFileName)
-	logFileName = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
 	metaFileName = DATA_DIR + "/" + date + "/" + "meta.data"
 	os.MkdirAll(DATA_DIR+"/"+date, 0775)
 	if this.util.IsExist(logFileName) {
@@ -814,13 +822,13 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 	if this.util.IsExist(metaFileName) {
 		os.Remove(metaFileName)
 	}
-	fileLog, err = os.OpenFile(logFileName, os.O_CREATE|os.O_APPEND, 0664)
+	fileLog, err = os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	defer fileLog.Close()
-	fileMeta, err = os.OpenFile(metaFileName, os.O_CREATE|os.O_APPEND, 0664)
+	fileMeta, err = os.OpenFile(metaFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	if err != nil {
 		log.Error(err)
 		return
@@ -861,7 +869,7 @@ func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 		fileInfo  FileInfo
 		fileCount int64
 		fileSize  int64
-		stat StatDateFileInfo
+		stat      StatDateFileInfo
 	)
 	keyPrefix = "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, CONST_FILE_Md5_FILE_NAME)
@@ -877,9 +885,9 @@ func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 	this.statMap.Put(date+"_"+CONST_STAT_FILE_COUNT_KEY, fileCount)
 	this.statMap.Put(date+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileSize)
 	this.SaveStat()
-	stat.Date=date
-	stat.FileCount=fileCount
-	stat.TotalSize=fileSize
+	stat.Date = date
+	stat.FileCount = fileCount
+	stat.TotalSize = fileSize
 	return stat
 }
 func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool {
@@ -1327,7 +1335,11 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 	}
 }
 func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
-	this.queueFileLog <- &FileLog{FileInfo: fileInfo, FileName: filename}
+	var (
+		info FileInfo
+	)
+	info = *fileInfo
+	this.queueFileLog <- &FileLog{FileInfo: &info, FileName: filename}
 }
 func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 	var (
@@ -1364,7 +1376,9 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
 			this.SaveStat()
 		}
-		this.SaveFileInfoToLevelDB(logKey, fileInfo, this.logDB)
+		if _, err = this.SaveFileInfoToLevelDB(logKey, fileInfo, this.logDB); err != nil {
+			log.Error(err)
+		}
 		if _, err := this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
 			log.Error("saveToLevelDB", err, fileInfo)
 		}
@@ -1551,6 +1565,9 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *le
 		err  error
 		data []byte
 	)
+	if fileInfo == nil || db == nil {
+		return nil, errors.New("fileInfo is null or db is null")
+	}
 	if data, err = json.Marshal(fileInfo); err != nil {
 		return fileInfo, err
 	}
@@ -2189,12 +2206,29 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
 		date   string
+		inner  string
 	)
+	if !this.IsPeer(r) {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
 	date = r.FormValue("date")
+	inner = r.FormValue("inner")
 	if date == "" {
 		date = this.util.GetToDay()
 	}
-	result.Data=this.RepairStatByDate(date)
+	if inner != "1" {
+		for _, peer := range Config().Peers {
+			req := httplib.Post(peer + this.getRequestURI("repair_stat"))
+			req.Param("inner", "1")
+			req.Param("date", date)
+			if _, err := req.String(); err != nil {
+				log.Error(err)
+			}
+		}
+	}
+	result.Data = this.RepairStatByDate(date)
 	result.Status = "ok"
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
 }
@@ -2203,6 +2237,11 @@ func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 		result JsonResult
 		inner  string
 	)
+	if !this.IsPeer(r) {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
 	r.ParseForm()
 	inner = r.FormValue("inner")
 	data := this.GetStat()
@@ -2420,11 +2459,11 @@ func (this *Server) AutoRepair(forceRepair bool) {
 	}
 	AutoRepairFunc(forceRepair)
 }
-func (this *Server) CleanLevelDBByDate(date string, filename string) {
+func (this *Server) CleanLogLevelDBByDate(date string, filename string) {
 	defer func() {
 		if re := recover(); re != nil {
 			buffer := debug.Stack()
-			log.Error("CleanLevelDBByDate")
+			log.Error("CleanLogLevelDBByDate")
 			log.Error(re)
 			log.Error(string(buffer))
 		}
@@ -2437,7 +2476,7 @@ func (this *Server) CleanLevelDBByDate(date string, filename string) {
 	keys = mapset.NewSet()
 	keyPrefix = "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, filename)
-	iter := server.ldb.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	iter := server.logDB.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
 	for iter.Next() {
 		keys.Add(string(iter.Value()))
 	}
@@ -2459,7 +2498,7 @@ func (this *Server) CleanAndBackUp() {
 			filenames = []string{CONST_Md5_QUEUE_FILE_NAME, CONST_Md5_ERROR_FILE_NAME, CONST_REMOME_Md5_FILE_NAME}
 			yesterday = this.util.GetDayFromTimeStamp(time.Now().AddDate(0, 0, -1).Unix())
 			for _, filename := range filenames {
-				this.CleanLevelDBByDate(yesterday, filename)
+				this.CleanLogLevelDBByDate(yesterday, filename)
 			}
 			this.BackUpMetaDataByDate(yesterday)
 			this.curDate = this.util.GetToDay()
@@ -3035,7 +3074,9 @@ func (this *Server) initTus() {
 					continue
 				}
 				os.Remove(infoFullPath)
-				this.SaveFileInfoToLevelDB(info.ID, fileInfo, this.ldb) //assosiate file id
+				if _, err = this.SaveFileInfoToLevelDB(info.ID, fileInfo, this.ldb); err != nil { //assosiate file id
+					log.Error(err)
+				}
 				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 				go this.postFileToPeer(fileInfo)
 			}
