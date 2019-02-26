@@ -925,7 +925,10 @@ func (this *Server) RepairFileInfoFromFile() {
 					Path:      strings.Replace(file_path, "\\", "/", -1),
 					Md5:       sum,
 					TimeStamp: fi.ModTime().Unix(),
+					Peers:     []string{this.host},
+					OffSet:    -1,
 				}
+				log.Info(fileInfo)
 				this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
 		}
