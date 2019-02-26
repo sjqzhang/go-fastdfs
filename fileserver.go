@@ -157,7 +157,9 @@ const (
 	"是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认不支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
 	"support_group_manage": false,
 	"管理ip列表": "用于管理集的ip白名单,",
-	"admin_ips": ["127.0.0.1"]
+	"admin_ips": ["127.0.0.1"],
+	"是否启用迁移": "默认不启用",
+	"enable_migrate": false
 }
 	`
 )
@@ -244,6 +246,7 @@ type GloablConfig struct {
 	SupportGroupManage   bool     `json:"support_group_manage"`
 	AdminIps             []string `json:"admin_ips"`
 	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
+	EnableMigrate        bool     `json:"enable_migrate"`
 }
 
 func NewServer() *Server {
@@ -874,6 +877,66 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 		fileMeta.Close()
 		os.Remove(metaFileName)
 	}
+}
+func (this *Server) RepairFileInfoFromFile() {
+	defer func() {
+		if re := recover(); re != nil {
+			buffer := debug.Stack()
+			log.Error("RepairFileInfoFromFile")
+			log.Error(re)
+			log.Error(string(buffer))
+		}
+	}()
+	if this.lockMap.IsLock("RepairFileInfoFromFile") {
+		log.Warn("Lock RepairFileInfoFromFile")
+		return
+	}
+	this.lockMap.LockKey("RepairFileInfoFromFile")
+	defer this.lockMap.UnLockKey("RepairFileInfoFromFile")
+	handlefunc := func(file_path string, f os.FileInfo, err error) error {
+		var (
+			files    []os.FileInfo
+			fi       os.FileInfo
+			fileInfo FileInfo
+			sum      string
+			pathMd5  string
+		)
+		if f.IsDir() {
+			files, err = ioutil.ReadDir(file_path)
+			if err != nil {
+				return err
+			}
+			for _, fi = range files {
+				if fi.IsDir() || fi.Size() == 0 {
+					continue
+				}
+				pathMd5 = this.util.MD5(file_path + "/" + fi.Name())
+				if finfo, _ := this.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
+					continue
+				}
+				sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				fileInfo = FileInfo{
+					Size:      fi.Size(),
+					Name:      fi.Name(),
+					Path:      strings.Replace(file_path, "\\", "/", -1),
+					Md5:       sum,
+					TimeStamp: fi.ModTime().Unix(),
+				}
+				this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+			}
+		}
+		return nil
+	}
+	pathname := STORE_DIR
+	fi, _ := os.Stat(pathname)
+	if fi.IsDir() {
+		filepath.Walk(pathname, handlefunc)
+	}
+	log.Info("RepairFileInfoFromFile is finish.")
 }
 func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 	defer func() {
@@ -2652,10 +2715,13 @@ func (this *Server) RepairFileInfo(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		return
 	}
+	if !Config().EnableMigrate {
+		w.Write([]byte("please set enable_migrate=true"))
+		return
+	}
 	result.Status = "ok"
-	//result.Message = "repair job start,don't try again"
-	result.Message = "very danger , disable by system"
-	//go this.RepairFileInfoFromFile()
+	result.Message = "repair job start,don't try again,very danger "
+	go this.RepairFileInfoFromFile()
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
 }
 func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
@@ -3310,14 +3376,14 @@ func (this *Server) Main() {
 			}
 		}()
 	}
-	groupRoute:=""
+	groupRoute := ""
 	if Config().SupportGroupManage {
-		groupRoute="/"+Config().Group
+		groupRoute = "/" + Config().Group
 	}
-	if groupRoute=="" {
-		http.HandleFunc(fmt.Sprintf("%s", "/" ), this.Index)
+	if groupRoute == "" {
+		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Index)
 	} else {
-		http.HandleFunc(fmt.Sprintf("%s", groupRoute ), this.Index)
+		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Index)
 	}
 	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
 	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)
