@@ -49,7 +49,7 @@ var staticHandler http.Handler
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 var server *Server
 var logacc log.LoggerInterface
-var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
+var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR, STATIC_DIR}
 var CONST_QUEUE_SIZE = 10000
 var (
 	FileName                    string
@@ -59,6 +59,7 @@ var (
 	CONF_DIR                    = CONF_DIR_NAME
 	LOG_DIR                     = LOG_DIR_NAME
 	DATA_DIR                    = DATA_DIR_NAME
+	STATIC_DIR                  = STATIC_DIR_NAME
 	LARGE_DIR_NAME              = "haystack"
 	LARGE_DIR                   = STORE_DIR + "/haystack"
 	CONST_LEVELDB_FILE_NAME     = DATA_DIR + "/fileserver.db"
@@ -96,6 +97,7 @@ const (
 	LOG_DIR_NAME                   = "log"
 	DATA_DIR_NAME                  = "data"
 	CONF_DIR_NAME                  = "conf"
+	STATIC_DIR_NAME                = "static"
 	CONST_STAT_FILE_COUNT_KEY      = "fileCount"
 	CONST_BIG_UPLOAD_PATH_SUFFIX   = "/big/upload/"
 	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
@@ -810,6 +812,7 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 		fileLog      *os.File
 		fileMeta     *os.File
 		metaFileName string
+		fi           os.FileInfo
 	)
 	logFileName = DATA_DIR + "/" + date + "/" + CONST_FILE_Md5_FILE_NAME
 	this.lockMap.LockKey(logFileName)
@@ -847,11 +850,29 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 			name = fileInfo.ReName
 		}
 		msg = fmt.Sprintf("%s\t%s\n", fileInfo.Md5, string(iter.Value()))
-		fileMeta.WriteString(msg)
+		if _, err = fileMeta.WriteString(msg); err != nil {
+			log.Error(err)
+		}
 		msg = fmt.Sprintf("%s\t%s\n", this.util.MD5(fileInfo.Path+"/"+name), string(iter.Value()))
-		fileMeta.WriteString(msg)
+		if _, err = fileMeta.WriteString(msg); err != nil {
+			log.Error(err)
+		}
 		msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+name)
-		fileLog.WriteString(msg)
+		if _, err = fileLog.WriteString(msg); err != nil {
+			log.Error(err)
+		}
+	}
+	if fi, err = fileLog.Stat(); err != nil {
+		log.Error(err)
+	} else if (fi.Size() == 0) {
+		fileLog.Close()
+		os.Remove(logFileName)
+	}
+	if fi, err = fileMeta.Stat(); err != nil {
+		log.Error(err)
+	} else if (fi.Size() == 0) {
+		fileMeta.Close()
+		os.Remove(metaFileName)
 	}
 }
 func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
@@ -2215,7 +2236,12 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 	}
 	date = r.FormValue("date")
 	inner = r.FormValue("inner")
-	if date == "" {
+	if ok, err := regexp.MatchString("\\d{8}", date); err != nil || !ok {
+		result.Message = "invalid date"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	if date == "" || len(date) != 8 {
 		date = this.util.GetToDay()
 	}
 	if inner != "1" {
@@ -2234,8 +2260,13 @@ func (this *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 	var (
-		result JsonResult
-		inner  string
+		result   JsonResult
+		inner    string
+		echart   string
+		category []string
+		barCount []int64
+		barSize  []int64
+		dataMap  map[string]interface{}
 	)
 	if !this.IsPeer(r) {
 		result.Message = this.GetClusterNotPermitMessage(r)
@@ -2244,9 +2275,22 @@ func (this *Server) Stat(w http.ResponseWriter, r *http.Request) {
 	}
 	r.ParseForm()
 	inner = r.FormValue("inner")
+	echart = r.FormValue("echart")
 	data := this.GetStat()
 	result.Status = "ok"
 	result.Data = data
+	if echart == "1" {
+		dataMap = make(map[string]interface{}, 3)
+		for _, v := range data {
+			barCount = append(barCount, v.FileCount)
+			barSize = append(barSize, v.TotalSize)
+			category = append(category, v.Date)
+		}
+		dataMap["category"] = category
+		dataMap["barCount"] = barCount
+		dataMap["barSize"] = barSize
+		result.Data = dataMap
+	}
 	if inner == "1" {
 		w.Write([]byte(this.util.JsonEncodePretty(data)))
 	} else {
@@ -2677,6 +2721,21 @@ func (this *Server) Reload(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("(error)action support set(json) get reload"))
 	}
 }
+func (this *Server) RemoveEmptyDir(w http.ResponseWriter, r *http.Request) {
+	var (
+		result JsonResult
+	)
+	result.Status = "ok"
+	if this.IsPeer(r) {
+		go this.util.RemoveEmptyDir(DATA_DIR)
+		go this.util.RemoveEmptyDir(STORE_DIR)
+		result.Message = "clean job start ..,don't try again!!!"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	} else {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	}
+}
 func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 	var (
 		date   string
@@ -2695,6 +2754,39 @@ func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 	} else {
 		result.Message = this.GetClusterNotPermitMessage(r)
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	}
+}
+func (this *Server) Report(w http.ResponseWriter, r *http.Request) {
+	var (
+		reportFileName string
+		result         JsonResult
+		html           string
+	)
+	result.Status = "ok"
+	r.ParseForm()
+	if this.IsPeer(r) {
+		reportFileName = STATIC_DIR + "/report.html"
+		if this.util.IsExist(reportFileName) {
+			if data, err := this.util.ReadBinFile(reportFileName); err != nil {
+				log.Error(err)
+				result.Message = err.Error()
+				w.Write([]byte(this.util.JsonEncodePretty(result)))
+				return
+			} else {
+				html = string(data)
+				if Config().SupportGroupManage {
+					html = strings.Replace(html, "{group}", "/"+Config().Group, 1)
+				} else {
+					html = strings.Replace(html, "{group}", "", 1)
+				}
+				w.Write([]byte(html))
+				return
+			}
+		} else {
+			w.Write([]byte(fmt.Sprintf("%s is not found", reportFileName)))
+		}
+	} else {
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 	}
 }
 func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
@@ -2835,6 +2927,14 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 				</div>
 			  </body>
 			</html>`
+		uppyFileName := STATIC_DIR + "/uppy.html"
+		if this.util.IsExist(uppyFileName) {
+			if data, err := this.util.ReadBinFile(uppyFileName); err != nil {
+				log.Error(err)
+			} else {
+				uppy = string(data)
+			}
+		}
 		fmt.Fprintf(w,
 			fmt.Sprintf(uppy, uploadUrl, Config().DefaultScene, uploadBigUrl))
 	} else {
@@ -2852,13 +2952,14 @@ func init() {
 	CONF_DIR = DOCKER_DIR + CONF_DIR_NAME
 	DATA_DIR = DOCKER_DIR + DATA_DIR_NAME
 	LOG_DIR = DOCKER_DIR + LOG_DIR_NAME
+	STATIC_DIR = DOCKER_DIR + STATIC_DIR_NAME
 	LARGE_DIR_NAME = "haystack"
 	LARGE_DIR = STORE_DIR + "/haystack"
 	CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
 	CONST_LOG_LEVELDB_FILE_NAME = DATA_DIR + "/log.db"
 	CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
-	FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR}
+	FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR, STATIC_DIR}
 	logAccessConfigStr = strings.Replace(logAccessConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
 	logConfigStr = strings.Replace(logConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
 	for _, folder := range FOLDERS {
@@ -3209,39 +3310,31 @@ func (this *Server) Main() {
 			}
 		}()
 	}
+	groupRoute:=""
 	if Config().SupportGroupManage {
-		http.HandleFunc(fmt.Sprintf("/%s", Config().Group), this.Index)
-		http.HandleFunc(fmt.Sprintf("/%s/check_file_exist", Config().Group), this.CheckFileExist)
-		http.HandleFunc(fmt.Sprintf("/%s/upload", Config().Group), this.Upload)
-		http.HandleFunc(fmt.Sprintf("/%s/delete", Config().Group), this.RemoveFile)
-		http.HandleFunc(fmt.Sprintf("/%s/sync", Config().Group), this.Sync)
-		http.HandleFunc(fmt.Sprintf("/%s/stat", Config().Group), this.Stat)
-		http.HandleFunc(fmt.Sprintf("/%s/repair_stat", Config().Group), this.RepairStatWeb)
-		http.HandleFunc(fmt.Sprintf("/%s/status", Config().Group), this.Status)
-		http.HandleFunc(fmt.Sprintf("/%s/repair", Config().Group), this.Repair)
-		http.HandleFunc(fmt.Sprintf("/%s/BackUp", Config().Group), this.BackUp)
-		http.HandleFunc(fmt.Sprintf("/%s/repair_fileinfo", Config().Group), this.RepairFileInfo)
-		http.HandleFunc(fmt.Sprintf("/%s/reload", Config().Group), this.Reload)
-		http.HandleFunc(fmt.Sprintf("/%s/syncfile_info", Config().Group), this.SyncFileInfo)
-		http.HandleFunc(fmt.Sprintf("/%s/get_md5s_by_date", Config().Group), this.GetMd5sForWeb)
-		http.HandleFunc(fmt.Sprintf("/%s/receive_md5s", Config().Group), this.ReceiveMd5s)
-	} else {
-		http.HandleFunc("/", this.Index)
-		http.HandleFunc("/check_file_exist", this.CheckFileExist)
-		http.HandleFunc("/upload", this.Upload)
-		http.HandleFunc("/delete", this.RemoveFile)
-		http.HandleFunc("/sync", this.Sync)
-		http.HandleFunc("/stat", this.Stat)
-		http.HandleFunc("/repair_stat", this.RepairStatWeb)
-		http.HandleFunc("/status", this.Status)
-		http.HandleFunc("/repair", this.Repair)
-		http.HandleFunc("/backup", this.BackUp)
-		http.HandleFunc("/repair_fileinfo", this.RepairFileInfo)
-		http.HandleFunc("/reload", this.Reload)
-		http.HandleFunc("/syncfile_info", this.SyncFileInfo)
-		http.HandleFunc("/get_md5s_by_date", this.GetMd5sForWeb)
-		http.HandleFunc("/receive_md5s", this.ReceiveMd5s)
+		groupRoute="/"+Config().Group
 	}
+	if groupRoute=="" {
+		http.HandleFunc(fmt.Sprintf("%s", "/" ), this.Index)
+	} else {
+		http.HandleFunc(fmt.Sprintf("%s", groupRoute ), this.Index)
+	}
+	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
+	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)
+	http.HandleFunc(fmt.Sprintf("%s/delete", groupRoute), this.RemoveFile)
+	http.HandleFunc(fmt.Sprintf("%s/sync", groupRoute), this.Sync)
+	http.HandleFunc(fmt.Sprintf("%s/stat", groupRoute), this.Stat)
+	http.HandleFunc(fmt.Sprintf("%s/repair_stat", groupRoute), this.RepairStatWeb)
+	http.HandleFunc(fmt.Sprintf("%s/status", groupRoute), this.Status)
+	http.HandleFunc(fmt.Sprintf("%s/repair", groupRoute), this.Repair)
+	http.HandleFunc(fmt.Sprintf("%s/report", groupRoute), this.Report)
+	http.HandleFunc(fmt.Sprintf("%s/backup", groupRoute), this.BackUp)
+	http.HandleFunc(fmt.Sprintf("%s/remove_empty_dir", groupRoute), this.RemoveEmptyDir)
+	http.HandleFunc(fmt.Sprintf("%s/repair_fileinfo", groupRoute), this.RepairFileInfo)
+	http.HandleFunc(fmt.Sprintf("%s/reload", groupRoute), this.Reload)
+	http.HandleFunc(fmt.Sprintf("%s/syncfile_info", groupRoute), this.SyncFileInfo)
+	http.HandleFunc(fmt.Sprintf("%s/get_md5s_by_date", groupRoute), this.GetMd5sForWeb)
+	http.HandleFunc(fmt.Sprintf("%s/receive_md5s", groupRoute), this.ReceiveMd5s)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
