@@ -913,8 +913,17 @@ func (this *Server) RepairFileInfoFromFile() {
 				if fi.IsDir() || fi.Size() == 0 {
 					continue
 				}
+				file_path = strings.Replace(file_path, "\\", "/", -1)
+				if DOCKER_DIR != "" {
+					file_path = strings.Replace(file_path, DOCKER_DIR, "", 1)
+				}
+				if strings.HasPrefix(file_path, STORE_DIR_NAME+"/"+LARGE_DIR_NAME) {
+					log.Info(fmt.Sprintf("ignore small file file %s", file_path+"/"+fi.Name()))
+					continue
+				}
 				pathMd5 = this.util.MD5(file_path + "/" + fi.Name())
 				if finfo, _ := this.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
+					log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))
 					continue
 				}
 				sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
@@ -925,13 +934,14 @@ func (this *Server) RepairFileInfoFromFile() {
 				fileInfo = FileInfo{
 					Size:      fi.Size(),
 					Name:      fi.Name(),
-					Path:      strings.Replace(file_path, "\\", "/", -1),
+					Path:      file_path,
 					Md5:       sum,
 					TimeStamp: fi.ModTime().Unix(),
 					Peers:     []string{this.host},
 					OffSet:    -1,
 				}
-				log.Info(fileInfo)
+				//log.Info(fileInfo)
+				log.Info(file_path, fi.Name())
 				this.postFileToPeer(&fileInfo)
 				this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
@@ -1087,7 +1097,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	req := httplib.Get(peer + "/" + Config().Group + "/" + p + "/" + filename)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	timeout := fileInfo.Size/1024/1024/8 + 30
-	req.SetTimeout(time.Second*5, time.Second*time.Duration(timeout))
+	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 	if fileInfo.OffSet != -1 { //small file download
 		data, err = req.Bytes()
 		if err != nil {
@@ -1269,11 +1279,11 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 NotFound:
 	if info, err = os.Stat(fullpath); err != nil || info.Size() == 0 || notFound {
-		log.Error(err)
+		log.Error(err, fullpath, smallPath)
 		if isSmallFile && notFound {
 			pathMd5 = this.util.MD5(smallPath)
 		} else {
-			if err == nil && Config().ShowDir {
+			if err == nil && Config().ShowDir && info.IsDir() {
 				goto SHOW_DIR
 			}
 			pathMd5 = this.util.MD5(fullpath)
@@ -2023,7 +2033,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if Config().RenameFile {
 		outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
 	}
-	if this.util.FileExists(outPath) {
+	if this.util.FileExists(outPath) && Config().EnableDistinctFile {
 		for i := 0; i < 10000; i++ {
 			outPath = fmt.Sprintf(folder+"/%d_%s", i, header.Filename)
 			fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
@@ -2973,7 +2983,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 			  
 			  <head>
 				<meta charset="utf-8" />
-				<title>Uploader</title>
+				<title>go-fastdfs</title>
 				<style>form { bargin } .form-line { display:block;height: 30px;margin:8px; } #stdUpload {background: #fafafa;border-radius: 10px;width: 745px; }</style>
 				<link href="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.css" rel="stylesheet"></head>
 			  
@@ -3017,6 +3027,8 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 			} else {
 				uppy = string(data)
 			}
+		} else {
+			this.util.WriteFile(uppyFileName,uppy)
 		}
 		fmt.Fprintf(w,
 			fmt.Sprintf(uppy, uploadUrl, Config().DefaultScene, uploadBigUrl))
@@ -3384,6 +3396,9 @@ func (this *Server) Main() {
 	go this.Consumer()
 	go this.ConsumerLog()
 	go this.ConsumerDownLoad()
+	if Config().EnableMigrate {
+		go this.RepairFileInfoFromFile()
+	}
 	if Config().AutoRepair {
 		go func() {
 			for {
