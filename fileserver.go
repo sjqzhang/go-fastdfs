@@ -159,7 +159,9 @@ const (
 	"管理ip列表": "用于管理集的ip白名单,",
 	"admin_ips": ["127.0.0.1"],
 	"是否启用迁移": "默认不启用",
-	"enable_migrate": false
+	"enable_migrate": false,
+	"文件是否去重": "默认去重",
+	"enable_distinct_file": true
 }
 	`
 )
@@ -247,6 +249,7 @@ type GloablConfig struct {
 	AdminIps             []string `json:"admin_ips"`
 	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
 	EnableMigrate        bool     `json:"enable_migrate"`
+	EnableDistinctFile   bool     `json:"enable_distinct_file"`
 }
 
 func NewServer() *Server {
@@ -929,6 +932,7 @@ func (this *Server) RepairFileInfoFromFile() {
 					OffSet:    -1,
 				}
 				log.Info(fileInfo)
+				this.postFileToPeer(&fileInfo)
 				this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
 		}
@@ -977,7 +981,7 @@ func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 	stat.TotalSize = fileSize
 	return stat
 }
-func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool {
+func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool { // important: just for DownloadFromPeer use
 	var (
 		err    error
 		info   *FileInfo
@@ -990,6 +994,9 @@ func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool {
 		return false
 	}
 	if info == nil || info.Md5 == "" {
+		return false
+	}
+	if info.Path != fileInfo.Path { // upload thee same file at a tiime from two peer
 		return false
 	}
 	fn = info.Name
@@ -1236,6 +1243,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	if isSmallFile {
 		if _, offset, length, err = this.ParseSmallFile(r.RequestURI); err != nil {
 			log.Error(err)
+			w.Write([]byte(err.Error()))
 			return
 		}
 		if info, err = os.Stat(fullpath); err != nil {
@@ -1265,6 +1273,9 @@ NotFound:
 		if isSmallFile && notFound {
 			pathMd5 = this.util.MD5(smallPath)
 		} else {
+			if err == nil && Config().ShowDir {
+				goto SHOW_DIR
+			}
 			pathMd5 = this.util.MD5(fullpath)
 		}
 		for _, peer = range Config().Peers {
@@ -1287,6 +1298,7 @@ NotFound:
 		w.WriteHeader(404)
 		return
 	}
+SHOW_DIR:
 	if !Config().ShowDir && info.IsDir() {
 		w.Write([]byte("list dir deny"))
 		return
@@ -1397,7 +1409,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 		postURL = fmt.Sprintf("%s%s", peer, this.getRequestURI("syncfile_info"))
 		b := httplib.Post(postURL)
-		b.SetTimeout(time.Second*5, time.Second*5)
+		b.SetTimeout(time.Second*30, time.Second*30)
 		if data, err = json.Marshal(fileInfo); err != nil {
 			log.Error(err)
 			return
@@ -2114,23 +2126,25 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(err.Error()))
 			return
 		}
-		if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
-			fileResult = this.BuildFileResult(v, r)
-			if Config().RenameFile {
-				os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
-			} else {
-				os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
-			}
-			if output == "json" {
-				if data, err = json.Marshal(fileResult); err != nil {
-					log.Error(err)
-					w.Write([]byte(err.Error()))
+		if Config().EnableDistinctFile {
+			if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
+				fileResult = this.BuildFileResult(v, r)
+				if Config().RenameFile {
+					os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
+				} else {
+					os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
 				}
-				w.Write(data)
-			} else {
-				w.Write([]byte(fileResult.Url))
+				if output == "json" {
+					if data, err = json.Marshal(fileResult); err != nil {
+						log.Error(err)
+						w.Write([]byte(err.Error()))
+					}
+					w.Write(data)
+				} else {
+					w.Write([]byte(fileResult.Url))
+				}
+				return
 			}
-			return
 		}
 		if fileInfo.Md5 == "" {
 			log.Warn(" fileInfo.Md5 is null")
