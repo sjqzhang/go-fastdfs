@@ -463,3 +463,5 @@ issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代
 ![二维码](doc/wechat.jpg)
 
 
+- 捐赠
+![捐赠二维码](doc/pay.png)
