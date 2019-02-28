@@ -1520,10 +1520,6 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 		return
 	}
 	this.SaveFileInfoToLevelDB(logKey, fileInfo, this.logDB)
-	if filename == CONST_Md5_QUEUE_FILE_NAME {
-		this.queueFromPeers <- *fileInfo
-		return
-	}
 }
 func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, error) {
 	var (
