@@ -1075,12 +1075,13 @@ func (this *Server) ParseSmallFile(filename string) (string, int64, int, error) 
 }
 func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	var (
-		err      error
-		filename string
-		fpath    string
-		fi       os.FileInfo
-		sum      string
-		data     []byte
+		err         error
+		filename    string
+		fpath       string
+		fi          os.FileInfo
+		sum         string
+		data        []byte
+		downloadUrl string
 	)
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
@@ -1095,7 +1096,9 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	//fmt.Println("downloadFromPeer",fileInfo)
 	p := strings.Replace(fileInfo.Path, STORE_DIR_NAME+"/", "", 1)
 	//filename=this.util.UrlEncode(filename)
-	req := httplib.Get(peer + "/" + Config().Group + "/" + p + "/" + filename)
+	downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
+	log.Info("DownloadFromPeer: ", downloadUrl)
+	req := httplib.Get(downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	timeout := fileInfo.Size/1024/1024/8 + 30
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
@@ -1448,6 +1451,9 @@ func (this *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	var (
 		info FileInfo
 	)
+	for len(this.queueFileLog)+len(this.queueFileLog)/10 > CONST_QUEUE_SIZE {
+		time.Sleep(time.Second * 1)
+	}
 	info = *fileInfo
 	this.queueFileLog <- &FileLog{FileInfo: &info, FileName: filename}
 }
@@ -1864,7 +1870,7 @@ func (this *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	this.SaveFileMd5Log(&fileInfo, CONST_Md5_QUEUE_FILE_NAME)
-	go this.AppendToDownloadQueue(&fileInfo)
+	this.AppendToDownloadQueue(&fileInfo)
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
@@ -2178,7 +2184,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileResult = this.BuildFileResult(&fileInfo, r)
-		this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+		this.saveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 		if output == "json" {
 			if data, err = json.Marshal(fileResult); err != nil {
 				log.Error(err)
