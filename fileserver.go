@@ -2174,13 +2174,13 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		this.saveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)//maybe slow
 		go this.postFileToPeer(&fileInfo)
 		if fileInfo.Size <= 0 {
 			log.Error("file size is zero")
 			return
 		}
 		fileResult = this.BuildFileResult(&fileInfo, r)
-		this.saveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 		if output == "json" {
 			if data, err = json.Marshal(fileResult); err != nil {
 				log.Error(err)
@@ -2502,7 +2502,7 @@ func (this *Server) ConsumerLog() {
 		}
 	}()
 }
-func (this *Server) Consumer() {
+func (this *Server) ConsumerPostToPeer() {
 	ConsumerFunc := func() {
 		for {
 			fileInfo := <-this.queueToPeers
@@ -2684,7 +2684,7 @@ func (this *Server) LoadFileInfoByDate(date string, filename string) (mapset.Set
 	iter.Release()
 	return fileInfos, nil
 }
-func (this *Server) LoadQueue() {
+func (this *Server) LoadQueueSendToPeer() {
 	if queue, err := this.LoadFileInfoByDate(this.util.GetToDay(), CONST_Md5_QUEUE_FILE_NAME); err != nil {
 		log.Error(err)
 	} else {
@@ -2694,12 +2694,12 @@ func (this *Server) LoadQueue() {
 		}
 	}
 }
-func (this *Server) Check() {
+func (this *Server) CheckClusterStatus() {
 	check := func() {
 		defer func() {
 			if re := recover(); re != nil {
 				buffer := debug.Stack()
-				log.Error("Check")
+				log.Error("CheckClusterStatus")
 				log.Error(re)
 				log.Error(string(buffer))
 			}
@@ -3405,9 +3405,9 @@ func (this *Server) Main() {
 		}
 	}()
 	go this.CleanAndBackUp()
-	go this.Check()
-	go this.LoadQueue()
-	go this.Consumer()
+	go this.CheckClusterStatus()
+	go this.LoadQueueSendToPeer()
+	go this.ConsumerPostToPeer()
 	go this.ConsumerLog()
 	go this.ConsumerDownLoad()
 	if Config().EnableMigrate {
