@@ -112,7 +112,7 @@ const (
 	"addr": ":8080",
 	"PeerID": "集群内唯一,请使用0-9的单字符，默认自动生成",
 	"peer_id": "%s",
-	"本主机地址": "本机http地址,默认自动生成，必段为内网，自动生成不为内网请自行修改，下同",
+	"本主机地址": "本机http地址,默认自动生成(注意端口必须与addr中的端口一致），必段为内网，自动生成不为内网请自行修改，下同",
 	"host": "%s",
 	"集群": "集群列表,注意为了高可用，IP必须不能是同一个,同一不会自动备份，且不能为127.0.0.1,且必须为内网IP，默认自动生成",
 	"peers": ["%s"],
@@ -2071,7 +2071,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	fileInfo.Md5 = v
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
-	fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", r.Host))
+	fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", this.host))
 	//fmt.Println("upload",fileInfo)
 	return fileInfo, nil
 }
@@ -2174,7 +2174,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		this.saveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)//maybe slow
+		this.saveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME) //maybe slow
 		go this.postFileToPeer(&fileInfo)
 		if fileInfo.Size <= 0 {
 			log.Error("file size is zero")
