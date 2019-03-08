@@ -2071,7 +2071,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	fileInfo.Md5 = v
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
-	fileInfo.Peers = append(fileInfo.Peers, fmt.Sprintf("http://%s", this.host))
+	fileInfo.Peers = append(fileInfo.Peers, this.host)
 	//fmt.Println("upload",fileInfo)
 	return fileInfo, nil
 }
