@@ -1149,13 +1149,13 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 }
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	var (
-		err          error
-		pathMd5      string
-		info         os.FileInfo
-		peer         string
-		fileInfo     *FileInfo
-		fullpath     string
-		pathval      url.Values
+		err      error
+		pathMd5  string
+		info     os.FileInfo
+		peer     string
+		fileInfo *FileInfo
+		fullpath string
+		//pathval      url.Values
 		token        string
 		timestamp    string
 		maxTimestamp int64
@@ -1204,21 +1204,9 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = isSmallFile
 	_ = smallPath
-	fullpath = strings.Replace(fullpath, "&", "$$$$", -1)
-	if pathval, err = url.ParseQuery(fullpath); err != nil {
+	if fullpath, err = url.PathUnescape(fullpath); err != nil {
 		log.Error(err)
-	} else {
-		for k, v := range pathval {
-			if k != "" {
-				if len(v) > 0 && v[0] != "" {
-					fullpath = k + "=" + v[0]
-				} else {
-					fullpath = k
-				}
-			}
-		}
 	}
-	fullpath = strings.Replace(fullpath, "$$$$", "&", -1)
 	CheckToken := func(token string, md5sum string, timestamp string) bool {
 		if this.util.MD5(md5sum+timestamp) != token {
 			return false
@@ -1305,7 +1293,8 @@ NotFound:
 					}
 				}
 				go this.DownloadFromPeer(peer, fileInfo)
-				http.Redirect(w, r, peer+r.RequestURI, 302)
+				//http.Redirect(w, r, peer+r.RequestURI, 302)
+				this.DownloadFileToResponse(peer+r.RequestURI, w, r)
 				return
 			}
 		}
@@ -1319,6 +1308,24 @@ SHOW_DIR:
 	}
 	log.Info("download:" + r.RequestURI)
 	staticHandler.ServeHTTP(w, r)
+}
+func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r *http.Request) {
+	var (
+		err  error
+		req  *httplib.BeegoHTTPRequest
+		resp *http.Response
+	)
+	req = httplib.Get(url)
+	req.SetTimeout(time.Second*20, time.Second*600)
+	resp, err = req.DoRequest()
+	if err != nil {
+		log.Error(err)
+	}
+	defer resp.Body.Close()
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		log.Error(err)
+	}
 }
 func (this *Server) GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
@@ -3342,7 +3349,11 @@ func (this *Server) initComponent(isReload bool) {
 			Config().Host = server.host
 		}
 	} else {
-		server.host = Config().Host
+		if strings.HasPrefix(Config().Host, "http") {
+			server.host = Config().Host
+		} else {
+			server.host = "http://" + Config().Host
+		}
 	}
 	ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")
 	var peers []string
