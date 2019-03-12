@@ -993,6 +993,16 @@ func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 	stat.TotalSize = fileSize
 	return stat
 }
+func (this *Server) GetFilePathByInfo(fileInfo *FileInfo) string {
+	var (
+		fn string
+	)
+	fn = fileInfo.Name
+	if fileInfo.ReName != "" {
+		fn = fileInfo.ReName
+	}
+	return DOCKER_DIR + fileInfo.Path + "/" + fn
+}
 func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool { // important: just for DownloadFromPeer use
 	var (
 		err    error
@@ -1090,7 +1100,10 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) {
+	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) && Config().EnableDistinctFile {
+		return
+	}
+	if !Config().EnableDistinctFile && this.util.FileExists(this.GetFilePathByInfo(fileInfo)) {
 		return
 	}
 	if _, err = os.Stat(fileInfo.Path); err != nil {
