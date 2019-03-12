@@ -290,14 +290,15 @@ func NewServer() *Server {
 	server.ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
 	if err != nil {
 		fmt.Println(err)
-		panic(err)
 		log.Error(err)
+		panic(err)
 	}
 	server.logDB, err = leveldb.OpenFile(CONST_LOG_LEVELDB_FILE_NAME, nil)
 	if err != nil {
 		fmt.Println(err)
-		panic(err)
 		log.Error(err)
+		panic(err)
+
 	}
 	return server
 }
@@ -1017,6 +1018,8 @@ func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool { 
 	if info.OffSet == -1 {
 		if this.util.FileExists(DOCKER_DIR + info.Path + "/" + fn) {
 			return true
+		} else {
+			return false
 		}
 	} else { //small file
 		if name, offset, _, err = this.ParseSmallFile(fn); err != nil {
@@ -1122,6 +1125,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		err = this.util.WriteFileByOffSet(fpath, fileInfo.OffSet, data)
 		if err != nil {
 			log.Warn(err)
+			return
 		}
 		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 		return
