@@ -204,7 +204,6 @@ func main() {
 上传结果说明
 	Md5    string `json:"md5"`
 	Path   string `json:"path"`
-	Domain string `json:"domain"`
 	Scene  string `json:"scene"`
 请使用以上字段，其它是为了兼容老的线上系统添加的，以后有可能去掉。
 ```
