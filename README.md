@@ -201,6 +201,12 @@ func main() {
 总结：业务保存的文件的path,减少后期访问路径转换带来开消,文件访问权限由业务来完成，这样性能最好，通用性强（可直接其它web服务器）。
 
 重要提醒：如果开启小文件合并功能，后期是无法删除小文件的。
+上传结果说明
+	Md5    string `json:"md5"`
+	Path   string `json:"path"`
+	Domain string `json:"domain"`
+	Scene  string `json:"scene"`
+请使用以上字段，其它是为了兼容老的线上系统添加的，以后有可能去掉。
 ```
 
 - 有API文档么？
