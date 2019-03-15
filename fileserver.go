@@ -161,7 +161,9 @@ const (
 	"是否启用迁移": "默认不启用",
 	"enable_migrate": false,
 	"文件是否去重": "默认去重",
-	"enable_distinct_file": true
+	"enable_distinct_file": true,
+	"本机是否只读": "默认可读可写",
+	"read_only": false
 }
 	`
 )
@@ -250,6 +252,7 @@ type GloablConfig struct {
 	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
 	EnableMigrate        bool     `json:"enable_migrate"`
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
+	ReadOnly             bool     `json:"read_only"`
 }
 
 func NewServer() *Server {
@@ -1096,6 +1099,10 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		data        []byte
 		downloadUrl string
 	)
+	if Config().ReadOnly {
+		log.Warn("ReadOnly", fileInfo)
+		return
+	}
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
@@ -2122,6 +2129,10 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		//	w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
 		//	return
 		//}
+		if Config().ReadOnly {
+			w.Write([]byte( "(error) readonly"))
+			return
+		}
 		if Config().EnableCustomPath {
 			fileInfo.Path = r.FormValue("path")
 			fileInfo.Path = strings.Trim(fileInfo.Path, "/")
