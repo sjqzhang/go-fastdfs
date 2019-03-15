@@ -1,0 +1,100 @@
+<component name="libraryTable">
+  <library name="GOPATH &lt;fileserver&gt;">
+    <CLASSES>
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/strings" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/database" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/vendor" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/os" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/debug" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/go" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/builtin" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/runtime" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/plugin" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/bytes" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/time" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/container" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/fmt" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/mime" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/path" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/context" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/reflect" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/text" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/html" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/net" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/image" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/io" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/compress" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/index" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/testing" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/sort" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/archive" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/sync" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/encoding" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/crypto" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/strconv" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/cmd" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/unicode" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/math" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/hash" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/regexp" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/errors" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/bufio" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/syscall" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/flag" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/internal" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/log" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/expvar" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/unsafe" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/strings" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/database" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/vendor" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/os" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/debug" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/go" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/builtin" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/runtime" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/plugin" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/bytes" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/time" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/container" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/fmt" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/mime" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/path" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/context" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/reflect" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/text" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/html" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/net" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/image" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/io" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/compress" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/index" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/testing" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/sort" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/archive" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/sync" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/encoding" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/crypto" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/strconv" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/cmd" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/unicode" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/math" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/hash" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/regexp" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/errors" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/bufio" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/syscall" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/flag" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/internal" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/log" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/expvar" />
+      <root url="file:///usr/local/Cellar/go/1.11.4/libexec/src/unsafe" />
+    </SOURCES>
+    <excluded>
+      <root url="file://$PROJECT_DIR$" />
+    </excluded>
+  </library>
+</component>
