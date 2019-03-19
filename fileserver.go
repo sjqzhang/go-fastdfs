@@ -162,6 +162,8 @@ const (
 	"enable_migrate": false,
 	"文件是否去重": "默认去重",
 	"enable_distinct_file": true,
+	"是否开启跨站访问": "默认开启",
+	"enable_cross_origin": true,
 	"本机是否只读": "默认可读可写",
 	"read_only": false
 }
@@ -253,6 +255,7 @@ type GloablConfig struct {
 	EnableMigrate        bool     `json:"enable_migrate"`
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
 	ReadOnly             bool     `json:"read_only"`
+	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
 }
 
 func NewServer() *Server {
@@ -1171,6 +1174,10 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 	}
 }
+
+func (this *Server) CrossOrigin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+}
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
@@ -1196,6 +1203,9 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		notFound     bool
 		//isBigFile    bool
 	)
+	if Config().EnableCrossOrigin {
+		this.CrossOrigin(w, r)
+	}
 	r.ParseForm()
 	isPeer = this.IsPeer(r)
 	if Config().DownloadUseToken && !isPeer {
@@ -2120,6 +2130,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		data         []byte
 	)
 	//r.ParseForm()
+	if Config().EnableCrossOrigin {
+		this.CrossOrigin(w, r)
+	}
 	if r.Method == "POST" {
 		//		name := r.PostFormValue("name")
 		//		fileInfo.Path = r.Header.Get("Sync-Path")
