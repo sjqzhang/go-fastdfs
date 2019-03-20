@@ -13,6 +13,7 @@ import (
 	"github.com/deckarep/golang-set"
 	_ "github.com/eventials/go-tus"
 	"github.com/json-iterator/go"
+	"github.com/sjqzhang/googleAuthenticator"
 	log "github.com/sjqzhang/seelog"
 	"github.com/sjqzhang/tusd"
 	"github.com/sjqzhang/tusd/filestore"
@@ -130,7 +131,7 @@ const (
 	"enable_custom_path": true,
 	"下载域名": "用于外网下载文件的域名,不包含http://",
 	"download_domain": "",
-	"场景列表": "当设定后，用户指的场景必项在列表中，默认不做限制",
+	"场景列表": "当设定后，用户指的场景必项在列表中，默认不做限制(注意：如果想开启场景认功能，格式如下：'场景名:googleauth_secret' 如 default:N7IET373HB2C5M6D ",
 	"scenes": [],
 	"默认场景": "默认default",
 	"default_scene": "default",
@@ -164,6 +165,8 @@ const (
 	"enable_distinct_file": true,
 	"是否开启跨站访问": "默认开启",
 	"enable_cross_origin": true,
+	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
+	"enable_google_auth": false,
 	"本机是否只读": "默认可读可写",
 	"read_only": false
 }
@@ -182,6 +185,7 @@ type Server struct {
 	queueFromPeers chan FileInfo
 	queueFileLog   chan *FileLog
 	lockMap        *CommonMap
+	sceneMap       *CommonMap
 	curDate        string
 	host           string
 }
@@ -256,6 +260,7 @@ type GloablConfig struct {
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
 	ReadOnly             bool     `json:"read_only"`
 	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
+	EnableGoogleAuth     bool     `json:"enable_google_auth"`
 }
 
 func NewServer() *Server {
@@ -267,6 +272,7 @@ func NewServer() *Server {
 		util:           &Common{},
 		statMap:        NewCommonMap(0),
 		lockMap:        NewCommonMap(0),
+		sceneMap:       NewCommonMap(0),
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFileLog:   make(chan *FileLog, CONST_QUEUE_SIZE),
@@ -1180,6 +1186,7 @@ func (this *Server) CrossOrigin(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	var (
+		ok       bool
 		err      error
 		pathMd5  string
 		info     os.FileInfo
@@ -1202,10 +1209,14 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		smallPath    string
 		notFound     bool
 		//isBigFile    bool
+		code   string
+		secret interface{}
+		scene  string
 	)
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
+	code = r.FormValue("code")
 	r.ParseForm()
 	isPeer = this.IsPeer(r)
 	if Config().DownloadUseToken && !isPeer {
@@ -1229,6 +1240,17 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+	fullpath = strings.Split(fullpath, "?")[0]// just path
+	if Config().EnableGoogleAuth {
+		scene= strings.Split(fullpath,"/")[0]
+		if secret, ok = this.sceneMap.GetValue(scene); ok {
+			if !this.VerifyGoogleCode(secret.(string), code, 30) {
+				w.Write([]byte("invalid google code"))
+				return
+			}
+		}
+	}
+
 	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
 	//fmt.Println("fullpath",fullpath)
 	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
@@ -1918,10 +1940,16 @@ func (this *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(downloadUrl))
 }
 func (this *Server) CheckScene(scene string) (bool, error) {
+	var (
+		scenes []string
+	)
 	if len(Config().Scenes) == 0 {
 		return true, nil
 	}
-	if !this.util.Contains(scene, Config().Scenes) {
+	for _, s := range Config().Scenes {
+		scenes = append(scenes, strings.Split(s, ":")[0])
+	}
+	if !this.util.Contains(scene, scenes) {
 		return false, errors.New("not valid scene")
 	}
 	return true, nil
@@ -2119,6 +2147,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
+		ok  bool
 		//		pathname     string
 		md5sum       string
 		fileInfo     FileInfo
@@ -2128,6 +2157,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		output       string
 		fileResult   FileResult
 		data         []byte
+		code         string
+		secret       interface{}
 	)
 	//r.ParseForm()
 	if Config().EnableCrossOrigin {
@@ -2151,9 +2182,18 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			fileInfo.Path = strings.Trim(fileInfo.Path, "/")
 		}
 		scene = r.FormValue("scene")
+		code = r.FormValue("code")
 		if scene == "" {
 			//Just for Compatibility
 			scene = r.FormValue("scenes")
+		}
+		if Config().EnableGoogleAuth && scene != "" {
+			if secret, ok = this.sceneMap.GetValue(scene); ok {
+				if !this.VerifyGoogleCode(secret.(string), code, 30) {
+					w.Write([]byte("invalid request,error google code"))
+					return
+				}
+			}
 		}
 		fileInfo.Md5 = md5sum
 		fileInfo.OffSet = -1
@@ -2909,6 +2949,64 @@ func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
 	}
 }
+func (this *Server) VerifyGoogleCode(secret string, code string, discrepancy int64) bool {
+	var (
+		goauth *googleAuthenticator.GAuth
+	)
+	goauth = googleAuthenticator.NewGAuth()
+	if ok, err := goauth.VerifyCode(secret, code, discrepancy); ok {
+		return ok
+	} else {
+		log.Error(err)
+		return ok
+	}
+}
+func (this *Server) GenGoogleCode(w http.ResponseWriter, r *http.Request) {
+	var (
+		err    error
+		result JsonResult
+		secret string
+		goauth *googleAuthenticator.GAuth
+	)
+	r.ParseForm()
+	goauth = googleAuthenticator.NewGAuth()
+	secret = r.FormValue("secret")
+	result.Status = "ok"
+	result.Message = "ok"
+	if !this.IsPeer(r) {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	if result.Data, err = goauth.GetCode(secret); err != nil {
+		result.Message = err.Error()
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
+}
+func (this *Server) GenGoogleSecret(w http.ResponseWriter, r *http.Request) {
+	var (
+		result JsonResult
+	)
+	result.Status = "ok"
+	result.Message = "ok"
+	if !this.IsPeer(r) {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	}
+	GetSeed := func(length int) string {
+		seeds := "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+		s := ""
+		random.Seed(time.Now().UnixNano())
+		for i := 0; i < length; i++ {
+			s += string(seeds[random.Intn(32)])
+		}
+		return s
+	}
+	result.Data = GetSeed(16)
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
+}
 func (this *Server) Report(w http.ResponseWriter, r *http.Request) {
 	var (
 		reportFileName string
@@ -3414,6 +3512,12 @@ func (this *Server) initComponent(isReload bool) {
 		this.FormatStatInfo()
 		this.initTus()
 	}
+	for _, s := range Config().Scenes {
+		kv := strings.Split(s, ":")
+		if len(kv) == 2 {
+			this.sceneMap.Put(kv[0], kv[1])
+		}
+	}
 	//Timer
 	// int tus
 }
@@ -3499,6 +3603,8 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/syncfile_info", groupRoute), this.SyncFileInfo)
 	http.HandleFunc(fmt.Sprintf("%s/get_md5s_by_date", groupRoute), this.GetMd5sForWeb)
 	http.HandleFunc(fmt.Sprintf("%s/receive_md5s", groupRoute), this.ReceiveMd5s)
+	http.HandleFunc(fmt.Sprintf("%s/gen_google_auth", groupRoute), this.GenGoogleSecret)
+	http.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), this.GenGoogleCode)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
