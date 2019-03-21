@@ -1184,6 +1184,11 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 func (this *Server) CrossOrigin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 }
+
+func (this *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment")
+}
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	var (
 		ok       bool
@@ -1209,14 +1214,19 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		smallPath    string
 		notFound     bool
 		//isBigFile    bool
-		code   string
-		secret interface{}
-		scene  string
+		code       string
+		secret     interface{}
+		scene      string
+		isDownload bool
 	)
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
 	code = r.FormValue("code")
+	isDownload = true
+	if r.FormValue("download") == "0" {
+		isDownload = false
+	}
 	r.ParseForm()
 	isPeer = this.IsPeer(r)
 	if Config().DownloadUseToken && !isPeer {
@@ -1240,11 +1250,11 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
-	fullpath = strings.Split(fullpath, "?")[0]// just path
+	fullpath = strings.Split(fullpath, "?")[0] // just path
 	if Config().EnableGoogleAuth {
-		scene= strings.Split(fullpath,"/")[0]
+		scene = strings.Split(fullpath, "/")[0]
 		if secret, ok = this.sceneMap.GetValue(scene); ok {
-			if !this.VerifyGoogleCode(secret.(string), code, 30) {
+			if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
 				w.Write([]byte("invalid google code"))
 				return
 			}
@@ -1318,6 +1328,9 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if string(data[0]) == "1" {
+				if isDownload {
+					this.SetDownloadHeader(w, r)
+				}
 				w.Write(data[1:])
 				return
 			} else {
@@ -1350,6 +1363,9 @@ NotFound:
 				}
 				go this.DownloadFromPeer(peer, fileInfo)
 				//http.Redirect(w, r, peer+r.RequestURI, 302)
+				if isDownload {
+					this.SetDownloadHeader(w, r)
+				}
 				this.DownloadFileToResponse(peer+r.RequestURI, w, r)
 				return
 			}
@@ -1361,6 +1377,9 @@ SHOW_DIR:
 	if !Config().ShowDir && info.IsDir() {
 		w.Write([]byte("list dir deny"))
 		return
+	}
+	if !info.IsDir() && isDownload {
+		this.SetDownloadHeader(w, r)
 	}
 	log.Info("download:" + r.RequestURI)
 	staticHandler.ServeHTTP(w, r)
@@ -2189,7 +2208,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 		if Config().EnableGoogleAuth && scene != "" {
 			if secret, ok = this.sceneMap.GetValue(scene); ok {
-				if !this.VerifyGoogleCode(secret.(string), code, 30) {
+				if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
 					w.Write([]byte("invalid request,error google code"))
 					return
 				}
@@ -3159,7 +3178,10 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					  <input type="text" id="output" name="output" value="json" /></span>
 					<span class="form-line">自定义路径(path):
 					  <input type="text" id="path" name="path" value="" /></span>
-					<input type="submit" name="submit" value="upload" /></form>
+	              <span class="form-line">google认证码(code):
+					  <input type="text" id="code" name="code" value="" /></span>
+					<input type="submit" name="submit" value="upload" />
+                </form>
 				</div>
                  <div>断点续传（如果文件很大时可以考虑）</div>
 				<div>
@@ -3518,8 +3540,6 @@ func (this *Server) initComponent(isReload bool) {
 			this.sceneMap.Put(kv[0], kv[1])
 		}
 	}
-	//Timer
-	// int tus
 }
 
 type HttpHandler struct {
@@ -3603,7 +3623,7 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/syncfile_info", groupRoute), this.SyncFileInfo)
 	http.HandleFunc(fmt.Sprintf("%s/get_md5s_by_date", groupRoute), this.GetMd5sForWeb)
 	http.HandleFunc(fmt.Sprintf("%s/receive_md5s", groupRoute), this.ReceiveMd5s)
-	http.HandleFunc(fmt.Sprintf("%s/gen_google_auth", groupRoute), this.GenGoogleSecret)
+	http.HandleFunc(fmt.Sprintf("%s/gen_google_secret", groupRoute), this.GenGoogleSecret)
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), this.GenGoogleCode)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
