@@ -178,7 +178,8 @@ func main() {
 部署图
 ![部署图](doc/go-fastdfs-deploy.png)
 
-
+文件认证时序图
+![文件认证时序图](doc/authentication.png)
 
 # 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 
@@ -482,4 +483,4 @@ issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代
 ## 有问题请加群
 ![二维码](doc/wechat.jpg)
 
-## [捐赠](doc/pay.png)
+#### [捐赠](doc/pay.png)
