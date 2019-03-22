@@ -64,6 +64,12 @@
 			"revisionTime": "2017-12-15T02:13:11Z"
 		},
 		{
+			"checksumSHA1": "kYRQcthIIU5NEqwba/Jfve+1myw=",
+			"path": "github.com/sjqzhang/googleAuthenticator",
+			"revision": "f198f070e0b1c610476cd4af49f75cb861900208",
+			"revisionTime": "2016-09-26T06:27:37Z"
+		},
+		{
 			"checksumSHA1": "A05sgnmxGZEtfibmzpOCAfluL9s=",
 			"path": "github.com/sjqzhang/seelog",
 			"revision": "556439109558695b36124c93863f93f385c0a07e",
@@ -174,5 +180,5 @@
 			"revisionTime": "2018-11-30T13:54:26Z"
 		}
 	],
-	"rootPath": "github.com/sjqzhang/go-fastdfs"
+	"rootPath": "github.com/sjqzhang/FileServer"
 }
