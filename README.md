@@ -18,6 +18,7 @@
 - 支持配置自动生成
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
+- 支持跨域访问
 - 支持一键迁移
 - 支持并行体验
 - 支持断点续传([tus](https://tus.io/))
@@ -47,6 +48,7 @@
 - 支持集群监控邮件告警
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
+- 支持跨域访问
 - 极低资源开销
 - 支持断点续传([tus](https://tus.io/))
 - 支持docker部署
@@ -176,7 +178,8 @@ func main() {
 部署图
 ![部署图](doc/go-fastdfs-deploy.png)
 
-
+文件认证时序图
+![文件认证时序图](doc/authentication.png)
 
 # 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 
@@ -480,4 +483,4 @@ issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代
 ## 有问题请加群
 ![二维码](doc/wechat.jpg)
 
-## [捐赠](doc/pay.png)
+#### [捐赠](doc/pay.png)
