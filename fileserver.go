@@ -13,12 +13,16 @@ import (
 	"github.com/deckarep/golang-set"
 	_ "github.com/eventials/go-tus"
 	"github.com/json-iterator/go"
+	"github.com/nfnt/resize"
 	"github.com/sjqzhang/googleAuthenticator"
 	log "github.com/sjqzhang/seelog"
 	"github.com/sjqzhang/tusd"
 	"github.com/sjqzhang/tusd/filestore"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"io/ioutil"
 	slog "log"
@@ -1218,6 +1222,10 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		secret     interface{}
 		scene      string
 		isDownload bool
+		imgWidth   int
+		imgHeight  int
+		width      string
+		height     string
 	)
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
@@ -1226,6 +1234,20 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	isDownload = true
 	if r.FormValue("download") == "0" {
 		isDownload = false
+	}
+	width = r.FormValue("width")
+	height = r.FormValue("height")
+	if width != "" {
+		imgWidth, err = strconv.Atoi(width)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	if height != "" {
+		imgHeight, err = strconv.Atoi(height)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 	r.ParseForm()
 	isPeer = this.IsPeer(r)
@@ -1331,6 +1353,10 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 				if isDownload {
 					this.SetDownloadHeader(w, r)
 				}
+				if (imgWidth != 0 || imgHeight != 0) {
+					this.ResizeImageByBytes(w, data[1:], uint(imgWidth), uint(imgHeight))
+					return
+				}
 				w.Write(data[1:])
 				return
 			} else {
@@ -1382,6 +1408,10 @@ SHOW_DIR:
 		this.SetDownloadHeader(w, r)
 	}
 	log.Info("download:" + r.RequestURI)
+	if (imgHeight != 0 || imgWidth != 0) {
+		this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
+		return
+	}
 	staticHandler.ServeHTTP(w, r)
 }
 func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r *http.Request) {
@@ -1400,6 +1430,55 @@ func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r 
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		log.Error(err)
+	}
+}
+func (this *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width, height uint) {
+	var (
+		img     image.Image
+		err     error
+		imgType string
+	)
+	reader := bytes.NewReader(data)
+	img, imgType, err = image.Decode(reader)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	img = resize.Resize(width, height, img, resize.Lanczos3)
+	if imgType == "jpg"|| imgType=="jpeg" {
+		jpeg.Encode(w, img, nil)
+	} else if imgType == "png" {
+		png.Encode(w, img)
+	} else {
+		w.Write(data)
+	}
+}
+func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, height uint) {
+	var (
+		img     image.Image
+		err     error
+		imgType string
+		file    *os.File
+	)
+	file, err = os.Open(fullpath)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	img, imgType, err = image.Decode(file)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	file.Close()
+	img = resize.Resize(width, height, img, resize.Lanczos3)
+	if imgType == "jpg" || imgType=="jpeg" {
+		jpeg.Encode(w, img, nil)
+	} else if imgType == "png" {
+		png.Encode(w, img)
+	} else {
+		file.Seek(0,0)
+		io.Copy(w,file)
 	}
 }
 func (this *Server) GetServerURI(r *http.Request) string {
