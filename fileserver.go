@@ -171,6 +171,8 @@ const (
 	"enable_cross_origin": true,
 	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
 	"enable_google_auth": false,
+	"认证url": "当url不为空时生效",
+	"auth_url": "",
 	"本机是否只读": "默认可读可写",
 	"read_only": false
 }
@@ -265,6 +267,7 @@ type GloablConfig struct {
 	ReadOnly             bool     `json:"read_only"`
 	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
 	EnableGoogleAuth     bool     `json:"enable_google_auth"`
+	AuthUrl              string   `json:"auth_url"`
 }
 
 func NewServer() *Server {
@@ -1193,6 +1196,31 @@ func (this *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment")
 }
+func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
+	var (
+		err    error
+		req    *httplib.BeegoHTTPRequest
+		result string
+	)
+	if err = r.ParseForm(); err != nil {
+		log.Error(err)
+		return false
+	}
+	req = httplib.Post(Config().AuthUrl)
+	req.SetTimeout(time.Second*10, time.Second*10)
+	for k, _ := range r.Form {
+		req.Param(k, r.FormValue(k))
+	}
+	req.Param("auth_token", r.FormValue("auth_token"))
+	if result, err = req.String(); err != nil {
+		return false
+	}
+	fmt.Println(result)
+	if result != "1" && result != "ok" {
+		return false
+	}
+	return true
+}
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	var (
 		ok       bool
@@ -1227,8 +1255,17 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		width      string
 		height     string
 	)
+	if err = r.ParseForm(); err != nil {
+		log.Error(err)
+	}
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
+	}
+	if Config().AuthUrl != "" {
+		if !this.CheckAuth(w, r) {
+			log.Warn("auth fail", r.Form)
+			return
+		}
 	}
 	code = r.FormValue("code")
 	isDownload = true
@@ -1445,7 +1482,7 @@ func (this *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width
 		return
 	}
 	img = resize.Resize(width, height, img, resize.Lanczos3)
-	if imgType == "jpg"|| imgType=="jpeg" {
+	if imgType == "jpg" || imgType == "jpeg" {
 		jpeg.Encode(w, img, nil)
 	} else if imgType == "png" {
 		png.Encode(w, img)
@@ -1472,13 +1509,13 @@ func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, h
 	}
 	file.Close()
 	img = resize.Resize(width, height, img, resize.Lanczos3)
-	if imgType == "jpg" || imgType=="jpeg" {
+	if imgType == "jpg" || imgType == "jpeg" {
 		jpeg.Encode(w, img, nil)
 	} else if imgType == "png" {
 		png.Encode(w, img)
 	} else {
-		file.Seek(0,0)
-		io.Copy(w,file)
+		file.Seek(0, 0)
+		io.Copy(w, file)
 	}
 }
 func (this *Server) GetServerURI(r *http.Request) string {
@@ -2258,19 +2295,19 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		code         string
 		secret       interface{}
 	)
-	//r.ParseForm()
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
+	if Config().AuthUrl != "" {
+		if !this.CheckAuth(w, r) {
+			log.Warn("auth fail", r.Form)
+			w.Write([]byte("auth fail"))
+			return
+		}
+	}
 	if r.Method == "POST" {
-		//		name := r.PostFormValue("name")
-		//		fileInfo.Path = r.Header.Get("Sync-Path")
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
-		//if strings.Contains(r.Host, "127.0.0.1") {
-		//	w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
-		//	return
-		//}
 		if Config().ReadOnly {
 			w.Write([]byte( "(error) readonly"))
 			return
