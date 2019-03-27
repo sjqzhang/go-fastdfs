@@ -187,7 +187,7 @@ func main() {
 通用文件认证时序图
 ![通用文件认证时序图](doc/authentication2.png)
 
-文件认证时序图
+文件google认证时序图
 ![文件认证时序图](doc/authentication.png)
 
 # 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
