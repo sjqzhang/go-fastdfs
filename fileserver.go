@@ -1215,7 +1215,6 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	if result, err = req.String(); err != nil {
 		return false
 	}
-	fmt.Println(result)
 	if result != "1" && result != "ok" {
 		return false
 	}
