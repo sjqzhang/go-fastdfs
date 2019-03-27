@@ -184,6 +184,9 @@ func main() {
 部署图
 ![部署图](doc/go-fastdfs-deploy.png)
 
+通用文件认证时序图
+![通用文件认证时序图](doc/authentication2.png)
+
 文件认证时序图
 ![文件认证时序图](doc/authentication.png)
 
