@@ -64,6 +64,12 @@
 			"revisionTime": "2017-12-15T02:13:11Z"
 		},
 		{
+			"checksumSHA1": "6z9MgcvNbdVGsAIvv6BHA1uALQA=",
+			"path": "github.com/nfnt/resize",
+			"revision": "83c6a9932646f83e3267f353373d47347b6036b2",
+			"revisionTime": "2018-02-21T19:10:11Z"
+		},
+		{
 			"checksumSHA1": "kYRQcthIIU5NEqwba/Jfve+1myw=",
 			"path": "github.com/sjqzhang/googleAuthenticator",
 			"revision": "f198f070e0b1c610476cd4af49f75cb861900208",
