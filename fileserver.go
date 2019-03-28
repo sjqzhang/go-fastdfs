@@ -173,6 +173,8 @@ const (
 	"enable_google_auth": false,
 	"认证url": "当url不为空时生效",
 	"auth_url": "",
+	"下载是否认证": "默认不认证(注意此选项是在auth_url不为空的情况下生效)",
+	"enable_download_auth": false,
 	"本机是否只读": "默认可读可写",
 	"read_only": false
 }
@@ -268,6 +270,7 @@ type GloablConfig struct {
 	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
 	EnableGoogleAuth     bool     `json:"enable_google_auth"`
 	AuthUrl              string   `json:"auth_url"`
+	EnableDownloadAuth   bool     `json:"enable_download_auth"`
 }
 
 func NewServer() *Server {
@@ -1260,7 +1263,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
-	if Config().AuthUrl != "" {
+	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) {
 		if !this.CheckAuth(w, r) {
 			log.Warn("auth fail", r.Form)
 			return
