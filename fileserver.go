@@ -175,6 +175,8 @@ const (
 	"auth_url": "",
 	"下载是否认证": "默认不认证(注意此选项是在auth_url不为空的情况下生效)",
 	"enable_download_auth": false,
+	"默认是否下载": "默认下载",
+	"default_download": true,
 	"本机是否只读": "默认可读可写",
 	"read_only": false
 }
@@ -271,6 +273,7 @@ type GloablConfig struct {
 	EnableGoogleAuth     bool     `json:"enable_google_auth"`
 	AuthUrl              string   `json:"auth_url"`
 	EnableDownloadAuth   bool     `json:"enable_download_auth"`
+	DefaultDownload      bool     `json:"default_download"`
 }
 
 func NewServer() *Server {
@@ -1270,7 +1273,10 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	code = r.FormValue("code")
-	isDownload = true
+	isDownload=true
+	if r.FormValue("download") == "" {
+		isDownload = Config().DefaultDownload
+	}
 	if r.FormValue("download") == "0" {
 		isDownload = false
 	}
