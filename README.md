@@ -69,8 +69,8 @@
 
 # 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)极速体验，只需一分钟）
 
-`./fileserver`
-
+`wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/download/v1.2.6/fileserver -O fileserver && chmod +x fileserver && ./fileserver`
+(注意：下载时要注意链接口的版本号)
 
 # 命令上传
 
