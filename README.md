@@ -106,7 +106,7 @@ import (
 func main()  {
 	var obj interface{}
 	req:=httplib.Post("http://10.1.5.9:8080/upload")
-	req.PostFile("file","path/to/file")
+	req.PostFile("file","filename")//注意不是全路径
 	req.Param("output","json")
 	req.Param("scene","")
 	req.Param("path","")
