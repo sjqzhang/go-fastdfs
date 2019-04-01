@@ -91,7 +91,7 @@ import requests
 url = 'http://10.1.5.9:8080/upload'
 files = {'file': open('report.xls', 'rb')}
 options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
-r = requests.post(url, files=files)
+r = requests.post(url,data=options, files=files)
 print(r.text)
 ```
 ## golang版本
