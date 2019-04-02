@@ -908,6 +908,11 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 	}
 }
 func (this *Server) RepairFileInfoFromFile() {
+	var (
+		pathPrefix string
+		err        error
+		fi         os.FileInfo
+	)
 	defer func() {
 		if re := recover(); re != nil {
 			buffer := debug.Stack()
@@ -932,6 +937,7 @@ func (this *Server) RepairFileInfoFromFile() {
 		)
 		if f.IsDir() {
 			files, err = ioutil.ReadDir(file_path)
+
 			if err != nil {
 				return err
 			}
@@ -942,6 +948,9 @@ func (this *Server) RepairFileInfoFromFile() {
 				file_path = strings.Replace(file_path, "\\", "/", -1)
 				if DOCKER_DIR != "" {
 					file_path = strings.Replace(file_path, DOCKER_DIR, "", 1)
+				}
+				if pathPrefix != "" {
+					file_path = strings.Replace(file_path, pathPrefix, STORE_DIR_NAME, 1)
 				}
 				if strings.HasPrefix(file_path, STORE_DIR_NAME+"/"+LARGE_DIR_NAME) {
 					log.Info(fmt.Sprintf("ignore small file file %s", file_path+"/"+fi.Name()))
@@ -976,7 +985,12 @@ func (this *Server) RepairFileInfoFromFile() {
 		return nil
 	}
 	pathname := STORE_DIR
-	fi, _ := os.Stat(pathname)
+	pathPrefix, err = os.Readlink(pathname)
+	if err == nil { //link
+		pathname = pathPrefix
+		fi, err = os.Stat(pathname)
+	}
+	fi, err = os.Stat(pathname)
 	if fi.IsDir() {
 		filepath.Walk(pathname, handlefunc)
 	}
