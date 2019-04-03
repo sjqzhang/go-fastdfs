@@ -413,6 +413,10 @@ GOPATH=$pwd go test -v fileserver.go fileserver_test.go
 
 - 如何压测？
 ```
+步骤：
+一、创建files文件夹
+二、将gen_file.py复制到files文件夹中，通过python gen_file.py 生成大量文件
+三、将benchmark.py放到 files目录外（即与files目录同一级），通过python benchmark.py进行压测（注意对benchmark.py中的ip进行修改）
 先用gen_file.py产生大量文件（注意如果要生成大文件，自已在内容中乘上一个大的数即可）
 例如:
 # -*- coding: utf-8 -*-
