@@ -988,9 +988,11 @@ func (this *Server) RepairFileInfoFromFile() {
 	pathPrefix, err = os.Readlink(pathname)
 	if err == nil { //link
 		pathname = pathPrefix
-		fi, err = os.Stat(pathname)
 	}
 	fi, err = os.Stat(pathname)
+	if err!=nil {
+		log.Error(err)
+	}
 	if fi.IsDir() {
 		filepath.Walk(pathname, handlefunc)
 	}
@@ -3223,8 +3225,6 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	var (
 		status JsonResult
-		err    error
-		data   []byte
 		sts    map[string]interface{}
 		today  string
 		sumset mapset.Set
@@ -3273,14 +3273,6 @@ func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	status.Status = "ok"
 	status.Data = sts
 	w.Write([]byte(this.util.JsonEncodePretty(status)))
-	return
-	if data, err = json.Marshal(&status); err != nil {
-		status.Status = "fail"
-		status.Message = err.Error()
-		w.Write(data)
-		return
-	}
-	w.Write(data)
 }
 func (this *Server) HeartBeat(w http.ResponseWriter, r *http.Request) {
 }
@@ -3742,10 +3734,13 @@ func (this *Server) Main() {
 	if Config().SupportGroupManage {
 		groupRoute = "/" + Config().Group
 	}
+	uploadPage:="upload.html"
 	if groupRoute == "" {
 		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Index)
+		http.HandleFunc(fmt.Sprintf("/%s", uploadPage), this.Index)
 	} else {
 		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Index)
+		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute,uploadPage), this.Index)
 	}
 	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
 	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)
