@@ -81,7 +81,7 @@ wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/dow
 
 # WEB上传（浏览器打开）
 
-`http://yourserver ip:8080` 注意：不要使用127.0.0.1上传 	
+`http://yourserver ip:8080/upload.html` 注意：不要使用127.0.0.1上传 	
 
 # 代码上传(选项参阅浏览器上传)
 
