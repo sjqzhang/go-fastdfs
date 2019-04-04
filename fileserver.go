@@ -990,7 +990,7 @@ func (this *Server) RepairFileInfoFromFile() {
 		pathname = pathPrefix
 	}
 	fi, err = os.Stat(pathname)
-	if err!=nil {
+	if err != nil {
 		log.Error(err)
 	}
 	if fi.IsDir() {
@@ -1244,6 +1244,9 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
+func (this *Server) NotPermit(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(403)
+}
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	var (
 		ok       bool
@@ -1278,6 +1281,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		width      string
 		height     string
 	)
+	code = r.FormValue("code")
 	if err = r.ParseForm(); err != nil {
 		log.Error(err)
 	}
@@ -1286,11 +1290,11 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) {
 		if !this.CheckAuth(w, r) {
+			this.NotPermit(w, r)
 			log.Warn("auth fail", r.Form)
 			return
 		}
 	}
-	code = r.FormValue("code")
 	isDownload = true
 	if r.FormValue("download") == "" {
 		isDownload = Config().DefaultDownload
@@ -1318,6 +1322,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		token = r.FormValue("token")
 		timestamp = r.FormValue("timestamp")
 		if token == "" || timestamp == "" {
+			this.NotPermit(w, r)
 			w.Write([]byte("unvalid request"))
 			return
 		}
@@ -1326,10 +1331,12 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		minTimestamp = time.Now().Add(-time.Second *
 			time.Duration(Config().DownloadTokenExpire)).Unix()
 		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
+			this.NotPermit(w, r)
 			w.Write([]byte("unvalid timestamp"))
 			return
 		}
 		if ts > maxTimestamp || ts < minTimestamp {
+			this.NotPermit(w, r)
 			w.Write([]byte("timestamp expire"))
 			return
 		}
@@ -1340,6 +1347,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		scene = strings.Split(fullpath, "/")[0]
 		if secret, ok = this.sceneMap.GetValue(scene); ok {
 			if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
+				this.NotPermit(w, r)
 				w.Write([]byte("invalid google code"))
 				return
 			}
@@ -1388,6 +1396,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if !CheckToken(token, fileInfo.Md5, timestamp) {
+				this.NotPermit(w, r)
 				w.Write([]byte("unvalid request,error token"))
 				return
 			}
@@ -2321,12 +2330,14 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		code         string
 		secret       interface{}
 	)
+	output = r.FormValue("output")
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
 	if Config().AuthUrl != "" {
 		if !this.CheckAuth(w, r) {
 			log.Warn("auth fail", r.Form)
+			this.NotPermit(w, r)
 			w.Write([]byte("auth fail"))
 			return
 		}
@@ -2351,6 +2362,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		if Config().EnableGoogleAuth && scene != "" {
 			if secret, ok = this.sceneMap.GetValue(scene); ok {
 				if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
+					this.NotPermit(w, r)
 					w.Write([]byte("invalid request,error google code"))
 					return
 				}
@@ -3312,6 +3324,8 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					  <input type="text" id="path" name="path" value="" /></span>
 	              <span class="form-line">google认证码(code):
 					  <input type="text" id="code" name="code" value="" /></span>
+					 <span class="form-line">自定义认证(auth_token):
+					  <input type="text" id="auth_token" name="auth_token" value="" /></span>
 					<input type="submit" name="submit" value="upload" />
                 </form>
 				</div>
@@ -3734,13 +3748,13 @@ func (this *Server) Main() {
 	if Config().SupportGroupManage {
 		groupRoute = "/" + Config().Group
 	}
-	uploadPage:="upload.html"
+	uploadPage := "upload.html"
 	if groupRoute == "" {
 		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Index)
 		http.HandleFunc(fmt.Sprintf("/%s", uploadPage), this.Index)
 	} else {
 		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Index)
-		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute,uploadPage), this.Index)
+		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute, uploadPage), this.Index)
 	}
 	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
 	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)
