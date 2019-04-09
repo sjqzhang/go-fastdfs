@@ -3365,8 +3365,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func init() {
-	//DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
-	DOCKER_DIR = "F://github//go-fastdfs"
+	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
 	if DOCKER_DIR != "" {
 		if !strings.HasSuffix(DOCKER_DIR, "/") {
 			DOCKER_DIR = DOCKER_DIR + "/"
