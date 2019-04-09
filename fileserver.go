@@ -13,12 +13,16 @@ import (
 	"github.com/deckarep/golang-set"
 	_ "github.com/eventials/go-tus"
 	"github.com/json-iterator/go"
+	"github.com/nfnt/resize"
 	"github.com/sjqzhang/googleAuthenticator"
 	log "github.com/sjqzhang/seelog"
 	"github.com/sjqzhang/tusd"
 	"github.com/sjqzhang/tusd/filestore"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"io/ioutil"
 	slog "log"
@@ -167,6 +171,12 @@ const (
 	"enable_cross_origin": true,
 	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
 	"enable_google_auth": false,
+	"认证url": "当url不为空时生效",
+	"auth_url": "",
+	"下载是否认证": "默认不认证(注意此选项是在auth_url不为空的情况下生效)",
+	"enable_download_auth": false,
+	"默认是否下载": "默认下载",
+	"default_download": true,
 	"本机是否只读": "默认可读可写",
 	"read_only": false
 }
@@ -261,6 +271,9 @@ type GloablConfig struct {
 	ReadOnly             bool     `json:"read_only"`
 	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
 	EnableGoogleAuth     bool     `json:"enable_google_auth"`
+	AuthUrl              string   `json:"auth_url"`
+	EnableDownloadAuth   bool     `json:"enable_download_auth"`
+	DefaultDownload      bool     `json:"default_download"`
 }
 
 func NewServer() *Server {
@@ -895,6 +908,11 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 	}
 }
 func (this *Server) RepairFileInfoFromFile() {
+	var (
+		pathPrefix string
+		err        error
+		fi         os.FileInfo
+	)
 	defer func() {
 		if re := recover(); re != nil {
 			buffer := debug.Stack()
@@ -919,6 +937,7 @@ func (this *Server) RepairFileInfoFromFile() {
 		)
 		if f.IsDir() {
 			files, err = ioutil.ReadDir(file_path)
+
 			if err != nil {
 				return err
 			}
@@ -929,6 +948,9 @@ func (this *Server) RepairFileInfoFromFile() {
 				file_path = strings.Replace(file_path, "\\", "/", -1)
 				if DOCKER_DIR != "" {
 					file_path = strings.Replace(file_path, DOCKER_DIR, "", 1)
+				}
+				if pathPrefix != "" {
+					file_path = strings.Replace(file_path, pathPrefix, STORE_DIR_NAME, 1)
 				}
 				if strings.HasPrefix(file_path, STORE_DIR_NAME+"/"+LARGE_DIR_NAME) {
 					log.Info(fmt.Sprintf("ignore small file file %s", file_path+"/"+fi.Name()))
@@ -963,7 +985,14 @@ func (this *Server) RepairFileInfoFromFile() {
 		return nil
 	}
 	pathname := STORE_DIR
-	fi, _ := os.Stat(pathname)
+	pathPrefix, err = os.Readlink(pathname)
+	if err == nil { //link
+		pathname = pathPrefix
+	}
+	fi, err = os.Stat(pathname)
+	if err != nil {
+		log.Error(err)
+	}
 	if fi.IsDir() {
 		filepath.Walk(pathname, handlefunc)
 	}
@@ -1180,14 +1209,43 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 	}
 }
-
 func (this *Server) CrossOrigin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, X-Requested-By, If-Modified-Since, X-File-Name, X-File-Type, Cache-Control, Origin")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+	w.Header().Set("Access-Control-Expose-Headers", "Authorization")
+	//https://blog.csdn.net/yanzisu_congcong/article/details/80552155
 }
-
 func (this *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment")
+}
+func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
+	var (
+		err    error
+		req    *httplib.BeegoHTTPRequest
+		result string
+	)
+	if err = r.ParseForm(); err != nil {
+		log.Error(err)
+		return false
+	}
+	req = httplib.Post(Config().AuthUrl)
+	req.SetTimeout(time.Second*10, time.Second*10)
+	for k, _ := range r.Form {
+		req.Param(k, r.FormValue(k))
+	}
+	req.Param("auth_token", r.FormValue("auth_token"))
+	if result, err = req.String(); err != nil {
+		return false
+	}
+	if result != "1" && result != "ok" {
+		return false
+	}
+	return true
+}
+func (this *Server) NotPermit(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(403)
 }
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -1218,14 +1276,45 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		secret     interface{}
 		scene      string
 		isDownload bool
+		imgWidth   int
+		imgHeight  int
+		width      string
+		height     string
 	)
+	code = r.FormValue("code")
+	if err = r.ParseForm(); err != nil {
+		log.Error(err)
+	}
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
-	code = r.FormValue("code")
+	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) {
+		if !this.CheckAuth(w, r) {
+			this.NotPermit(w, r)
+			log.Warn("auth fail", r.Form)
+			return
+		}
+	}
 	isDownload = true
+	if r.FormValue("download") == "" {
+		isDownload = Config().DefaultDownload
+	}
 	if r.FormValue("download") == "0" {
 		isDownload = false
+	}
+	width = r.FormValue("width")
+	height = r.FormValue("height")
+	if width != "" {
+		imgWidth, err = strconv.Atoi(width)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	if height != "" {
+		imgHeight, err = strconv.Atoi(height)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 	r.ParseForm()
 	isPeer = this.IsPeer(r)
@@ -1233,6 +1322,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		token = r.FormValue("token")
 		timestamp = r.FormValue("timestamp")
 		if token == "" || timestamp == "" {
+			this.NotPermit(w, r)
 			w.Write([]byte("unvalid request"))
 			return
 		}
@@ -1241,10 +1331,12 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		minTimestamp = time.Now().Add(-time.Second *
 			time.Duration(Config().DownloadTokenExpire)).Unix()
 		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
+			this.NotPermit(w, r)
 			w.Write([]byte("unvalid timestamp"))
 			return
 		}
 		if ts > maxTimestamp || ts < minTimestamp {
+			this.NotPermit(w, r)
 			w.Write([]byte("timestamp expire"))
 			return
 		}
@@ -1255,6 +1347,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		scene = strings.Split(fullpath, "/")[0]
 		if secret, ok = this.sceneMap.GetValue(scene); ok {
 			if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
+				this.NotPermit(w, r)
 				w.Write([]byte("invalid google code"))
 				return
 			}
@@ -1303,6 +1396,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if !CheckToken(token, fileInfo.Md5, timestamp) {
+				this.NotPermit(w, r)
 				w.Write([]byte("unvalid request,error token"))
 				return
 			}
@@ -1330,6 +1424,10 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 			if string(data[0]) == "1" {
 				if isDownload {
 					this.SetDownloadHeader(w, r)
+				}
+				if (imgWidth != 0 || imgHeight != 0) {
+					this.ResizeImageByBytes(w, data[1:], uint(imgWidth), uint(imgHeight))
+					return
 				}
 				w.Write(data[1:])
 				return
@@ -1382,6 +1480,10 @@ SHOW_DIR:
 		this.SetDownloadHeader(w, r)
 	}
 	log.Info("download:" + r.RequestURI)
+	if (imgHeight != 0 || imgWidth != 0) {
+		this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
+		return
+	}
 	staticHandler.ServeHTTP(w, r)
 }
 func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r *http.Request) {
@@ -1400,6 +1502,55 @@ func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r 
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		log.Error(err)
+	}
+}
+func (this *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width, height uint) {
+	var (
+		img     image.Image
+		err     error
+		imgType string
+	)
+	reader := bytes.NewReader(data)
+	img, imgType, err = image.Decode(reader)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	img = resize.Resize(width, height, img, resize.Lanczos3)
+	if imgType == "jpg" || imgType == "jpeg" {
+		jpeg.Encode(w, img, nil)
+	} else if imgType == "png" {
+		png.Encode(w, img)
+	} else {
+		w.Write(data)
+	}
+}
+func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, height uint) {
+	var (
+		img     image.Image
+		err     error
+		imgType string
+		file    *os.File
+	)
+	file, err = os.Open(fullpath)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	img, imgType, err = image.Decode(file)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	file.Close()
+	img = resize.Resize(width, height, img, resize.Lanczos3)
+	if imgType == "jpg" || imgType == "jpeg" {
+		jpeg.Encode(w, img, nil)
+	} else if imgType == "png" {
+		png.Encode(w, img)
+	} else {
+		file.Seek(0, 0)
+		io.Copy(w, file)
 	}
 }
 func (this *Server) GetServerURI(r *http.Request) string {
@@ -2179,19 +2330,21 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		code         string
 		secret       interface{}
 	)
-	//r.ParseForm()
+	output = r.FormValue("output")
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
+	if Config().AuthUrl != "" {
+		if !this.CheckAuth(w, r) {
+			log.Warn("auth fail", r.Form)
+			this.NotPermit(w, r)
+			w.Write([]byte("auth fail"))
+			return
+		}
+	}
 	if r.Method == "POST" {
-		//		name := r.PostFormValue("name")
-		//		fileInfo.Path = r.Header.Get("Sync-Path")
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
-		//if strings.Contains(r.Host, "127.0.0.1") {
-		//	w.Write([]byte( "(error) upload use clust ip(peers ip),not 127.0.0.1"))
-		//	return
-		//}
 		if Config().ReadOnly {
 			w.Write([]byte( "(error) readonly"))
 			return
@@ -2209,6 +2362,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		if Config().EnableGoogleAuth && scene != "" {
 			if secret, ok = this.sceneMap.GetValue(scene); ok {
 				if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
+					this.NotPermit(w, r)
 					w.Write([]byte("invalid request,error google code"))
 					return
 				}
@@ -3083,8 +3237,6 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	var (
 		status JsonResult
-		err    error
-		data   []byte
 		sts    map[string]interface{}
 		today  string
 		sumset mapset.Set
@@ -3133,14 +3285,6 @@ func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	status.Status = "ok"
 	status.Data = sts
 	w.Write([]byte(this.util.JsonEncodePretty(status)))
-	return
-	if data, err = json.Marshal(&status); err != nil {
-		status.Status = "fail"
-		status.Message = err.Error()
-		w.Write(data)
-		return
-	}
-	w.Write(data)
 }
 func (this *Server) HeartBeat(w http.ResponseWriter, r *http.Request) {
 }
@@ -3180,6 +3324,8 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					  <input type="text" id="path" name="path" value="" /></span>
 	              <span class="form-line">google认证码(code):
 					  <input type="text" id="code" name="code" value="" /></span>
+					 <span class="form-line">自定义认证(auth_token):
+					  <input type="text" id="auth_token" name="auth_token" value="" /></span>
 					<input type="submit" name="submit" value="upload" />
                 </form>
 				</div>
@@ -3602,10 +3748,13 @@ func (this *Server) Main() {
 	if Config().SupportGroupManage {
 		groupRoute = "/" + Config().Group
 	}
+	uploadPage := "upload.html"
 	if groupRoute == "" {
 		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Index)
+		http.HandleFunc(fmt.Sprintf("/%s", uploadPage), this.Index)
 	} else {
 		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Index)
+		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute, uploadPage), this.Index)
 	}
 	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
 	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)

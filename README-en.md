@@ -1,6 +1,14 @@
-# [中文](README.md)  [English](README-en.md)
+# [中文](README.md) [English](README-en.md)
+
 ![logo](doc/logo.png)
+
+
 # go-fastdfs is a distributed file system based on http protocol. It is based on the design concept of avenue to simple. All the simple design makes its operation and expansion more simple. It has high performance, high reliability and no center. , maintenance-free and so on.
+
+### Everyone is worried about such a simple file system. Is it not reliable, can it be used in a production environment? The answer is yes, it is efficient because it is simple, and it is stable because it is simple. If you are worried about the function, then run the unit test, if you are worried about the performance, then run the stress test, the project comes with it, run more confident ^_^.
+
+Note: Please read this article carefully before use, especially [QA](#qa)
+
 - Support curl command upload
 - Support browser upload
 - Support HTTP download
@@ -9,9 +17,15 @@
 - Support configuration automatic generation
 - Support small file automatic merge (reduce inode occupancy)
 - Support for second pass
-- Support for continued transmission ([tus](https://tus.io/))
+- Support for cross-domain access
+- Support one-click migration
+- Support for parallel experience
+- Support for breakpoint resuming ([tus](https://tus.io/))
 - Support for docker deployment
 - Support self-monitoring alarm
+- Support image zoom
+- Support google authentication code
+- Support for custom authentication
 - Support cluster file information viewing
 - Use the universal HTTP protocol
 - No need for a dedicated client (support wget, curl, etc.)
@@ -19,7 +33,6 @@
 - High performance (using leveldb as a kv library)
 - High reliability (design is extremely simple, using mature components)
 - No center design (all nodes can read and write at the same time)
-
 
 # advantage
 
@@ -37,9 +50,16 @@
 - Support cluster monitoring email alarm
 - Support small file automatic merge (reduce inode occupancy)
 - Support for second pass
-- Support for continued transmission ([tus](https://tus.io/))
+- Support image zoom
+- Support google authentication code
+- Support for custom authentication
+- Support for cross-domain access
+- Very low resource overhead
+- Support for breakpoint resuming ([tus](https://tus.io/))
 - Support for docker deployment
-- Support token download token = md5 (file_md5 + timestamp)
+- Support for one-click migration (migrated from other system file systems)
+- Support for parallel experience (parallel experience with existing file system, confirm OK and then one-click migration)
+- Support token download token=md5(file_md5+timestamp)
 - Easy operation and maintenance, only one role (unlike fastdfs has three roles Tracker Server, Storage Server, Client), the configuration is automatically generated
 - Peer-to-peer (simplified operation and maintenance)
 - All nodes can read and write simultaneously
@@ -145,15 +165,36 @@ func main() {
    fmt.Println( uploader.Upload())
 
 }
-
+````
 [more langue](doc/upload.md)
 
 ![deploy](doc/go-fastdfs-deploy.png)
+
+Universal file authentication timing diagram
+![Universal file authentication timing diagram](doc/authentication2.png)
+
+File google authentication timing diagram
+![File google authentication timing diagram](doc/authentication.png)
 
 # Please click [Feedback](https://github.com/sjqzhang/go-fastdfs/issues/new)
 
 
 # Q&A
+- Best practice?
+```
+First, if it is mass storage, do not open the file token authentication function to reduce performance.
+Second, try to use the standard upload, upload the business to save the path, and then connect the domain name when the business is used (convenient migration extension, etc.).
+Third, if you use breakpoints to continue transmission, you must use the file id to replace the path storage after uploading (how to replace the QA/API document), to reduce performance for subsequent access.
+Fourth, try to use physical server deployment, because the main pressure or performance comes from IO
+Fifth, the online business should use the nginx+gofastdfs deployment architecture (the equalization algorithm uses ip_hash) to meet the later functional scalability (nginx+lua).
+Sixth, the online environment is best not to use container deployment, the container is suitable for testing and functional verification.
+Summary: The path of the file saved by the business reduces the conversion of the later access path, and the file access permission is completed by the service, so that the performance is the best and the versatility is strong (can be directly connected to other web servers).
+
+Important reminder: If the small file merge function is enabled, it is impossible to delete small files later.
+Upload result description
+Please use md5, path, scene field, others are added to be compatible with the old online system, and may be removed in the future.
+
+```
 - In the WeChat discussion group, everyone asked about the performance of go-fastdfs?
 ```
 Because there are too many people asking, answer here in unison.
@@ -245,13 +286,13 @@ See system status description
 
 - How to view cluster file information?
 ```
-HTTP://10.1.xx.60:8080 / STAT
+HTTP://10.1.xx.60:8080/stat
 
 What should I do if there is a file error?
 Please delete the stat.json file in the data directory to restart the service. Please recalculate the number of files automatically.
 
 Or call
-HTTP://10.1.xx.60:8080 / repair_stat
+HTTP://10.1.xx.60:8080/repair_stat
 
 ```
 - How reliable can it be used in a production environment?

@@ -24,6 +24,9 @@
 - 支持断点续传([tus](https://tus.io/))
 - 支持docker部署
 - 支持自监控告警
+- 支持图片缩放
+- 支持google认证码
+- 支持自定义认证
 - 支持集群文件信息查看
 - 使用通用HTTP协议
 - 无需专用客户端（支持wget,curl等工具）
@@ -48,6 +51,9 @@
 - 支持集群监控邮件告警
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
+- 支持图片缩放
+- 支持google认证码
+- 支持自定义认证
 - 支持跨域访问
 - 极低资源开销
 - 支持断点续传([tus](https://tus.io/))
@@ -62,9 +68,11 @@
 
 
 # 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)极速体验，只需一分钟）
-
-`./fileserver`
-
+一键安装：（请将以下命令复制到linux console中执行）
+```shell
+wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/download/v1.2.6/fileserver -O fileserver && chmod +x fileserver && ./fileserver
+```
+(注意：下载时要注意链接的版本号，windows下直接运行fileserver.exe，执行文件在这里[下载](https://github.com/sjqzhang/fastdfs/releases))
 
 # 命令上传
 
@@ -73,7 +81,7 @@
 
 # WEB上传（浏览器打开）
 
-`http://yourserver ip:8080` 注意：不要使用127.0.0.1上传 	
+`http://yourserver ip:8080/upload.html` 注意：不要使用127.0.0.1上传 	
 
 # 代码上传(选项参阅浏览器上传)
 
@@ -83,7 +91,7 @@ import requests
 url = 'http://10.1.5.9:8080/upload'
 files = {'file': open('report.xls', 'rb')}
 options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
-r = requests.post(url, files=files)
+r = requests.post(url,data=options, files=files)
 print(r.text)
 ```
 ## golang版本
@@ -98,7 +106,7 @@ import (
 func main()  {
 	var obj interface{}
 	req:=httplib.Post("http://10.1.5.9:8080/upload")
-	req.PostFile("file","path/to/file")
+	req.PostFile("file","filename")//注意不是全路径
 	req.Param("output","json")
 	req.Param("scene","")
 	req.Param("path","")
@@ -178,7 +186,10 @@ func main() {
 部署图
 ![部署图](doc/go-fastdfs-deploy.png)
 
-文件认证时序图
+通用文件认证时序图
+![通用文件认证时序图](doc/authentication2.png)
+
+文件google认证时序图
 ![文件认证时序图](doc/authentication.png)
 
 # 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
@@ -201,14 +212,14 @@ func main() {
 二、尽量用标准上传，上传后业务保存path，在业务用的时候再并接上域名（方便迁移扩展等）。
 三、如果使用断点续传，上传后一定要用文件id置换成path存储（如何置换看ＱＡ/API文档），为后面访问减少性能开消。
 四、尽量使用物理服务器部署，因为主要压力或性能来自于IO
+五、线上业务尽量使用nginx+gofastdfs部署架构(均衡算法使用ip_hash)，以满足后面的功能扩展性(nginx+lua)。
+六、线上环境最好不要使用容器部署，容器适用于测试和功能验证。
 总结：业务保存的文件的path,减少后期访问路径转换带来开消,文件访问权限由业务来完成，这样性能最好，通用性强（可直接其它web服务器）。
 
 重要提醒：如果开启小文件合并功能，后期是无法删除小文件的。
 上传结果说明
-	Md5    string `json:"md5"`
-	Path   string `json:"path"`
-	Scene  string `json:"scene"`
-请使用以上字段，其它是为了兼容老的线上系统添加的，以后有可能去掉。
+请使用md5,path,scene字段，其它是为了兼容老的线上系统添加的，以后有可能去掉。
+
 ```
 
 - 有API文档么？
@@ -271,12 +282,33 @@ go-fastdfs的文件定位与其它分布式系统不同，它的寻址是直接�
 答案：适合海量存储
 ```
 
+- 如何缩放图片？
+```
+在下载url中加入width各height参数
+例如：http://127.0.0.1:8080/group1/haystack/5/124,0,27344,.jpg?download=0&width=100&height=100
+```
+
+- 如何在浏览器中直接显示图片？
+```
+在下载url中加入download=0参数
+例如：http://127.0.0.1:8080/group1/haystack/5/124,0,27344,.jpg?download=0
+```
+
+
+- 如何实现自定义认证上传下载？
+```
+一、使用1.2.6版本以后的go-fastdfs
+二、设auth_url参数（应用提供）
+三、应用实现验证权限接口（即第二步的url）,参数为　auth_toke 返回　ok 表示认证通过，其它为不通过
+四、认证通过后，可以上传或下载
+```
 
 
 - 还需要安装nginx么？
 ```
-可以不安装，也可以选择安装
-go fastdfs 本身就是一个高性能的web文件服务器。
+go-fastdfs本身是一个高性能的web服务器，在开发或测试时，可以不用安装nginx，
+但go-fastdfs的功能单一，如需要缓存或重定向或其它扩展，nginx都有成熟的组件
+所以建议线上还是加一层nginx，再借助nginx+lua解决扩展性问题。
 ```
 
 - 能动态加载配置么？
@@ -380,6 +412,10 @@ GOPATH=$pwd go test -v fileserver.go fileserver_test.go
 
 - 如何压测？
 ```
+步骤：
+一、创建files文件夹
+二、将gen_file.py复制到files文件夹中，通过python gen_file.py 生成大量文件
+三、将benchmark.py放到 files目录外（即与files目录同一级），通过python benchmark.py进行压测（注意对benchmark.py中的ip进行修改）
 先用gen_file.py产生大量文件（注意如果要生成大文件，自已在内容中乘上一个大的数即可）
 例如:
 # -*- coding: utf-8 -*-
@@ -482,5 +518,7 @@ issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代
 - 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 ## 有问题请加群
 ![二维码](doc/wechat.jpg)
+
+#### 进群请改昵称，昵称格式：城市－公司－昵称，如果你喜欢这项目，请关注(star)此项目，关注是对项目的肯定，也是作者创新的动力。
 
 #### [捐赠](doc/pay.png)
