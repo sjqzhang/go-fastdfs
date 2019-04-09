@@ -949,6 +949,7 @@ func (this *Server) RepairFileInfoFromFile() {
 				if DOCKER_DIR != "" {
 					file_path = strings.Replace(file_path, DOCKER_DIR, "", 1)
 				}
+                log.Info(file_path+" -- "+DOCKER_DIR)
 				if pathPrefix != "" {
 					file_path = strings.Replace(file_path, pathPrefix, STORE_DIR_NAME, 1)
 				}
@@ -961,7 +962,7 @@ func (this *Server) RepairFileInfoFromFile() {
 					log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))
 					continue
 				}
-				sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+				sum, err = this.util.GetFileSumByName(DOCKER_DIR + file_path+"/"+fi.Name(), Config().FileSumArithmetic)
 				if err != nil {
 					log.Error(err)
 					continue
@@ -3364,7 +3365,8 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func init() {
-	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
+	//DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
+	DOCKER_DIR = "F://github//go-fastdfs"
 	if DOCKER_DIR != "" {
 		if !strings.HasSuffix(DOCKER_DIR, "/") {
 			DOCKER_DIR = DOCKER_DIR + "/"
