@@ -165,7 +165,7 @@ func main() {
    fmt.Println( uploader.Upload())
 
 }
-
+````
 [more langue](doc/upload.md)
 
 ![deploy](doc/go-fastdfs-deploy.png)
