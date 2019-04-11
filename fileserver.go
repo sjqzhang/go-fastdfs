@@ -1235,11 +1235,10 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	for k, _ := range r.Form {
 		req.Param(k, r.FormValue(k))
 	}
-	req.Param("auth_token", r.FormValue("auth_token"))
 	if result, err = req.String(); err != nil {
 		return false
 	}
-	if result != "1" && result != "ok" {
+	if result != "ok" {
 		return false
 	}
 	return true
