@@ -282,10 +282,17 @@ go-fastdfs的文件定位与其它分布式系统不同，它的寻址是直接�
 答案：适合海量存储
 ```
 
+- 如何上传文件夹？
+```
+ DIR=log &&  ls $DIR |xargs -n 1 -I {} curl -s  -F path=$DIR  -F file=@$DIR/{} http://10.1.50.90:8080/upload 
+ 上面命令的log为要上传的目录，如果代码上传就是简单的循环上传就ＯＫ。
+```
+
 - 如何缩放图片？
 ```
 在下载url中加入width各height参数
 例如：http://127.0.0.1:8080/group1/haystack/5/124,0,27344,.jpg?download=0&width=100&height=100
+特明说明是：如果要等比例缩放，请将width或height设为０
 ```
 
 - 如何在浏览器中直接显示图片？
