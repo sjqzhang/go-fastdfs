@@ -275,6 +275,14 @@ type GloablConfig struct {
 	EnableDownloadAuth   bool     `json:"enable_download_auth"`
 	DefaultDownload      bool     `json:"default_download"`
 }
+type FileInfoResult struct {
+	Name    string    `json:"name"`
+	Md5     string    `json:"md5"`
+	Path    string    `json:"path"`
+	Size    int64     `json:"size"`
+	ModTime time.Time `json:"mtime"`
+	IsDir   bool      `json:"is_dir"`
+}
 
 func NewServer() *Server {
 	var (
@@ -3118,6 +3126,52 @@ func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
 	}
 }
+func (this *Server) ListDir(w http.ResponseWriter, r *http.Request) {
+	var (
+		result      JsonResult
+		dir         string
+		filesInfo   []os.FileInfo
+		err         error
+		filesResult []FileInfoResult
+		tmpDir      string
+	)
+	if !this.IsPeer(r) {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	dir = r.FormValue("dir")
+	if dir == "" {
+		result.Message = "dir can't null"
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	dir = strings.Replace(dir, ".", "", -1)
+	if tmpDir, err = os.Readlink(dir); err == nil {
+		dir = tmpDir
+	}
+	filesInfo, err = ioutil.ReadDir(DOCKER_DIR + STORE_DIR_NAME + "/" + dir)
+	if err != nil {
+		log.Error(err)
+		result.Message = err.Error()
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	for _, f := range filesInfo {
+		fi := FileInfoResult{
+			Name:    f.Name(),
+			Size:    f.Size(),
+			IsDir:   f.IsDir(),
+			ModTime: f.ModTime(),
+			Path:    dir,
+			Md5:     this.util.MD5(STORE_DIR_NAME + "/" + dir + "/" + f.Name()),
+		}
+		filesResult = append(filesResult, fi)
+	}
+	result.Data = filesResult
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
+	return
+}
 func (this *Server) VerifyGoogleCode(secret string, code string, discrepancy int64) bool {
 	var (
 		goauth *googleAuthenticator.GAuth
@@ -3762,6 +3816,7 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/repair", groupRoute), this.Repair)
 	http.HandleFunc(fmt.Sprintf("%s/report", groupRoute), this.Report)
 	http.HandleFunc(fmt.Sprintf("%s/backup", groupRoute), this.BackUp)
+	http.HandleFunc(fmt.Sprintf("%s/list_dir", groupRoute), this.ListDir)
 	http.HandleFunc(fmt.Sprintf("%s/remove_empty_dir", groupRoute), this.RemoveEmptyDir)
 	http.HandleFunc(fmt.Sprintf("%s/repair_fileinfo", groupRoute), this.RepairFileInfo)
 	http.HandleFunc(fmt.Sprintf("%s/reload", groupRoute), this.Reload)
