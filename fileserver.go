@@ -2461,19 +2461,16 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 		if v, _ := this.GetFileInfoFromLevelDB(md5sum); v != nil && v.Md5 != "" {
 			fileResult = this.BuildFileResult(v, r)
-			if output == "json" {
-				if data, err = json.Marshal(fileResult); err != nil {
-					log.Error(err)
-					w.Write([]byte(err.Error()))
-				}
-				w.Write(data)
-			} else {
-				w.Write([]byte(fileResult.Url))
-			}
-			return
 		}
-		w.Write([]byte("(error)fail,please use post method"))
-		return
+		if output == "json" {
+			if data, err = json.Marshal(fileResult); err != nil {
+				log.Error(err)
+				w.Write([]byte(err.Error()))
+			}
+			w.Write(data)
+		} else {
+			w.Write([]byte(fileResult.Url))
+		}
 	}
 }
 func (this *Server) SaveSmallFile(fileInfo *FileInfo) (error) {
