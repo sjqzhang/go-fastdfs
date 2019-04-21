@@ -225,6 +225,15 @@ func main() {
 - 有API文档么？
 [API文档](doc/api.md)
 
+- 有管理后台么？
+```
+https://github.com/perfree/go-fastdfs-web
+```
+- 断点上传有使用说明么？
+```
+https://github.com/tus
+```
+
 - 在微信讨论群中大家都问到go-fastdfs性能怎样？
 ```
 由于问的人太多，在这里统一回答。
