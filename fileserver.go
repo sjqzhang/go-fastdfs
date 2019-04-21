@@ -3141,11 +3141,11 @@ func (this *Server) ListDir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir = r.FormValue("dir")
-	if dir == "" {
-		result.Message = "dir can't null"
-		w.Write([]byte(this.util.JsonEncodePretty(result)))
-		return
-	}
+	//if dir == "" {
+	//	result.Message = "dir can't null"
+	//	w.Write([]byte(this.util.JsonEncodePretty(result)))
+	//	return
+	//}
 	dir = strings.Replace(dir, ".", "", -1)
 	if tmpDir, err = os.Readlink(dir); err == nil {
 		dir = tmpDir
