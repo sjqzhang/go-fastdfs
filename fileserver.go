@@ -981,7 +981,7 @@ func (this *Server) RepairFileInfoFromFile() {
 					Md5:       sum,
 					TimeStamp: fi.ModTime().Unix(),
 					Peers:     []string{this.host},
-					OffSet:    -1,
+					OffSet:    -2,
 				}
 				//log.Info(fileInfo)
 				log.Info(file_path, fi.Name())
@@ -1171,6 +1171,14 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	timeout := fileInfo.Size/1024/1024/8 + 30
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
+	if fileInfo.OffSet == -2 { //migrate file
+		this.lockMap.LockKey(fpath)
+		defer this.lockMap.UnLockKey(fpath)
+		if err = req.ToFile(fpath); err != nil {
+			log.Error(err)
+			return
+		}
+	}
 	if fileInfo.OffSet != -1 { //small file download
 		data, err = req.Bytes()
 		if err != nil {
@@ -1654,12 +1662,14 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 				}
 			}
 		}
-		if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
-			fileInfo.Peers = append(fileInfo.Peers, peer)
-			if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
-				log.Error(err)
+		if fileInfo.OffSet != -2 { //migrate file
+			if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
+				fileInfo.Peers = append(fileInfo.Peers, peer)
+				if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
+					log.Error(err)
+				}
+				continue
 			}
-			continue
 		}
 		postURL = fmt.Sprintf("%s%s", peer, this.getRequestURI("syncfile_info"))
 		b := httplib.Post(postURL)
