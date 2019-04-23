@@ -179,7 +179,7 @@ func main() {
 }
 
 ````
-[更多客户商请参考](https://github.com/tus)
+[更多客户端请参考](https://github.com/tus)
 
 
 
