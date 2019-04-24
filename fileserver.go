@@ -969,11 +969,12 @@ func (this *Server) RepairFileInfoFromFile() {
 					continue
 				}
 				pathMd5 = this.util.MD5(file_path + "/" + fi.Name())
-				if finfo, _ := this.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
-					log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))
-					continue
-				}
-				sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+				//if finfo, _ := this.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
+				//	log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))
+				//	continue
+				//}
+				//sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+				sum = pathMd5
 				if err != nil {
 					log.Error(err)
 					continue
@@ -1180,8 +1181,8 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		defer this.lockMap.UnLockKey(fpath)
 		if err = req.ToFile(fpath); err != nil {
 			log.Error(err)
-			return
 		}
+		return
 	}
 	if fileInfo.OffSet != -1 { //small file download
 		data, err = req.Bytes()
