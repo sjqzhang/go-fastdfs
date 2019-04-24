@@ -1741,7 +1741,7 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 	fullpath = fileInfo.Path + "/" + outname
 	logKey = fmt.Sprintf("%s_%s_%s", logDate, filename, fileInfo.Md5)
 	if filename == CONST_FILE_Md5_FILE_NAME {
-		this.searchMap.Put(fileInfo.Md5, fileInfo.Name)
+		//this.searchMap.Put(fileInfo.Md5, fileInfo.Name)
 		if ok, err = this.IsExistFromLevelDB(fileInfo.Md5, this.ldb); !ok {
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
@@ -1759,7 +1759,7 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 		return
 	}
 	if filename == CONST_REMOME_Md5_FILE_NAME {
-		this.searchMap.Remove(fileInfo.Md5)
+		//this.searchMap.Remove(fileInfo.Md5)
 		if ok, err = this.IsExistFromLevelDB(fileInfo.Md5, this.ldb); ok {
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, -1)
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, -fileInfo.Size)
@@ -3885,7 +3885,7 @@ func (this *Server) Main() {
 	go this.ConsumerPostToPeer()
 	go this.ConsumerLog()
 	go this.ConsumerDownLoad()
-	go this.LoadSearchDict()
+	//go this.LoadSearchDict()
 	if Config().EnableMigrate {
 		go this.RepairFileInfoFromFile()
 	}
