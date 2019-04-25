@@ -1175,15 +1175,20 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	req := httplib.Get(downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	timeout := fileInfo.Size/1024/1024/8 + 30
-	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 	if fileInfo.OffSet == -2 { //migrate file
 		this.lockMap.LockKey(fpath)
 		defer this.lockMap.UnLockKey(fpath)
+		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size { //prevent double download
+			log.Info(fmt.Sprintf("file '%s' has download", fpath))
+			return
+		}
+		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 		if err = req.ToFile(fpath); err != nil {
 			log.Error(err)
 		}
 		return
 	}
+	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 	if fileInfo.OffSet != -1 { //small file download
 		data, err = req.Bytes()
 		if err != nil {
