@@ -223,13 +223,13 @@ type JsonResult struct {
 	Data    interface{} `json:"data"`
 }
 type FileResult struct {
-	Url     string    `json:"url"`
-	Md5     string    `json:"md5"`
-	Path    string    `json:"path"`
-	Domain  string    `json:"domain"`
-	Scene   string    `json:"scene"`
-	Size    int64       `json:"size"`
-	ModTime int64 `json:"mtime"`
+	Url     string `json:"url"`
+	Md5     string `json:"md5"`
+	Path    string `json:"path"`
+	Domain  string `json:"domain"`
+	Scene   string `json:"scene"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"mtime"`
 	//Just for Compatibility
 	Scenes  string `json:"scenes"`
 	Retmsg  string `json:"retmsg"`
@@ -288,6 +288,10 @@ type FileInfoResult struct {
 	ModTime time.Time `json:"mtime"`
 	IsDir   bool      `json:"is_dir"`
 }
+type Tuple struct {
+	Key string
+	Val interface{}
+}
 
 func NewServer() *Server {
 	var (
@@ -343,7 +347,7 @@ func NewServer() *Server {
 }
 
 type CommonMap struct {
-	sync.Mutex
+	sync.RWMutex
 	m map[string]interface{}
 }
 
@@ -355,8 +359,8 @@ func NewCommonMap(size int) *CommonMap {
 	}
 }
 func (s *CommonMap) GetValue(k string) (interface{}, bool) {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 	v, ok := s.m[k]
 	return v, ok
 }
@@ -364,6 +368,18 @@ func (s *CommonMap) Put(k string, v interface{}) {
 	s.Lock()
 	defer s.Unlock()
 	s.m[k] = v
+}
+func (s *CommonMap) Iter() <-chan Tuple { // reduce memory
+	ch := make(chan Tuple)
+	go func() {
+		s.RLock()
+		for k, v := range s.m {
+			ch <- Tuple{Key: k, Val: v}
+		}
+		close(ch)
+		s.RUnlock()
+	}()
+	return ch
 }
 func (s *CommonMap) LockKey(k string) {
 	s.Lock()
@@ -2267,8 +2283,8 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 	fileResult.Path = "/" + p
 	fileResult.Domain = domain
 	fileResult.Scene = fileInfo.Scene
-	fileResult.Size=fileInfo.Size
-	fileResult.ModTime=fileInfo.TimeStamp
+	fileResult.Size = fileInfo.Size
+	fileResult.ModTime = fileInfo.TimeStamp
 	// Just for Compatibility
 	fileResult.Src = fileResult.Path
 	fileResult.Scenes = fileInfo.Scene
