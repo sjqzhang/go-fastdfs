@@ -223,11 +223,13 @@ type JsonResult struct {
 	Data    interface{} `json:"data"`
 }
 type FileResult struct {
-	Url    string `json:"url"`
-	Md5    string `json:"md5"`
-	Path   string `json:"path"`
-	Domain string `json:"domain"`
-	Scene  string `json:"scene"`
+	Url     string    `json:"url"`
+	Md5     string    `json:"md5"`
+	Path    string    `json:"path"`
+	Domain  string    `json:"domain"`
+	Scene   string    `json:"scene"`
+	Size    int64       `json:"size"`
+	ModTime int64 `json:"mtime"`
 	//Just for Compatibility
 	Scenes  string `json:"scenes"`
 	Retmsg  string `json:"retmsg"`
@@ -2265,6 +2267,8 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 	fileResult.Path = "/" + p
 	fileResult.Domain = domain
 	fileResult.Scene = fileInfo.Scene
+	fileResult.Size=fileInfo.Size
+	fileResult.ModTime=fileInfo.TimeStamp
 	// Just for Compatibility
 	fileResult.Src = fileResult.Path
 	fileResult.Scenes = fileInfo.Scene
