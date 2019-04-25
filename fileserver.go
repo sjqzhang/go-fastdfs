@@ -3249,9 +3249,24 @@ func (this *Server) Search(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error()
 	}
+	//fileInfos=this.SearchDict(kw) // serch file from map for huge capacity
 	result.Status = "ok"
 	result.Data = fileInfos
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
+}
+func (this *Server) SearchDict(kw string) []FileInfo{
+	var (
+		fileInfos []FileInfo
+		fileInfo *FileInfo
+	)
+	for dict:=range this.searchMap.Iter() {
+		if strings.Contains( dict.Val.(string),kw) {
+			if fileInfo,_=this.GetFileInfoFromLevelDB(dict.Key);fileInfo!=nil{
+				fileInfos=append(fileInfos,*fileInfo)
+			}
+		}
+	}
+	return fileInfos
 }
 func (this *Server) ListDir(w http.ResponseWriter, r *http.Request) {
 	var (
