@@ -1203,7 +1203,9 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 		if err = req.ToFile(fpath); err != nil {
 			log.Error(err)
+			return
 		}
+		this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
 		return
 	}
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
@@ -3254,15 +3256,15 @@ func (this *Server) Search(w http.ResponseWriter, r *http.Request) {
 	result.Data = fileInfos
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
 }
-func (this *Server) SearchDict(kw string) []FileInfo{
+func (this *Server) SearchDict(kw string) []FileInfo {
 	var (
 		fileInfos []FileInfo
-		fileInfo *FileInfo
+		fileInfo  *FileInfo
 	)
-	for dict:=range this.searchMap.Iter() {
-		if strings.Contains( dict.Val.(string),kw) {
-			if fileInfo,_=this.GetFileInfoFromLevelDB(dict.Key);fileInfo!=nil{
-				fileInfos=append(fileInfos,*fileInfo)
+	for dict := range this.searchMap.Iter() {
+		if strings.Contains(dict.Val.(string), kw) {
+			if fileInfo, _ = this.GetFileInfoFromLevelDB(dict.Key); fileInfo != nil {
+				fileInfos = append(fileInfos, *fileInfo)
 			}
 		}
 	}
