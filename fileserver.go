@@ -1205,7 +1205,8 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 			log.Error(err)
 			return
 		}
-		this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
+		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+		//this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
 		return
 	}
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
