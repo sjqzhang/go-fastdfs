@@ -1010,7 +1010,8 @@ func (this *Server) RepairFileInfoFromFile() {
 				log.Info(file_path, fi.Name())
 				//this.AppendToQueue(&fileInfo)
 				this.postFileToPeer(&fileInfo)
-				this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+				this.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, this.ldb)
+				//this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
 		}
 		return nil
@@ -1190,25 +1191,27 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	//filename=this.util.UrlEncode(filename)
 	downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
-	req := httplib.Get(downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	timeout := fileInfo.Size/1024/1024/8 + 30
 	if fileInfo.OffSet == -2 { //migrate file
 		this.lockMap.LockKey(fpath)
 		defer this.lockMap.UnLockKey(fpath)
 		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size { //prevent double download
+			this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
 			log.Info(fmt.Sprintf("file '%s' has download", fpath))
 			return
 		}
+		req := httplib.Get(downloadUrl)
 		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 		if err = req.ToFile(fpath); err != nil {
 			log.Error(err)
 			return
 		}
-		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
-		//this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
+		//this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+		this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
 		return
 	}
+	req := httplib.Get(downloadUrl)
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 	if fileInfo.OffSet != -1 { //small file download
 		data, err = req.Bytes()
