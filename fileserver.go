@@ -2177,6 +2177,37 @@ func (this *Server) CheckScene(scene string) (bool, error) {
 	}
 	return true, nil
 }
+func (this *Server) GetFileInfo(w http.ResponseWriter, r *http.Request) {
+	var (
+		fpath    string
+		md5sum   string
+		fileInfo *FileInfo
+		err      error
+		result   JsonResult
+	)
+	md5sum = r.FormValue("md5")
+	fpath = r.FormValue("path")
+	result.Status = "fail"
+	if !this.IsPeer(r) {
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+		return
+	}
+	md5sum = r.FormValue("md5")
+	if fpath != "" {
+		fpath = strings.Replace(fpath, "/"+Config().Group+"/", STORE_DIR_NAME+"/", 1)
+		md5sum = this.util.MD5(fpath)
+	}
+	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); err != nil {
+		log.Error(err)
+		result.Message = err.Error()
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	result.Status = "ok"
+	result.Data = fileInfo
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
+	return
+}
 func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
@@ -2195,6 +2226,10 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	fpath = r.FormValue("path")
 	inner = r.FormValue("inner")
 	result.Status = "fail"
+	if !this.IsPeer(r) {
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+		return
+	}
 	if fpath != "" && md5sum == "" {
 		fpath = strings.Replace(fpath, "/"+Config().Group+"/", STORE_DIR_NAME+"/", 1)
 		md5sum = this.util.MD5(fpath)
@@ -3960,6 +3995,7 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
 	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)
 	http.HandleFunc(fmt.Sprintf("%s/delete", groupRoute), this.RemoveFile)
+	http.HandleFunc(fmt.Sprintf("%s/get_file_info", groupRoute), this.GetFileInfo)
 	http.HandleFunc(fmt.Sprintf("%s/sync", groupRoute), this.Sync)
 	http.HandleFunc(fmt.Sprintf("%s/stat", groupRoute), this.Stat)
 	http.HandleFunc(fmt.Sprintf("%s/repair_stat", groupRoute), this.RepairStatWeb)
