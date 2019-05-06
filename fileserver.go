@@ -1338,6 +1338,9 @@ func (this *Server) CheckDownloadAuth(w http.ResponseWriter, r *http.Request) (b
 		}
 		return true
 	}
+	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r)  && !this.CheckAuth(w,r) {
+		return  false,errors.New("auth fail")
+	}
 	if Config().DownloadUseToken && !this.IsPeer(r) {
 		token = r.FormValue("token")
 		timestamp = r.FormValue("timestamp")
@@ -1349,14 +1352,11 @@ func (this *Server) CheckDownloadAuth(w http.ResponseWriter, r *http.Request) (b
 		minTimestamp = time.Now().Add(-time.Second *
 			time.Duration(Config().DownloadTokenExpire)).Unix()
 		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
-
 			return false, errors.New("unvalid timestamp")
-
 		}
 		if ts > maxTimestamp || ts < minTimestamp {
 			return false, errors.New("timestamp expire")
 		}
-
 		fullpath, smallPath = this.GetFilePathFromRequest(w, r)
 		if smallPath != "" {
 			pathMd5 = this.util.MD5(smallPath)
@@ -1492,6 +1492,7 @@ func (this *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Reque
 			log.Error(err)
 		}
 	}
+	fmt.Println(isDownload)
 	if isDownload {
 		this.SetDownloadHeader(w, r)
 	}
@@ -1553,16 +1554,11 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		fi        os.FileInfo
 	)
 	if ok, err = this.CheckDownloadAuth(w, r); !ok {
-		w.Write([]byte(err.Error()))
+		log.Error(err)
+		this.NotPermit(w,r)
 		return
 	}
-	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) {
-		if !this.CheckAuth(w, r) {
-			this.NotPermit(w, r)
-			log.Warn("auth fail", r.Form)
-			return
-		}
-	}
+
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
 	}
@@ -1588,245 +1584,6 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-}
-func (this *Server) Download2(w http.ResponseWriter, r *http.Request) {
-	var (
-		ok       bool
-		err      error
-		pathMd5  string
-		info     os.FileInfo
-		peer     string
-		fileInfo *FileInfo
-		fullpath string
-		//pathval      url.Values
-		token        string
-		timestamp    string
-		maxTimestamp int64
-		minTimestamp int64
-		ts           int64
-		md5sum       string
-		fp           *os.File
-		isPeer       bool
-		isSmallFile  bool
-		data         []byte
-		offset       int64
-		length       int
-		smallPath    string
-		notFound     bool
-		//isBigFile    bool
-		code       string
-		secret     interface{}
-		scene      string
-		isDownload bool
-		imgWidth   int
-		imgHeight  int
-		width      string
-		height     string
-	)
-	code = r.FormValue("code")
-	if err = r.ParseForm(); err != nil {
-		log.Error(err)
-	}
-	if Config().EnableCrossOrigin {
-		this.CrossOrigin(w, r)
-	}
-	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) {
-		if !this.CheckAuth(w, r) {
-			this.NotPermit(w, r)
-			log.Warn("auth fail", r.Form)
-			return
-		}
-	}
-	isDownload = true
-	if r.FormValue("download") == "" {
-		isDownload = Config().DefaultDownload
-	}
-	if r.FormValue("download") == "0" {
-		isDownload = false
-	}
-	width = r.FormValue("width")
-	height = r.FormValue("height")
-	if width != "" {
-		imgWidth, err = strconv.Atoi(width)
-		if err != nil {
-			log.Error(err)
-		}
-	}
-	if height != "" {
-		imgHeight, err = strconv.Atoi(height)
-		if err != nil {
-			log.Error(err)
-		}
-	}
-	r.ParseForm()
-	isPeer = this.IsPeer(r)
-	if Config().DownloadUseToken && !isPeer {
-		token = r.FormValue("token")
-		timestamp = r.FormValue("timestamp")
-		if token == "" || timestamp == "" {
-			this.NotPermit(w, r)
-			w.Write([]byte("unvalid request"))
-			return
-		}
-		maxTimestamp = time.Now().Add(time.Second *
-			time.Duration(Config().DownloadTokenExpire)).Unix()
-		minTimestamp = time.Now().Add(-time.Second *
-			time.Duration(Config().DownloadTokenExpire)).Unix()
-		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
-			this.NotPermit(w, r)
-			w.Write([]byte("unvalid timestamp"))
-			return
-		}
-		if ts > maxTimestamp || ts < minTimestamp {
-			this.NotPermit(w, r)
-			w.Write([]byte("timestamp expire"))
-			return
-		}
-	}
-	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
-	fullpath = strings.Split(fullpath, "?")[0] // just path
-	if Config().EnableGoogleAuth {
-		scene = strings.Split(fullpath, "/")[0]
-		if secret, ok = this.sceneMap.GetValue(scene); ok {
-			if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
-				this.NotPermit(w, r)
-				w.Write([]byte("invalid google code"))
-				return
-			}
-		}
-	}
-
-	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
-	//fmt.Println("fullpath",fullpath)
-	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
-		isSmallFile = true
-		smallPath = fullpath //notice order
-		fullpath = strings.Split(fullpath, ",")[0]
-	}
-	_ = isSmallFile
-	_ = smallPath
-	if fullpath, err = url.PathUnescape(fullpath); err != nil {
-		log.Error(err)
-	}
-	CheckToken := func(token string, md5sum string, timestamp string) bool {
-		if this.util.MD5(md5sum+timestamp) != token {
-			return false
-		}
-		return true
-	}
-	if Config().DownloadUseToken && !isPeer {
-		if isSmallFile {
-			pathMd5 = this.util.MD5(smallPath)
-		} else {
-			fullpath = strings.Split(fullpath, "?")[0]
-			pathMd5 = this.util.MD5(fullpath)
-		}
-		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
-			log.Error(err)
-			if this.util.FileExists(fullpath) {
-				if fp, err = os.Create(fullpath); err != nil {
-					log.Error(err)
-				}
-				if fp != nil {
-					defer fp.Close()
-				}
-				md5sum = this.util.GetFileSum(fp, Config().FileSumArithmetic)
-				if !CheckToken(token, md5sum, timestamp) {
-					w.Write([]byte("unvalid request,error token"))
-					return
-				}
-			}
-		} else {
-			if !CheckToken(token, fileInfo.Md5, timestamp) {
-				this.NotPermit(w, r)
-				w.Write([]byte("unvalid request,error token"))
-				return
-			}
-		}
-	}
-	if isSmallFile {
-		if _, offset, length, err = this.ParseSmallFile(r.RequestURI); err != nil {
-			log.Error(err)
-			w.Write([]byte(err.Error()))
-			return
-		}
-		if info, err = os.Stat(fullpath); err != nil {
-			notFound = true
-			goto NotFound // if return can't not repair file
-			return
-		}
-		if info.Size() < offset+int64(length) {
-			notFound = true
-		} else {
-			data, err = this.util.ReadFileByOffSet(fullpath, offset, length)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-			if string(data[0]) == "1" {
-				if isDownload {
-					this.SetDownloadHeader(w, r)
-				}
-				if (imgWidth != 0 || imgHeight != 0) {
-					this.ResizeImageByBytes(w, data[1:], uint(imgWidth), uint(imgHeight))
-					return
-				}
-				w.Write(data[1:])
-				return
-			} else {
-				notFound = true
-			}
-		}
-	}
-NotFound:
-	if info, err = os.Stat(fullpath); err != nil || info.Size() == 0 || notFound {
-		log.Error(err, fullpath, smallPath)
-		if isSmallFile && notFound {
-			pathMd5 = this.util.MD5(smallPath)
-		} else {
-			if err == nil && Config().ShowDir && info.IsDir() {
-				goto SHOW_DIR
-			}
-			pathMd5 = this.util.MD5(fullpath)
-		}
-		for _, peer = range Config().Peers {
-			if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil {
-				log.Error(err)
-				continue
-			}
-			if fileInfo.Md5 != "" {
-				if Config().DownloadUseToken && !isPeer {
-					if !CheckToken(token, fileInfo.Md5, timestamp) {
-						w.Write([]byte("unvalid request,error token"))
-						return
-					}
-				}
-				go this.DownloadFromPeer(peer, fileInfo)
-				//http.Redirect(w, r, peer+r.RequestURI, 302)
-				if isDownload {
-					this.SetDownloadHeader(w, r)
-				}
-				this.DownloadFileToResponse(peer+r.RequestURI, w, r)
-				return
-			}
-		}
-		w.WriteHeader(404)
-		return
-	}
-SHOW_DIR:
-	if !Config().ShowDir && info.IsDir() {
-		w.Write([]byte("list dir deny"))
-		return
-	}
-	if !info.IsDir() && isDownload {
-		this.SetDownloadHeader(w, r)
-	}
-	log.Info("download:" + r.RequestURI)
-	if (imgHeight != 0 || imgWidth != 0) {
-		this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
-		return
-	}
-	staticHandler.ServeHTTP(w, r)
 }
 func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r *http.Request) {
 	var (
