@@ -1296,7 +1296,300 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 func (this *Server) NotPermit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(403)
 }
+
+func (this *Server) GetFilePathFromRequest(w http.ResponseWriter, r *http.Request) (string, string) {
+	var (
+		err       error
+		fullpath  string
+		smallPath string
+	)
+	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+	fullpath = strings.Split(fullpath, "?")[0] // just path
+	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
+	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
+		smallPath = fullpath //notice order
+		fullpath = strings.Split(fullpath, ",")[0]
+	}
+	if fullpath, err = url.PathUnescape(fullpath); err != nil {
+		log.Error(err)
+	}
+	return fullpath, smallPath
+}
+func (this *Server) CheckDownloadAuth(w http.ResponseWriter, r *http.Request) (bool, error) {
+	var (
+		err          error
+		maxTimestamp int64
+		minTimestamp int64
+		ts           int64
+		token        string
+		timestamp    string
+		fullpath     string
+		smallPath    string
+		pathMd5      string
+		fileInfo     *FileInfo
+		scene        string
+		secret       interface{}
+		code         string
+		ok           bool
+	)
+	CheckToken := func(token string, md5sum string, timestamp string) bool {
+		if this.util.MD5(md5sum+timestamp) != token {
+			return false
+		}
+		return true
+	}
+	if Config().DownloadUseToken && !this.IsPeer(r) {
+		token = r.FormValue("token")
+		timestamp = r.FormValue("timestamp")
+		if token == "" || timestamp == "" {
+			return false, errors.New("unvalid request")
+		}
+		maxTimestamp = time.Now().Add(time.Second *
+			time.Duration(Config().DownloadTokenExpire)).Unix()
+		minTimestamp = time.Now().Add(-time.Second *
+			time.Duration(Config().DownloadTokenExpire)).Unix()
+		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
+
+			return false, errors.New("unvalid timestamp")
+
+		}
+		if ts > maxTimestamp || ts < minTimestamp {
+			return false, errors.New("timestamp expire")
+		}
+
+		fullpath, smallPath = this.GetFilePathFromRequest(w, r)
+		if smallPath != "" {
+			pathMd5 = this.util.MD5(smallPath)
+		} else {
+			pathMd5 = this.util.MD5(fullpath)
+		}
+		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
+			// TODO
+		} else {
+			ok := CheckToken(token, fileInfo.Md5, timestamp)
+			if !ok {
+				return ok, errors.New("unvalid token")
+			}
+			return ok, nil
+		}
+	}
+	if Config().EnableGoogleAuth && !this.IsPeer(r) {
+		fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+		fullpath = strings.Split(fullpath, "?")[0] // just path
+		scene = strings.Split(fullpath, "/")[0]
+		code = r.FormValue("code")
+		if secret, ok = this.sceneMap.GetValue(scene); ok {
+			if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
+				return false, errors.New("invalid google code")
+			}
+		}
+	}
+	return true, nil
+}
+
+func (this *Server) GetSmallFileByURI(w http.ResponseWriter, r *http.Request) ([]byte, bool, error) {
+	var (
+		err      error
+		data     []byte
+		offset   int64
+		length   int
+		fullpath string
+		info     os.FileInfo
+	)
+	fullpath, _ = this.GetFilePathFromRequest(w, r)
+	if _, offset, length, err = this.ParseSmallFile(r.RequestURI); err != nil {
+		return nil, false, err
+	}
+	if info, err = os.Stat(fullpath); err != nil {
+		return nil, false, err
+	}
+	if info.Size() < offset+int64(length) {
+		return nil, true, errors.New("noFound")
+	} else {
+		data, err = this.util.ReadFileByOffSet(fullpath, offset, length)
+		if err != nil {
+			return nil, false, err
+		}
+		return data, false, err
+	}
+}
+func (this *Server) DownloadSmallFileByURI(w http.ResponseWriter, r *http.Request) (bool, error) {
+	var (
+		err        error
+		data       []byte
+		isDownload bool
+		imgWidth   int
+		imgHeight  int
+		width      string
+		height     string
+		notFound   bool
+	)
+	r.ParseForm()
+	isDownload = true
+	if r.FormValue("download") == "" {
+		isDownload = Config().DefaultDownload
+	}
+	if r.FormValue("download") == "0" {
+		isDownload = false
+	}
+	width = r.FormValue("width")
+	height = r.FormValue("height")
+	if width != "" {
+		imgWidth, err = strconv.Atoi(width)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	if height != "" {
+		imgHeight, err = strconv.Atoi(height)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	data, notFound, err = this.GetSmallFileByURI(w, r)
+	_ = notFound
+	if data != nil && string(data[0]) == "1" {
+		if isDownload {
+			this.SetDownloadHeader(w, r)
+		}
+		if (imgWidth != 0 || imgHeight != 0) {
+			this.ResizeImageByBytes(w, data[1:], uint(imgWidth), uint(imgHeight))
+			return true, nil
+		}
+		w.Write(data[1:])
+		return true, nil
+	}
+	return false, errors.New("not found")
+}
+func (this *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Request) (bool, error) {
+	var (
+		err        error
+		isDownload bool
+		imgWidth   int
+		imgHeight  int
+		width      string
+		height     string
+	)
+	r.ParseForm()
+	isDownload = true
+	if r.FormValue("download") == "" {
+		isDownload = Config().DefaultDownload
+	}
+	if r.FormValue("download") == "0" {
+		isDownload = false
+	}
+	width = r.FormValue("width")
+	height = r.FormValue("height")
+	if width != "" {
+		imgWidth, err = strconv.Atoi(width)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	if height != "" {
+		imgHeight, err = strconv.Atoi(height)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+	if isDownload {
+		this.SetDownloadHeader(w, r)
+	}
+	fullpath, _ := this.GetFilePathFromRequest(w, r)
+	if (imgWidth != 0 || imgHeight != 0) {
+		this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
+		return true, nil
+	}
+	staticHandler.ServeHTTP(w, r)
+	return true, nil
+}
+func (this *Server) DownloadNotFound(w http.ResponseWriter, r *http.Request) {
+	var (
+		err        error
+		fullpath   string
+		smallPath  string
+		isDownload bool
+		pathMd5    string
+		peer       string
+		fileInfo   *FileInfo
+	)
+	fullpath, smallPath = this.GetFilePathFromRequest(w, r)
+	isDownload = true
+	if r.FormValue("download") == "" {
+		isDownload = Config().DefaultDownload
+	}
+	if r.FormValue("download") == "0" {
+		isDownload = false
+	}
+	if smallPath != "" {
+		pathMd5 = this.util.MD5(smallPath)
+	} else {
+		pathMd5 = this.util.MD5(fullpath)
+	}
+	for _, peer = range Config().Peers {
+		if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil {
+			log.Error(err)
+			continue
+		}
+		if fileInfo.Md5 != "" {
+			go this.DownloadFromPeer(peer, fileInfo)
+			//http.Redirect(w, r, peer+r.RequestURI, 302)
+			if isDownload {
+				this.SetDownloadHeader(w, r)
+			}
+			this.DownloadFileToResponse(peer+r.RequestURI, w, r)
+			return
+		}
+	}
+	w.WriteHeader(404)
+	return
+}
 func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
+	var (
+		err       error
+		ok        bool
+		fullpath  string
+		smallPath string
+		fi        os.FileInfo
+	)
+	if ok, err = this.CheckDownloadAuth(w, r); !ok {
+		w.Write([]byte(err.Error()))
+		return
+	}
+	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) {
+		if !this.CheckAuth(w, r) {
+			this.NotPermit(w, r)
+			log.Warn("auth fail", r.Form)
+			return
+		}
+	}
+	if Config().EnableCrossOrigin {
+		this.CrossOrigin(w, r)
+	}
+	fullpath, smallPath = this.GetFilePathFromRequest(w, r)
+	if smallPath == "" {
+		if fi, err = os.Stat(fullpath); err != nil {
+			this.DownloadNotFound(w, r)
+			return
+		}
+		if !Config().ShowDir && fi.IsDir() {
+			w.Write([]byte("list dir deny"))
+			return
+		}
+		//staticHandler.ServeHTTP(w, r)
+		this.DownloadNormalFileByURI(w, r)
+		return
+	}
+	if smallPath != "" {
+		if ok, err = this.DownloadSmallFileByURI(w, r); !ok {
+			this.DownloadNotFound(w, r)
+			return
+		}
+		return
+	}
+
+}
+func (this *Server) Download2(w http.ResponseWriter, r *http.Request) {
 	var (
 		ok       bool
 		err      error
@@ -3234,16 +3527,35 @@ func (this *Server) RemoveEmptyDir(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 	var (
+		err    error
 		date   string
 		result JsonResult
+		inner  string
+		url    string
 	)
 	result.Status = "ok"
 	r.ParseForm()
 	date = r.FormValue("date")
+	inner = r.FormValue("inner")
 	if date == "" {
 		date = this.util.GetToDay()
 	}
 	if this.IsPeer(r) {
+		if inner != "1" {
+			for _, peer := range Config().Peers {
+				backUp := func(peer string, date string) {
+					url = fmt.Sprintf("%s%s", peer, this.getRequestURI("backup"))
+					req := httplib.Post(url)
+					req.Param("date", date)
+					req.Param("inner", "1")
+					req.SetTimeout(time.Second*5, time.Second*600)
+					if _, err = req.String(); err != nil {
+						log.Error(err)
+					}
+				}
+				go backUp(peer, date)
+			}
+		}
 		go this.BackUpMetaDataByDate(date)
 		result.Message = "back job start..."
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
