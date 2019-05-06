@@ -1338,8 +1338,8 @@ func (this *Server) CheckDownloadAuth(w http.ResponseWriter, r *http.Request) (b
 		}
 		return true
 	}
-	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r)  && !this.CheckAuth(w,r) {
-		return  false,errors.New("auth fail")
+	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) && !this.CheckAuth(w, r) {
+		return false, errors.New("auth fail")
 	}
 	if Config().DownloadUseToken && !this.IsPeer(r) {
 		token = r.FormValue("token")
@@ -1555,7 +1555,7 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 	)
 	if ok, err = this.CheckDownloadAuth(w, r); !ok {
 		log.Error(err)
-		this.NotPermit(w,r)
+		this.NotPermit(w, r)
 		return
 	}
 
@@ -2201,7 +2201,11 @@ func (this *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		return
 	}
-	this.SaveFileMd5Log(&fileInfo, CONST_Md5_QUEUE_FILE_NAME)
+	if fileInfo.OffSet == -2 { // optimize migrate
+		this.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, this.ldb)
+	} else {
+		this.SaveFileMd5Log(&fileInfo, CONST_Md5_QUEUE_FILE_NAME)
+	}
 	this.AppendToDownloadQueue(&fileInfo)
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
