@@ -173,14 +173,16 @@ const (
 	"enable_cross_origin": true,
 	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
 	"enable_google_auth": false,
-	"认证url": "当url不为空时生效",
+	"认证url": "当url不为空时生效,注意:普通上传中使用http参数 auth_token 作为认证参数, 在断点续传中通过HTTP头Upload-Metadata中的auth_token作为认证参数,认证流程参考认证架构图",
 	"auth_url": "",
 	"下载是否认证": "默认不认证(注意此选项是在auth_url不为空的情况下生效)",
 	"enable_download_auth": false,
 	"默认是否下载": "默认下载",
 	"default_download": true,
 	"本机是否只读": "默认可读可写",
-	"read_only": false
+	"read_only": false,
+	"是否开启断点续传": "默认开启",
+	"enable_tus": true
 }
 	`
 )
@@ -279,6 +281,7 @@ type GloablConfig struct {
 	AuthUrl              string   `json:"auth_url"`
 	EnableDownloadAuth   bool     `json:"enable_download_auth"`
 	DefaultDownload      bool     `json:"default_download"`
+	EnableTus            bool     `json:"enable_tus"`
 }
 type FileInfoResult struct {
 	Name    string    `json:"name"`
@@ -3766,6 +3769,35 @@ func (this *Server) test() {
 	_ = testFile
 	//testFile()
 }
+
+type hookDataStore struct {
+	tusd.DataStore
+}
+
+func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) {
+	if Config().AuthUrl != "" {
+		if auth_token, ok := info.MetaData["auth_token"]; !ok {
+			msg := "token auth fail,auth_token is not in http header Upload-Metadata," +
+				"in uppy uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca' })"
+			log.Error(msg, fmt.Sprintf("current header:%v", info.MetaData))
+			return "", errors.New(msg)
+		} else {
+			req := httplib.Post(Config().AuthUrl)
+			req.Param("auth_token", auth_token)
+			req.SetTimeout(time.Second*5, time.Second*10)
+			content, err := req.String()
+			return "", nil
+			if err != nil {
+				log.Error(err)
+				return "", err
+			}
+			if strings.TrimSpace(content) != "ok" {
+				return "", err
+			}
+		}
+	}
+	return store.DataStore.NewUpload(info)
+}
 func (this *Server) initTus() {
 	var (
 		err     error
@@ -3845,11 +3877,18 @@ func (this *Server) initTus() {
 		}
 	}
 	store.UseIn(composer)
+	SetupPreHooks := func(composer *tusd.StoreComposer) {
+		composer.UseCore(hookDataStore{
+			DataStore: composer.Core,
+		})
+	}
+	SetupPreHooks(composer)
 	handler, err := tusd.NewHandler(tusd.Config{
-		Logger:                l,
-		BasePath:              bigDir,
-		StoreComposer:         composer,
-		NotifyCompleteUploads: true,
+		Logger:                  l,
+		BasePath:                bigDir,
+		StoreComposer:           composer,
+		NotifyCompleteUploads:   true,
+		RespectForwardedHeaders: true,
 	})
 	notify := func(handler *tusd.Handler) {
 		for {
@@ -3986,7 +4025,9 @@ func (this *Server) initComponent(isReload bool) {
 	Config().Peers = peers
 	if !isReload {
 		this.FormatStatInfo()
-		this.initTus()
+		if Config().EnableTus {
+			this.initTus()
+		}
 	}
 	for _, s := range Config().Scenes {
 		kv := strings.Split(s, ":")
@@ -4023,6 +4064,9 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			log.Error(string(buff))
 		}
 	}()
+	if Config().EnableCrossOrigin {
+		server.CrossOrigin(res, req)
+	}
 	http.DefaultServeMux.ServeHTTP(res, req)
 }
 func (this *Server) Main() {
