@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/md5"
 	"crypto/rand"
@@ -71,6 +72,7 @@ var (
 	CONST_LOG_LEVELDB_FILE_NAME = DATA_DIR + "/log.db"
 	CONST_STAT_FILE_NAME        = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME        = CONF_DIR + "/cfg.json"
+	CONST_SEARCH_FILE_NAME      = DATA_DIR + "/search.txt"
 	logConfigStr                = `
 <seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
 	<outputs formatid="common">  
@@ -111,7 +113,7 @@ const (
 	CONST_FILE_Md5_FILE_NAME       = "files.md5"
 	CONST_REMOME_Md5_FILE_NAME     = "removes.md5"
 	CONST_SMALL_FILE_SIZE          = 1024 * 1024
-	CONST_MESSAGE_CLUSTER_IP       = "Can only be called by the cluster ip,current ip:%s"
+	CONST_MESSAGE_CLUSTER_IP       = "Can only be called by the cluster ip or 127.0.0.1 or admin_ips(cfg.json),current ip:%s"
 	cfgJson                        = `{
 	"绑定端号": "端口",
 	"addr": ":8080",
@@ -171,14 +173,16 @@ const (
 	"enable_cross_origin": true,
 	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
 	"enable_google_auth": false,
-	"认证url": "当url不为空时生效",
+	"认证url": "当url不为空时生效,注意:普通上传中使用http参数 auth_token 作为认证参数, 在断点续传中通过HTTP头Upload-Metadata中的auth_token作为认证参数,认证流程参考认证架构图",
 	"auth_url": "",
 	"下载是否认证": "默认不认证(注意此选项是在auth_url不为空的情况下生效)",
 	"enable_download_auth": false,
 	"默认是否下载": "默认下载",
 	"default_download": true,
 	"本机是否只读": "默认可读可写",
-	"read_only": false
+	"read_only": false,
+	"是否开启断点续传": "默认开启",
+	"enable_tus": true
 }
 	`
 )
@@ -196,6 +200,7 @@ type Server struct {
 	queueFileLog   chan *FileLog
 	lockMap        *CommonMap
 	sceneMap       *CommonMap
+	searchMap      *CommonMap
 	curDate        string
 	host           string
 }
@@ -220,11 +225,13 @@ type JsonResult struct {
 	Data    interface{} `json:"data"`
 }
 type FileResult struct {
-	Url    string `json:"url"`
-	Md5    string `json:"md5"`
-	Path   string `json:"path"`
-	Domain string `json:"domain"`
-	Scene  string `json:"scene"`
+	Url     string `json:"url"`
+	Md5     string `json:"md5"`
+	Path    string `json:"path"`
+	Domain  string `json:"domain"`
+	Scene   string `json:"scene"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"mtime"`
 	//Just for Compatibility
 	Scenes  string `json:"scenes"`
 	Retmsg  string `json:"retmsg"`
@@ -274,6 +281,7 @@ type GloablConfig struct {
 	AuthUrl              string   `json:"auth_url"`
 	EnableDownloadAuth   bool     `json:"enable_download_auth"`
 	DefaultDownload      bool     `json:"default_download"`
+	EnableTus            bool     `json:"enable_tus"`
 }
 type FileInfoResult struct {
 	Name    string    `json:"name"`
@@ -282,6 +290,10 @@ type FileInfoResult struct {
 	Size    int64     `json:"size"`
 	ModTime time.Time `json:"mtime"`
 	IsDir   bool      `json:"is_dir"`
+}
+type Tuple struct {
+	Key string
+	Val interface{}
 }
 
 func NewServer() *Server {
@@ -294,6 +306,7 @@ func NewServer() *Server {
 		statMap:        NewCommonMap(0),
 		lockMap:        NewCommonMap(0),
 		sceneMap:       NewCommonMap(0),
+		searchMap:      NewCommonMap(0),
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFileLog:   make(chan *FileLog, CONST_QUEUE_SIZE),
@@ -337,7 +350,7 @@ func NewServer() *Server {
 }
 
 type CommonMap struct {
-	sync.Mutex
+	sync.RWMutex
 	m map[string]interface{}
 }
 
@@ -349,8 +362,8 @@ func NewCommonMap(size int) *CommonMap {
 	}
 }
 func (s *CommonMap) GetValue(k string) (interface{}, bool) {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 	v, ok := s.m[k]
 	return v, ok
 }
@@ -358,6 +371,18 @@ func (s *CommonMap) Put(k string, v interface{}) {
 	s.Lock()
 	defer s.Unlock()
 	s.m[k] = v
+}
+func (s *CommonMap) Iter() <-chan Tuple { // reduce memory
+	ch := make(chan Tuple)
+	go func() {
+		s.RLock()
+		for k, v := range s.m {
+			ch <- Tuple{Key: k, Val: v}
+		}
+		close(ch)
+		s.RUnlock()
+	}()
+	return ch
 }
 func (s *CommonMap) LockKey(k string) {
 	s.Lock()
@@ -965,11 +990,12 @@ func (this *Server) RepairFileInfoFromFile() {
 					continue
 				}
 				pathMd5 = this.util.MD5(file_path + "/" + fi.Name())
-				if finfo, _ := this.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
-					log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))
-					continue
-				}
-				sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+				//if finfo, _ := this.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
+				//	log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))
+				//	continue
+				//}
+				//sum, err = this.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
+				sum = pathMd5
 				if err != nil {
 					log.Error(err)
 					continue
@@ -981,13 +1007,14 @@ func (this *Server) RepairFileInfoFromFile() {
 					Md5:       sum,
 					TimeStamp: fi.ModTime().Unix(),
 					Peers:     []string{this.host},
-					OffSet:    -1,
+					OffSet:    -2,
 				}
 				//log.Info(fileInfo)
 				log.Info(file_path, fi.Name())
 				//this.AppendToQueue(&fileInfo)
 				this.postFileToPeer(&fileInfo)
-				this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+				this.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, this.ldb)
+				//this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
 		}
 		return nil
@@ -1167,9 +1194,27 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	//filename=this.util.UrlEncode(filename)
 	downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
-	req := httplib.Get(downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	timeout := fileInfo.Size/1024/1024/8 + 30
+	if fileInfo.OffSet == -2 { //migrate file
+		this.lockMap.LockKey(fpath)
+		defer this.lockMap.UnLockKey(fpath)
+		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size { //prevent double download
+			this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
+			log.Info(fmt.Sprintf("file '%s' has download", fpath))
+			return
+		}
+		req := httplib.Get(downloadUrl)
+		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
+		if err = req.ToFile(fpath); err != nil {
+			log.Error(err)
+			return
+		}
+		//this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+		this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
+		return
+	}
+	req := httplib.Get(downloadUrl)
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 	if fileInfo.OffSet != -1 { //small file download
 		data, err = req.Bytes()
@@ -1254,54 +1299,135 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 func (this *Server) NotPermit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(403)
 }
-func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
+
+func (this *Server) GetFilePathFromRequest(w http.ResponseWriter, r *http.Request) (string, string) {
 	var (
-		ok       bool
-		err      error
-		pathMd5  string
-		info     os.FileInfo
-		peer     string
-		fileInfo *FileInfo
-		fullpath string
-		//pathval      url.Values
-		token        string
-		timestamp    string
+		err       error
+		fullpath  string
+		smallPath string
+	)
+	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+	fullpath = strings.Split(fullpath, "?")[0] // just path
+	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
+	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
+		smallPath = fullpath //notice order
+		fullpath = strings.Split(fullpath, ",")[0]
+	}
+	if fullpath, err = url.PathUnescape(fullpath); err != nil {
+		log.Error(err)
+	}
+	return fullpath, smallPath
+}
+func (this *Server) CheckDownloadAuth(w http.ResponseWriter, r *http.Request) (bool, error) {
+	var (
+		err          error
 		maxTimestamp int64
 		minTimestamp int64
 		ts           int64
-		md5sum       string
-		fp           *os.File
-		isPeer       bool
-		isSmallFile  bool
-		data         []byte
-		offset       int64
-		length       int
+		token        string
+		timestamp    string
+		fullpath     string
 		smallPath    string
-		notFound     bool
-		//isBigFile    bool
-		code       string
-		secret     interface{}
-		scene      string
+		pathMd5      string
+		fileInfo     *FileInfo
+		scene        string
+		secret       interface{}
+		code         string
+		ok           bool
+	)
+	CheckToken := func(token string, md5sum string, timestamp string) bool {
+		if this.util.MD5(md5sum+timestamp) != token {
+			return false
+		}
+		return true
+	}
+	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) && !this.CheckAuth(w, r) {
+		return false, errors.New("auth fail")
+	}
+	if Config().DownloadUseToken && !this.IsPeer(r) {
+		token = r.FormValue("token")
+		timestamp = r.FormValue("timestamp")
+		if token == "" || timestamp == "" {
+			return false, errors.New("unvalid request")
+		}
+		maxTimestamp = time.Now().Add(time.Second *
+			time.Duration(Config().DownloadTokenExpire)).Unix()
+		minTimestamp = time.Now().Add(-time.Second *
+			time.Duration(Config().DownloadTokenExpire)).Unix()
+		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
+			return false, errors.New("unvalid timestamp")
+		}
+		if ts > maxTimestamp || ts < minTimestamp {
+			return false, errors.New("timestamp expire")
+		}
+		fullpath, smallPath = this.GetFilePathFromRequest(w, r)
+		if smallPath != "" {
+			pathMd5 = this.util.MD5(smallPath)
+		} else {
+			pathMd5 = this.util.MD5(fullpath)
+		}
+		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
+			// TODO
+		} else {
+			ok := CheckToken(token, fileInfo.Md5, timestamp)
+			if !ok {
+				return ok, errors.New("unvalid token")
+			}
+			return ok, nil
+		}
+	}
+	if Config().EnableGoogleAuth && !this.IsPeer(r) {
+		fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+		fullpath = strings.Split(fullpath, "?")[0] // just path
+		scene = strings.Split(fullpath, "/")[0]
+		code = r.FormValue("code")
+		if secret, ok = this.sceneMap.GetValue(scene); ok {
+			if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
+				return false, errors.New("invalid google code")
+			}
+		}
+	}
+	return true, nil
+}
+
+func (this *Server) GetSmallFileByURI(w http.ResponseWriter, r *http.Request) ([]byte, bool, error) {
+	var (
+		err      error
+		data     []byte
+		offset   int64
+		length   int
+		fullpath string
+		info     os.FileInfo
+	)
+	fullpath, _ = this.GetFilePathFromRequest(w, r)
+	if _, offset, length, err = this.ParseSmallFile(r.RequestURI); err != nil {
+		return nil, false, err
+	}
+	if info, err = os.Stat(fullpath); err != nil {
+		return nil, false, err
+	}
+	if info.Size() < offset+int64(length) {
+		return nil, true, errors.New("noFound")
+	} else {
+		data, err = this.util.ReadFileByOffSet(fullpath, offset, length)
+		if err != nil {
+			return nil, false, err
+		}
+		return data, false, err
+	}
+}
+func (this *Server) DownloadSmallFileByURI(w http.ResponseWriter, r *http.Request) (bool, error) {
+	var (
+		err        error
+		data       []byte
 		isDownload bool
 		imgWidth   int
 		imgHeight  int
 		width      string
 		height     string
+		notFound   bool
 	)
-	code = r.FormValue("code")
-	if err = r.ParseForm(); err != nil {
-		log.Error(err)
-	}
-	if Config().EnableCrossOrigin {
-		this.CrossOrigin(w, r)
-	}
-	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !this.IsPeer(r) {
-		if !this.CheckAuth(w, r) {
-			this.NotPermit(w, r)
-			log.Warn("auth fail", r.Form)
-			return
-		}
-	}
+	r.ParseForm()
 	isDownload = true
 	if r.FormValue("download") == "" {
 		isDownload = Config().DefaultDownload
@@ -1323,175 +1449,144 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 		}
 	}
+	data, notFound, err = this.GetSmallFileByURI(w, r)
+	_ = notFound
+	if data != nil && string(data[0]) == "1" {
+		if isDownload {
+			this.SetDownloadHeader(w, r)
+		}
+		if (imgWidth != 0 || imgHeight != 0) {
+			this.ResizeImageByBytes(w, data[1:], uint(imgWidth), uint(imgHeight))
+			return true, nil
+		}
+		w.Write(data[1:])
+		return true, nil
+	}
+	return false, errors.New("not found")
+}
+func (this *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Request) (bool, error) {
+	var (
+		err        error
+		isDownload bool
+		imgWidth   int
+		imgHeight  int
+		width      string
+		height     string
+	)
 	r.ParseForm()
-	isPeer = this.IsPeer(r)
-	if Config().DownloadUseToken && !isPeer {
-		token = r.FormValue("token")
-		timestamp = r.FormValue("timestamp")
-		if token == "" || timestamp == "" {
-			this.NotPermit(w, r)
-			w.Write([]byte("unvalid request"))
-			return
-		}
-		maxTimestamp = time.Now().Add(time.Second *
-			time.Duration(Config().DownloadTokenExpire)).Unix()
-		minTimestamp = time.Now().Add(-time.Second *
-			time.Duration(Config().DownloadTokenExpire)).Unix()
-		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
-			this.NotPermit(w, r)
-			w.Write([]byte("unvalid timestamp"))
-			return
-		}
-		if ts > maxTimestamp || ts < minTimestamp {
-			this.NotPermit(w, r)
-			w.Write([]byte("timestamp expire"))
-			return
-		}
+	isDownload = true
+	if r.FormValue("download") == "" {
+		isDownload = Config().DefaultDownload
 	}
-	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
-	fullpath = strings.Split(fullpath, "?")[0] // just path
-	if Config().EnableGoogleAuth {
-		scene = strings.Split(fullpath, "/")[0]
-		if secret, ok = this.sceneMap.GetValue(scene); ok {
-			if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
-				this.NotPermit(w, r)
-				w.Write([]byte("invalid google code"))
-				return
-			}
-		}
+	if r.FormValue("download") == "0" {
+		isDownload = false
 	}
-
-	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
-	//fmt.Println("fullpath",fullpath)
-	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
-		isSmallFile = true
-		smallPath = fullpath //notice order
-		fullpath = strings.Split(fullpath, ",")[0]
-	}
-	_ = isSmallFile
-	_ = smallPath
-	if fullpath, err = url.PathUnescape(fullpath); err != nil {
-		log.Error(err)
-	}
-	CheckToken := func(token string, md5sum string, timestamp string) bool {
-		if this.util.MD5(md5sum+timestamp) != token {
-			return false
-		}
-		return true
-	}
-	if Config().DownloadUseToken && !isPeer {
-		if isSmallFile {
-			pathMd5 = this.util.MD5(smallPath)
-		} else {
-			fullpath = strings.Split(fullpath, "?")[0]
-			pathMd5 = this.util.MD5(fullpath)
-		}
-		if fileInfo, err = this.GetFileInfoFromLevelDB(pathMd5); err != nil {
+	width = r.FormValue("width")
+	height = r.FormValue("height")
+	if width != "" {
+		imgWidth, err = strconv.Atoi(width)
+		if err != nil {
 			log.Error(err)
-			if this.util.FileExists(fullpath) {
-				if fp, err = os.Create(fullpath); err != nil {
-					log.Error(err)
-				}
-				if fp != nil {
-					defer fp.Close()
-				}
-				md5sum = this.util.GetFileSum(fp, Config().FileSumArithmetic)
-				if !CheckToken(token, md5sum, timestamp) {
-					w.Write([]byte("unvalid request,error token"))
-					return
-				}
-			}
-		} else {
-			if !CheckToken(token, fileInfo.Md5, timestamp) {
-				this.NotPermit(w, r)
-				w.Write([]byte("unvalid request,error token"))
-				return
-			}
 		}
 	}
-	if isSmallFile {
-		if _, offset, length, err = this.ParseSmallFile(r.RequestURI); err != nil {
+	if height != "" {
+		imgHeight, err = strconv.Atoi(height)
+		if err != nil {
 			log.Error(err)
-			w.Write([]byte(err.Error()))
-			return
-		}
-		if info, err = os.Stat(fullpath); err != nil {
-			notFound = true
-			goto NotFound // if return can't not repair file
-			return
-		}
-		if info.Size() < offset+int64(length) {
-			notFound = true
-		} else {
-			data, err = this.util.ReadFileByOffSet(fullpath, offset, length)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-			if string(data[0]) == "1" {
-				if isDownload {
-					this.SetDownloadHeader(w, r)
-				}
-				if (imgWidth != 0 || imgHeight != 0) {
-					this.ResizeImageByBytes(w, data[1:], uint(imgWidth), uint(imgHeight))
-					return
-				}
-				w.Write(data[1:])
-				return
-			} else {
-				notFound = true
-			}
 		}
 	}
-NotFound:
-	if info, err = os.Stat(fullpath); err != nil || info.Size() == 0 || notFound {
-		log.Error(err, fullpath, smallPath)
-		if isSmallFile && notFound {
-			pathMd5 = this.util.MD5(smallPath)
-		} else {
-			if err == nil && Config().ShowDir && info.IsDir() {
-				goto SHOW_DIR
-			}
-			pathMd5 = this.util.MD5(fullpath)
-		}
-		for _, peer = range Config().Peers {
-			if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil {
-				log.Error(err)
-				continue
-			}
-			if fileInfo.Md5 != "" {
-				if Config().DownloadUseToken && !isPeer {
-					if !CheckToken(token, fileInfo.Md5, timestamp) {
-						w.Write([]byte("unvalid request,error token"))
-						return
-					}
-				}
-				go this.DownloadFromPeer(peer, fileInfo)
-				//http.Redirect(w, r, peer+r.RequestURI, 302)
-				if isDownload {
-					this.SetDownloadHeader(w, r)
-				}
-				this.DownloadFileToResponse(peer+r.RequestURI, w, r)
-				return
-			}
-		}
-		w.WriteHeader(404)
-		return
-	}
-SHOW_DIR:
-	if !Config().ShowDir && info.IsDir() {
-		w.Write([]byte("list dir deny"))
-		return
-	}
-	if !info.IsDir() && isDownload {
+	fmt.Println(isDownload)
+	if isDownload {
 		this.SetDownloadHeader(w, r)
 	}
-	log.Info("download:" + r.RequestURI)
-	if (imgHeight != 0 || imgWidth != 0) {
+	fullpath, _ := this.GetFilePathFromRequest(w, r)
+	if (imgWidth != 0 || imgHeight != 0) {
 		this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
-		return
+		return true, nil
 	}
 	staticHandler.ServeHTTP(w, r)
+	return true, nil
+}
+func (this *Server) DownloadNotFound(w http.ResponseWriter, r *http.Request) {
+	var (
+		err        error
+		fullpath   string
+		smallPath  string
+		isDownload bool
+		pathMd5    string
+		peer       string
+		fileInfo   *FileInfo
+	)
+	fullpath, smallPath = this.GetFilePathFromRequest(w, r)
+	isDownload = true
+	if r.FormValue("download") == "" {
+		isDownload = Config().DefaultDownload
+	}
+	if r.FormValue("download") == "0" {
+		isDownload = false
+	}
+	if smallPath != "" {
+		pathMd5 = this.util.MD5(smallPath)
+	} else {
+		pathMd5 = this.util.MD5(fullpath)
+	}
+	for _, peer = range Config().Peers {
+		if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil {
+			log.Error(err)
+			continue
+		}
+		if fileInfo.Md5 != "" {
+			go this.DownloadFromPeer(peer, fileInfo)
+			//http.Redirect(w, r, peer+r.RequestURI, 302)
+			if isDownload {
+				this.SetDownloadHeader(w, r)
+			}
+			this.DownloadFileToResponse(peer+r.RequestURI, w, r)
+			return
+		}
+	}
+	w.WriteHeader(404)
+	return
+}
+func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
+	var (
+		err       error
+		ok        bool
+		fullpath  string
+		smallPath string
+		fi        os.FileInfo
+	)
+	if ok, err = this.CheckDownloadAuth(w, r); !ok {
+		log.Error(err)
+		this.NotPermit(w, r)
+		return
+	}
+
+	if Config().EnableCrossOrigin {
+		this.CrossOrigin(w, r)
+	}
+	fullpath, smallPath = this.GetFilePathFromRequest(w, r)
+	if smallPath == "" {
+		if fi, err = os.Stat(fullpath); err != nil {
+			this.DownloadNotFound(w, r)
+			return
+		}
+		if !Config().ShowDir && fi.IsDir() {
+			w.Write([]byte("list dir deny"))
+			return
+		}
+		//staticHandler.ServeHTTP(w, r)
+		this.DownloadNormalFileByURI(w, r)
+		return
+	}
+	if smallPath != "" {
+		if ok, err = this.DownloadSmallFileByURI(w, r); !ok {
+			this.DownloadNotFound(w, r)
+			return
+		}
+		return
+	}
+
 }
 func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r *http.Request) {
 	var (
@@ -1654,12 +1749,14 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 				}
 			}
 		}
-		if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
-			fileInfo.Peers = append(fileInfo.Peers, peer)
-			if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
-				log.Error(err)
+		if fileInfo.OffSet != -2 { //migrate file
+			if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
+				fileInfo.Peers = append(fileInfo.Peers, peer)
+				if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
+					log.Error(err)
+				}
+				continue
 			}
-			continue
 		}
 		postURL = fmt.Sprintf("%s%s", peer, this.getRequestURI("syncfile_info"))
 		b := httplib.Post(postURL)
@@ -1727,6 +1824,7 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 	fullpath = fileInfo.Path + "/" + outname
 	logKey = fmt.Sprintf("%s_%s_%s", logDate, filename, fileInfo.Md5)
 	if filename == CONST_FILE_Md5_FILE_NAME {
+		//this.searchMap.Put(fileInfo.Md5, fileInfo.Name)
 		if ok, err = this.IsExistFromLevelDB(fileInfo.Md5, this.ldb); !ok {
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, 1)
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
@@ -1744,6 +1842,7 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 		return
 	}
 	if filename == CONST_REMOME_Md5_FILE_NAME {
+		//this.searchMap.Remove(fileInfo.Md5)
 		if ok, err = this.IsExistFromLevelDB(fileInfo.Md5, this.ldb); ok {
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_COUNT_KEY, -1)
 			this.statMap.AddCountInt64(logDate+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, -fileInfo.Size)
@@ -2105,7 +2204,11 @@ func (this *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		return
 	}
-	this.SaveFileMd5Log(&fileInfo, CONST_Md5_QUEUE_FILE_NAME)
+	if fileInfo.OffSet == -2 { // optimize migrate
+		this.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, this.ldb)
+	} else {
+		this.SaveFileMd5Log(&fileInfo, CONST_Md5_QUEUE_FILE_NAME)
+	}
 	this.AppendToDownloadQueue(&fileInfo)
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
@@ -2131,6 +2234,37 @@ func (this *Server) CheckScene(scene string) (bool, error) {
 	}
 	return true, nil
 }
+func (this *Server) GetFileInfo(w http.ResponseWriter, r *http.Request) {
+	var (
+		fpath    string
+		md5sum   string
+		fileInfo *FileInfo
+		err      error
+		result   JsonResult
+	)
+	md5sum = r.FormValue("md5")
+	fpath = r.FormValue("path")
+	result.Status = "fail"
+	if !this.IsPeer(r) {
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+		return
+	}
+	md5sum = r.FormValue("md5")
+	if fpath != "" {
+		fpath = strings.Replace(fpath, "/"+Config().Group+"/", STORE_DIR_NAME+"/", 1)
+		md5sum = this.util.MD5(fpath)
+	}
+	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); err != nil {
+		log.Error(err)
+		result.Message = err.Error()
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
+	}
+	result.Status = "ok"
+	result.Data = fileInfo
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
+	return
+}
 func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
@@ -2149,6 +2283,10 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	fpath = r.FormValue("path")
 	inner = r.FormValue("inner")
 	result.Status = "fail"
+	if !this.IsPeer(r) {
+		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+		return
+	}
 	if fpath != "" && md5sum == "" {
 		fpath = strings.Replace(fpath, "/"+Config().Group+"/", STORE_DIR_NAME+"/", 1)
 		md5sum = this.util.MD5(fpath)
@@ -2243,6 +2381,8 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 	fileResult.Path = "/" + p
 	fileResult.Domain = domain
 	fileResult.Scene = fileInfo.Scene
+	fileResult.Size = fileInfo.Size
+	fileResult.ModTime = fileInfo.TimeStamp
 	// Just for Compatibility
 	fileResult.Src = fileResult.Path
 	fileResult.Scenes = fileInfo.Scene
@@ -2767,6 +2907,49 @@ func (this *Server) ConsumerLog() {
 		}
 	}()
 }
+func (this *Server) LoadSearchDict() {
+	go func() {
+		log.Info("Load search dict ....")
+		f, err := os.Open(CONST_SEARCH_FILE_NAME)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		defer f.Close()
+		r := bufio.NewReader(f)
+		for {
+			line, isprefix, err := r.ReadLine()
+			for isprefix && err == nil {
+				kvs := strings.Split(string(line), "\t")
+				if len(kvs) == 2 {
+					this.searchMap.Put(kvs[0], kvs[1])
+				}
+			}
+		}
+		log.Info("finish load search dict")
+	}()
+}
+func (this *Server) SaveSearchDict() {
+	var (
+		err        error
+		fp         *os.File
+		searchDict map[string]interface{}
+		k          string
+		v          interface{}
+	)
+	this.lockMap.LockKey(CONST_SEARCH_FILE_NAME)
+	defer this.lockMap.UnLockKey(CONST_SEARCH_FILE_NAME)
+	searchDict = this.searchMap.Get()
+	fp, err = os.OpenFile(CONST_SEARCH_FILE_NAME, os.O_RDWR, 0755)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	defer fp.Close()
+	for k, v = range searchDict {
+		fp.WriteString(fmt.Sprintf("%s\t%s", k, v.(string)))
+	}
+}
 func (this *Server) ConsumerPostToPeer() {
 	ConsumerFunc := func() {
 		for {
@@ -3108,16 +3291,35 @@ func (this *Server) RemoveEmptyDir(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 	var (
+		err    error
 		date   string
 		result JsonResult
+		inner  string
+		url    string
 	)
 	result.Status = "ok"
 	r.ParseForm()
 	date = r.FormValue("date")
+	inner = r.FormValue("inner")
 	if date == "" {
 		date = this.util.GetToDay()
 	}
 	if this.IsPeer(r) {
+		if inner != "1" {
+			for _, peer := range Config().Peers {
+				backUp := func(peer string, date string) {
+					url = fmt.Sprintf("%s%s", peer, this.getRequestURI("backup"))
+					req := httplib.Post(url)
+					req.Param("date", date)
+					req.Param("inner", "1")
+					req.SetTimeout(time.Second*5, time.Second*600)
+					if _, err = req.String(); err != nil {
+						log.Error(err)
+					}
+				}
+				go backUp(peer, date)
+			}
+		}
 		go this.BackUpMetaDataByDate(date)
 		result.Message = "back job start..."
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
@@ -3125,6 +3327,63 @@ func (this *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 		result.Message = this.GetClusterNotPermitMessage(r)
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
 	}
+}
+
+// Notice: performance is poor,just for low capacity,but low memory , if you want to high performance,use searchMap for search,but memory ....
+func (this *Server) Search(w http.ResponseWriter, r *http.Request) {
+	var (
+		result    JsonResult
+		err       error
+		kw        string
+		count     int
+		fileInfos []FileInfo
+		md5s      []string
+	)
+	kw = r.FormValue("kw")
+	if !this.IsPeer(r) {
+		result.Message = this.GetClusterNotPermitMessage(r)
+		w.Write([]byte(this.util.JsonEncodePretty(result)))
+	}
+	iter := this.ldb.NewIterator(nil, nil)
+	for iter.Next() {
+		var fileInfo FileInfo
+		value := iter.Value()
+		if err = json.Unmarshal(value, &fileInfo); err != nil {
+			log.Error(err)
+			continue
+		}
+		if strings.Contains(fileInfo.Name, kw) && !this.util.Contains(fileInfo.Md5, md5s) {
+			count = count + 1
+			fileInfos = append(fileInfos, fileInfo)
+			md5s = append(md5s, fileInfo.Md5)
+		}
+		if count >= 100 {
+			break
+		}
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		log.Error()
+	}
+	//fileInfos=this.SearchDict(kw) // serch file from map for huge capacity
+	result.Status = "ok"
+	result.Data = fileInfos
+	w.Write([]byte(this.util.JsonEncodePretty(result)))
+}
+func (this *Server) SearchDict(kw string) []FileInfo {
+	var (
+		fileInfos []FileInfo
+		fileInfo  *FileInfo
+	)
+	for dict := range this.searchMap.Iter() {
+		if strings.Contains(dict.Val.(string), kw) {
+			if fileInfo, _ = this.GetFileInfoFromLevelDB(dict.Key); fileInfo != nil {
+				fileInfos = append(fileInfos, *fileInfo)
+			}
+		}
+	}
+	return fileInfos
 }
 func (this *Server) ListDir(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -3141,11 +3400,11 @@ func (this *Server) ListDir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir = r.FormValue("dir")
-	if dir == "" {
-		result.Message = "dir can't null"
-		w.Write([]byte(this.util.JsonEncodePretty(result)))
-		return
-	}
+	//if dir == "" {
+	//	result.Message = "dir can't null"
+	//	w.Write([]byte(this.util.JsonEncodePretty(result)))
+	//	return
+	//}
 	dir = strings.Replace(dir, ".", "", -1)
 	if tmpDir, err = os.Readlink(dir); err == nil {
 		dir = tmpDir
@@ -3168,6 +3427,7 @@ func (this *Server) ListDir(w http.ResponseWriter, r *http.Request) {
 		}
 		filesResult = append(filesResult, fi)
 	}
+	result.Status = "ok"
 	result.Data = filesResult
 	w.Write([]byte(this.util.JsonEncodePretty(result)))
 	return
@@ -3393,6 +3653,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					uppy.on('complete', (result) => {
 					 // console.log(result) console.log('Upload complete! We’ve uploaded these files:', result.successful)
 					})
+					uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca',callback_url:'http://127.0.0.1/callback' })//这里是传递上传的认证参数,callback_url参数中 id为文件的ID,info 文转的基本信息json
                 </script>
 				</div>
 			  </body>
@@ -3431,6 +3692,7 @@ func init() {
 	CONST_LOG_LEVELDB_FILE_NAME = DATA_DIR + "/log.db"
 	CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
+	CONST_SEARCH_FILE_NAME = DATA_DIR + "/search.txt"
 	FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR, STATIC_DIR}
 	logAccessConfigStr = strings.Replace(logAccessConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
 	logConfigStr = strings.Replace(logConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
@@ -3507,6 +3769,34 @@ func (this *Server) test() {
 	}
 	_ = testFile
 	//testFile()
+}
+
+type hookDataStore struct {
+	tusd.DataStore
+}
+
+func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) {
+	if Config().AuthUrl != "" {
+		if auth_token, ok := info.MetaData["auth_token"]; !ok {
+			msg := "token auth fail,auth_token is not in http header Upload-Metadata," +
+				"in uppy uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca' })"
+			log.Error(msg, fmt.Sprintf("current header:%v", info.MetaData))
+			return "", errors.New(msg)
+		} else {
+			req := httplib.Post(Config().AuthUrl)
+			req.Param("auth_token", auth_token)
+			req.SetTimeout(time.Second*5, time.Second*10)
+			content, err := req.String()
+			if err != nil {
+				log.Error(err)
+				return "", err
+			}
+			if strings.TrimSpace(content) != "ok" {
+				return "", err
+			}
+		}
+	}
+	return store.DataStore.NewUpload(info)
 }
 func (this *Server) initTus() {
 	var (
@@ -3587,11 +3877,18 @@ func (this *Server) initTus() {
 		}
 	}
 	store.UseIn(composer)
+	SetupPreHooks := func(composer *tusd.StoreComposer) {
+		composer.UseCore(hookDataStore{
+			DataStore: composer.Core,
+		})
+	}
+	SetupPreHooks(composer)
 	handler, err := tusd.NewHandler(tusd.Config{
-		Logger:                l,
-		BasePath:              bigDir,
-		StoreComposer:         composer,
-		NotifyCompleteUploads: true,
+		Logger:                  l,
+		BasePath:                bigDir,
+		StoreComposer:           composer,
+		NotifyCompleteUploads:   true,
+		RespectForwardedHeaders: true,
 	})
 	notify := func(handler *tusd.Handler) {
 		for {
@@ -3653,6 +3950,18 @@ func (this *Server) initTus() {
 				}
 				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 				go this.postFileToPeer(fileInfo)
+				callBack := func(info tusd.FileInfo, fileInfo *FileInfo) {
+					if callback_url, ok := info.MetaData["callback_url"]; ok {
+						req := httplib.Post(callback_url)
+						req.SetTimeout(time.Second*10, time.Second*10)
+						req.Param("info", server.util.JsonEncodePretty(fileInfo))
+						req.Param("id", info.ID)
+						if _, err := req.String(); err != nil {
+							log.Error(err)
+						}
+					}
+				}
+				go callBack(info, fileInfo)
 			}
 		}
 	}
@@ -3728,7 +4037,9 @@ func (this *Server) initComponent(isReload bool) {
 	Config().Peers = peers
 	if !isReload {
 		this.FormatStatInfo()
-		this.initTus()
+		if Config().EnableTus {
+			this.initTus()
+		}
 	}
 	for _, s := range Config().Scenes {
 		kv := strings.Split(s, ":")
@@ -3765,6 +4076,9 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			log.Error(string(buff))
 		}
 	}()
+	if Config().EnableCrossOrigin {
+		server.CrossOrigin(res, req)
+	}
 	http.DefaultServeMux.ServeHTTP(res, req)
 }
 func (this *Server) Main() {
@@ -3782,6 +4096,7 @@ func (this *Server) Main() {
 	go this.ConsumerPostToPeer()
 	go this.ConsumerLog()
 	go this.ConsumerDownLoad()
+	//go this.LoadSearchDict()
 	if Config().EnableMigrate {
 		go this.RepairFileInfoFromFile()
 	}
@@ -3809,6 +4124,7 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
 	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)
 	http.HandleFunc(fmt.Sprintf("%s/delete", groupRoute), this.RemoveFile)
+	http.HandleFunc(fmt.Sprintf("%s/get_file_info", groupRoute), this.GetFileInfo)
 	http.HandleFunc(fmt.Sprintf("%s/sync", groupRoute), this.Sync)
 	http.HandleFunc(fmt.Sprintf("%s/stat", groupRoute), this.Stat)
 	http.HandleFunc(fmt.Sprintf("%s/repair_stat", groupRoute), this.RepairStatWeb)
@@ -3816,6 +4132,7 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/repair", groupRoute), this.Repair)
 	http.HandleFunc(fmt.Sprintf("%s/report", groupRoute), this.Report)
 	http.HandleFunc(fmt.Sprintf("%s/backup", groupRoute), this.BackUp)
+	http.HandleFunc(fmt.Sprintf("%s/search", groupRoute), this.Search)
 	http.HandleFunc(fmt.Sprintf("%s/list_dir", groupRoute), this.ListDir)
 	http.HandleFunc(fmt.Sprintf("%s/remove_empty_dir", groupRoute), this.RemoveEmptyDir)
 	http.HandleFunc(fmt.Sprintf("%s/repair_fileinfo", groupRoute), this.RepairFileInfo)
