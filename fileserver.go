@@ -3653,6 +3653,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					uppy.on('complete', (result) => {
 					 // console.log(result) console.log('Upload complete! We’ve uploaded these files:', result.successful)
 					})
+					uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca',callback_url:'http://127.0.0.1/callback' })//这里是传递上传的认证参数,callback_url参数中 id为文件的ID,info 文转的基本信息json
                 </script>
 				</div>
 			  </body>
@@ -3950,6 +3951,18 @@ func (this *Server) initTus() {
 				}
 				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 				go this.postFileToPeer(fileInfo)
+				callBack := func(info tusd.FileInfo, fileInfo *FileInfo) {
+					if callback_url, ok := info.MetaData["callback_url"]; ok {
+						req := httplib.Post(callback_url)
+						req.SetTimeout(time.Second*10, time.Second*10)
+						req.Param("info", server.util.JsonEncodePretty(fileInfo))
+						req.Param("id", info.ID)
+						if _, err := req.String(); err != nil {
+							log.Error(err)
+						}
+					}
+				}
+				go callBack(info, fileInfo)
 			}
 		}
 	}
