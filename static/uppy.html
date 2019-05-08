@@ -19,11 +19,15 @@
 					  <input type="text" id="output" name="output" value="json" /></span>
 					<span class="form-line">自定义路径(path):
 					  <input type="text" id="path" name="path" value="" /></span>
-					<input type="submit" name="submit" value="upload" /></form>
+	              <span class="form-line">google认证码(code):
+					  <input type="text" id="code" name="code" value="" /></span>
+					 <span class="form-line">自定义认证(auth_token):
+					  <input type="text" id="auth_token" name="auth_token" value="" /></span>
+					<input type="submit" name="submit" value="upload" />
+                </form>
 				</div>
                  <div>断点续传（如果文件很大时可以考虑）</div>
 				<div>
-
 				 
 				  <div id="drag-drop-area"></div>
 				  <script src="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.js"></script>
@@ -33,12 +37,11 @@
 					}).use(Uppy.Tus, {
 					  endpoint: '%s'
 					})
-
 					uppy.on('complete', (result) => {
 					 // console.log(result) console.log('Upload complete! We’ve uploaded these files:', result.successful)
 					})
-                </script>
+                    uppy.setMeta({ auth_token: 'xx',callback_url:'http://127.0.0.1/callback' })//这里是传递上传的认证参数,callback_url参数中 id为文件的ID,info 文转的基本信息json
+				  </script>
 				</div>
 			  </body>
-
-</html>
+			</html>
