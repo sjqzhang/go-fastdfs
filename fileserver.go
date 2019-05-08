@@ -3787,7 +3787,6 @@ func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) 
 			req.Param("auth_token", auth_token)
 			req.SetTimeout(time.Second*5, time.Second*10)
 			content, err := req.String()
-			return "", nil
 			if err != nil {
 				log.Error(err)
 				return "", err
