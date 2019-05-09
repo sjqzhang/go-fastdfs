@@ -20,6 +20,7 @@ import (
 	"github.com/sjqzhang/tusd"
 	"github.com/sjqzhang/tusd/filestore"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"image"
 	"image/jpeg"
@@ -333,13 +334,17 @@ func NewServer() *Server {
 	server.statMap.Put(server.util.GetToDay()+"_"+CONST_STAT_FILE_COUNT_KEY, int64(0))
 	server.statMap.Put(server.util.GetToDay()+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
 	server.curDate = server.util.GetToDay()
-	server.ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, nil)
+	opts := &opt.Options{
+		CompactionTableSize: 1024 * 1024 * 20,
+		WriteBuffer:         1024 * 1024 * 20,
+	}
+	server.ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, opts)
 	if err != nil {
 		fmt.Println(err)
 		log.Error(err)
 		panic(err)
 	}
-	server.logDB, err = leveldb.OpenFile(CONST_LOG_LEVELDB_FILE_NAME, nil)
+	server.logDB, err = leveldb.OpenFile(CONST_LOG_LEVELDB_FILE_NAME, opts)
 	if err != nil {
 		fmt.Println(err)
 		log.Error(err)
@@ -1021,9 +1026,9 @@ func (this *Server) RepairFileInfoFromFile() {
 					OffSet:    -2,
 				}
 				//log.Info(fileInfo)
-				log.Info(file_path, fi.Name())
-				//this.AppendToQueue(&fileInfo)
-				this.postFileToPeer(&fileInfo)
+				log.Info(file_path, "/", fi.Name())
+				this.AppendToQueue(&fileInfo)
+				//this.postFileToPeer(&fileInfo)
 				this.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, this.ldb)
 				//this.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
 			}
@@ -1100,71 +1105,18 @@ func (this *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo) bool {
 	if fileInfo == nil {
 		return false
 	}
-	if fileInfo.OffSet >=0 { //small file
+	if fileInfo.OffSet >= 0 { //small file
 		if info, err = this.GetFileInfoFromLevelDB(fileInfo.Md5); err == nil && info.Md5 == fileInfo.Md5 {
 			return true
 		} else {
 			return false
 		}
 	}
-	fullpath=this.GetFilePathByInfo(fileInfo)
+	fullpath = this.GetFilePathByInfo(fileInfo)
 	if fi, err = os.Stat(fullpath); err != nil {
 		return false
 	}
 	if fi.Size() == fileInfo.Size {
-		return true
-	} else {
-		return false
-	}
-}
-func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool { // important: just for DownloadFromPeer use
-	var (
-		err    error
-		info   *FileInfo
-		fn     string
-		name   string
-		offset int64
-		data   []byte
-	)
-	if info, err = this.GetFileInfoFromLevelDB(md5s); err != nil {
-		return false
-	}
-	if info == nil || info.Md5 == "" {
-		return false
-	}
-	if info.Path != fileInfo.Path { // upload thee same file at a tiime from two peer
-		return false
-	}
-	fn = info.Name
-	if info.ReName != "" {
-		fn = info.ReName
-	}
-	if info.OffSet == -1 {
-		if this.util.FileExists(DOCKER_DIR + info.Path + "/" + fn) {
-			return true
-		} else {
-			return false
-		}
-	} else { //small file
-		if name, offset, _, err = this.ParseSmallFile(fn); err != nil {
-			return false
-		}
-		if !this.util.FileExists(DOCKER_DIR + info.Path + "/" + name) {
-			return false
-		}
-		if data, err = this.util.ReadFileByOffSet(DOCKER_DIR+info.Path+"/"+name, offset, 1); err != nil {
-			return false
-		}
-		if data[0] == '1' {
-			return true
-		}
-	}
-	if info != nil && info.Md5 != "" {
-		if fileInfo != nil {
-			if fileInfo.Path != info.Path {
-				return false
-			}
-		}
 		return true
 	} else {
 		return false
@@ -1254,7 +1206,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	}
 	req := httplib.Get(downloadUrl)
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
-	if fileInfo.OffSet >=0 { //small file download
+	if fileInfo.OffSet >= 0 { //small file download
 		data, err = req.Bytes()
 		if err != nil {
 			log.Error(err)
@@ -2900,13 +2852,13 @@ func (this *Server) RegisterExit() {
 func (this *Server) AppendToQueue(fileInfo *FileInfo) {
 
 	for (len(this.queueToPeers) + CONST_QUEUE_SIZE/10) > CONST_QUEUE_SIZE {
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Millisecond * 50)
 	}
 	this.queueToPeers <- *fileInfo
 }
 func (this *Server) AppendToDownloadQueue(fileInfo *FileInfo) {
 	for (len(this.queueFromPeers) + CONST_QUEUE_SIZE/10) > CONST_QUEUE_SIZE {
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Millisecond * 50)
 	}
 	this.queueFromPeers <- *fileInfo
 }
