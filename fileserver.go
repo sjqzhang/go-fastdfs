@@ -389,20 +389,31 @@ func (s *CommonMap) LockKey(k string) {
 	if v, ok := s.m[k]; ok {
 		s.m[k+"_lock_"] = true
 		s.Unlock()
-		v.(*sync.Mutex).Lock()
+		switch v.(type) {
+		case *sync.Mutex:
+			v.(*sync.Mutex).Lock()
+		default:
+			log.Warn(fmt.Sprintf("LockKey %s", k))
+		}
 	} else {
 		s.m[k] = &sync.Mutex{}
 		v = s.m[k]
 		s.m[k+"_lock_"] = true
-		s.Unlock()
 		v.(*sync.Mutex).Lock()
+		s.Unlock()
 	}
 }
 func (s *CommonMap) UnLockKey(k string) {
 	s.Lock()
 	if v, ok := s.m[k]; ok {
-		v.(*sync.Mutex).Unlock()
-		s.m[k+"_lock_"] = false
+		switch v.(type) {
+		case *sync.Mutex:
+			v.(*sync.Mutex).Unlock()
+		default:
+			log.Warn(fmt.Sprintf("UnLockKey %s", k))
+		}
+		delete(s.m, k+"_lock_") // memory leak
+		delete(s.m, k)          // memory leak
 	}
 	s.Unlock()
 }
@@ -3729,23 +3740,40 @@ func init() {
 	server.initComponent(false)
 }
 func (this *Server) test() {
+
 	testLock := func() {
-		tt := func(i int) {
-			if server.lockMap.IsLock("xx") {
-				return
-			}
+		wg := sync.WaitGroup{}
+		tt := func(i int, wg *sync.WaitGroup) {
+			//if server.lockMap.IsLock("xx") {
+			//	return
+			//}
+			//fmt.Println("timeer len",len(server.lockMap.Get()))
+			//time.Sleep(time.Nanosecond*10)
 			server.lockMap.LockKey("xx")
 			defer server.lockMap.UnLockKey("xx")
 			//time.Sleep(time.Nanosecond*1)
-			fmt.Println("xx", i)
+			//fmt.Println("xx", i)
+			wg.Done()
 		}
+		go func() {
+			for {
+				time.Sleep(time.Second * 1)
+				fmt.Println("timeer len", len(server.lockMap.Get()), server.lockMap.Get())
+			}
+		}()
+		fmt.Println(len(server.lockMap.Get()))
 		for i := 0; i < 10000; i++ {
-			go tt(i)
+			wg.Add(1)
+			go tt(i, &wg)
 		}
-		time.Sleep(time.Second * 3)
-		go tt(999999)
-		go tt(999999)
-		go tt(999999)
+		fmt.Println(len(server.lockMap.Get()))
+		fmt.Println(len(server.lockMap.Get()))
+		server.lockMap.LockKey("abc")
+		fmt.Println("lock")
+		time.Sleep(time.Second * 5)
+		server.lockMap.UnLockKey("abc")
+		server.lockMap.LockKey("abc")
+		server.lockMap.UnLockKey("abc")
 	}
 	_ = testLock
 	testFile := func() {
@@ -3769,6 +3797,7 @@ func (this *Server) test() {
 	}
 	_ = testFile
 	//testFile()
+	//testLock()
 }
 
 type hookDataStore struct {
