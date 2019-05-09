@@ -1090,6 +1090,33 @@ func (this *Server) GetFilePathByInfo(fileInfo *FileInfo) string {
 	}
 	return DOCKER_DIR + fileInfo.Path + "/" + fn
 }
+func (this *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo) bool {
+	var (
+		err      error
+		fullpath string
+		fi       os.FileInfo
+		info     *FileInfo
+	)
+	if fileInfo == nil {
+		return false
+	}
+	if fileInfo.OffSet >=0 { //small file
+		if info, err = this.GetFileInfoFromLevelDB(fileInfo.Md5); err == nil && info.Md5 == fileInfo.Md5 {
+			return true
+		} else {
+			return false
+		}
+	}
+	fullpath=this.GetFilePathByInfo(fileInfo)
+	if fi, err = os.Stat(fullpath); err != nil {
+		return false
+	}
+	if fi.Size() == fileInfo.Size {
+		return true
+	} else {
+		return false
+	}
+}
 func (this *Server) CheckFileExistByMd5(md5s string, fileInfo *FileInfo) bool { // important: just for DownloadFromPeer use
 	var (
 		err    error
@@ -1191,7 +1218,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	if this.CheckFileExistByMd5(fileInfo.Md5, fileInfo) && Config().EnableDistinctFile {
+	if this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) && Config().EnableDistinctFile {
 		return
 	}
 	if !Config().EnableDistinctFile && this.util.FileExists(this.GetFilePathByInfo(fileInfo)) {
@@ -1212,7 +1239,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		defer this.lockMap.UnLockKey(fpath)
 		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size { //prevent double download
 			this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
-			log.Info(fmt.Sprintf("file '%s' has download", fpath))
+			//log.Info(fmt.Sprintf("file '%s' has download", fpath))
 			return
 		}
 		req := httplib.Get(downloadUrl)
@@ -1227,7 +1254,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	}
 	req := httplib.Get(downloadUrl)
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
-	if fileInfo.OffSet != -1 { //small file download
+	if fileInfo.OffSet >=0 { //small file download
 		data, err = req.Bytes()
 		if err != nil {
 			log.Error(err)
@@ -1760,7 +1787,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 				}
 			}
 		}
-		if fileInfo.OffSet != -2 { //migrate file
+		if fileInfo.OffSet != -2 { //not migrate file should check
 			if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
 				fileInfo.Peers = append(fileInfo.Peers, peer)
 				if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
