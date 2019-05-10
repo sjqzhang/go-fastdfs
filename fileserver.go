@@ -2881,7 +2881,7 @@ func (this *Server) ConsumerDownLoad() {
 			}
 		}
 	}
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 200; i++ {
 		go ConsumerFunc()
 	}
 }
@@ -2946,7 +2946,7 @@ func (this *Server) ConsumerPostToPeer() {
 			this.postFileToPeer(&fileInfo)
 		}
 	}
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 200; i++ {
 		go ConsumerFunc()
 	}
 }
