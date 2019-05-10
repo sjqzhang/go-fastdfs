@@ -1485,7 +1485,6 @@ func (this *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Reque
 			log.Error(err)
 		}
 	}
-	fmt.Println(isDownload)
 	if isDownload {
 		this.SetDownloadHeader(w, r)
 	}
