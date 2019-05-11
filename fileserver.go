@@ -3781,14 +3781,24 @@ func (this *Server) test() {
 type hookDataStore struct {
 	tusd.DataStore
 }
+type httpError struct {
+	error
+	statusCode int
+}
 
+func (err httpError) StatusCode() int {
+	return err.statusCode
+}
+func (err httpError) Body() []byte {
+	return []byte(err.Error())
+}
 func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) {
 	if Config().AuthUrl != "" {
 		if auth_token, ok := info.MetaData["auth_token"]; !ok {
 			msg := "token auth fail,auth_token is not in http header Upload-Metadata," +
-				"in uppy uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca' })"
+				"for example: in uppy uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca' })"
 			log.Error(msg, fmt.Sprintf("current header:%v", info.MetaData))
-			return "", errors.New(msg)
+			return "", httpError{error: errors.New(msg), statusCode: 401}
 		} else {
 			req := httplib.Post(Config().AuthUrl)
 			req.Param("auth_token", auth_token)
@@ -3799,7 +3809,7 @@ func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) 
 				return "", err
 			}
 			if strings.TrimSpace(content) != "ok" {
-				return "", err
+				return "", httpError{error: errors.New("auth fail"), statusCode: 401}
 			}
 		}
 	}
@@ -4046,6 +4056,8 @@ func (this *Server) initComponent(isReload bool) {
 		this.FormatStatInfo()
 		if Config().EnableTus {
 			this.initTus()
+		} else {
+			log.Warn("tus disable")
 		}
 	}
 	for _, s := range Config().Scenes {
