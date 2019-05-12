@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/astaxie/beego/httplib"
 	"github.com/eventials/go-tus"
+	"github.com/sjqzhang/goutil"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
@@ -18,7 +19,7 @@ const (
 	CONST_DOWNLOAD_SMALL_FILE_NAME = "small_dowload.txt"
 )
 
-var testUtil = Common{}
+var testUtil = goutil.Common{}
 
 var endPoint = "http://127.0.0.1:8080"
 var endPoint2 = ""
@@ -204,9 +205,9 @@ func testCommon(t *testing.T) {
 
 func testCommonMap(t *testing.T) {
 	var (
-		commonMap *CommonMap
+		commonMap *goutil.CommonMap
 	)
-	commonMap = NewCommonMap(1)
+	commonMap = goutil.NewCommonMap(1)
 	commonMap.AddUniq("1")
 	//if len(commonMap.Keys()) != 1 {
 	//	t.Error("testCommonMap fail")

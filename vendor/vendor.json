@@ -76,6 +76,12 @@
 			"revisionTime": "2016-09-26T06:27:37Z"
 		},
 		{
+			"checksumSHA1": "nVwF6FoQFomB+r6lWlFY2yxY/0w=",
+			"path": "github.com/sjqzhang/goutil",
+			"revision": "6e5f468b7d51a8cb8bfb07d6a69105349d19e20e",
+			"revisionTime": "2019-05-11T16:05:04Z"
+		},
+		{
 			"checksumSHA1": "A05sgnmxGZEtfibmzpOCAfluL9s=",
 			"path": "github.com/sjqzhang/seelog",
 			"revision": "556439109558695b36124c93863f93f385c0a07e",
@@ -186,5 +192,5 @@
 			"revisionTime": "2018-11-30T13:54:26Z"
 		}
 	],
-	"rootPath": "github.com/sjqzhang/FileServer"
+	"rootPath": "github.com/sjqzhang/go-fastdfs"
 }
