@@ -249,7 +249,9 @@ func testApis(t *testing.T) {
 
 	apis := []string{"/index","/status", "/stat", "/repair?force=1", "/repair_stat",
 	"/sync?force=1&date=" + testUtil.GetToDay(),"/delete?md5="+testSmallFileMd5,
-	"/repair_fileinfo",""}
+	"/repair_fileinfo","","/list_dir","/gen_google_code?secret=N7IET373HB2C5M6D",
+	"/gen_google_secret","/receive_md5s?md5s=xx","/remove_empty_dir","/backup","/search?kw=ab",
+	"/reload=get","/back","/report"}
 	for _, v := range apis {
 		req := httplib.Get(endPoint + v)
 		req.SetTimeout(time.Second*2, time.Second*3)
