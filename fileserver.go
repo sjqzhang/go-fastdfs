@@ -1803,7 +1803,7 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
 	}
-	if fileInfo.OffSet != -1 {
+	if fileInfo.OffSet >= 0 {
 		result.Message = "small file delete not support"
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
 		return
