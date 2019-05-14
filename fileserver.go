@@ -54,6 +54,13 @@ var logacc log.LoggerInterface
 var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR, STATIC_DIR}
 var CONST_QUEUE_SIZE = 10000
 var (
+	VERSION     string
+	BUILD_TIME  string
+	GO_VERSION  string
+	GIT_VERSION string
+	v           = flag.Bool("v", false, "display version")
+)
+var (
 	FileName                    string
 	ptr                         unsafe.Pointer
 	DOCKER_DIR                  = ""
@@ -3599,6 +3606,10 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	http.DefaultServeMux.ServeHTTP(res, req)
 }
 func (this *Server) Main() {
+	if *v {
+		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BUILD_TIME, GO_VERSION,GIT_VERSION)
+		return
+	}
 	go func() {
 		for {
 			this.CheckFileAndSendToPeer(this.util.GetToDay(), CONST_Md5_ERROR_FILE_NAME, false)
