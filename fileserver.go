@@ -792,7 +792,7 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 func (this *Server) NotPermit(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(403)
+	w.WriteHeader(401)
 }
 
 func (this *Server) GetFilePathFromRequest(w http.ResponseWriter, r *http.Request) (string, string) {
@@ -1779,6 +1779,10 @@ func (this *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	result.Status = "fail"
 	if !this.IsPeer(r) {
 		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
+		return
+	}
+	if Config().AuthUrl != "" && !this.CheckAuth(w, r) {
+		this.NotPermit(w, r)
 		return
 	}
 	if fpath != "" && md5sum == "" {
@@ -3607,7 +3611,7 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 }
 func (this *Server) Main() {
 	if *v {
-		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BUILD_TIME, GO_VERSION,GIT_VERSION)
+		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BUILD_TIME, GO_VERSION, GIT_VERSION)
 		return
 	}
 	go func() {
