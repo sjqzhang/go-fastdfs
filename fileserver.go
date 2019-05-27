@@ -691,9 +691,9 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	log.Info("DownloadFromPeer: ", downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	timeout := fileInfo.Size/1024/1024/8 + 30
+	this.lockMap.LockKey(fpath)
+	defer this.lockMap.UnLockKey(fpath)
 	if fileInfo.OffSet == -2 { //migrate file
-		this.lockMap.LockKey(fpath)
-		defer this.lockMap.UnLockKey(fpath)
 		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size { //prevent double download
 			this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
 			//log.Info(fmt.Sprintf("file '%s' has download", fpath))
