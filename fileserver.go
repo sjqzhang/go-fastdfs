@@ -130,6 +130,8 @@ const (
 	"group": "group1",
 	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
 	"enable_merge_small_file": false,
+    "允许后缀名": "允许可以上传的文件后缀名，如jpg,jpeg,png等。留空允许所有。",
+	"extensions": [],
 	"重试同步失败文件的时间": "单位秒",
 	"refresh_interval": 1800,
 	"是否自动重命名": "默认不自动重命名,使用原文件名",
@@ -255,6 +257,7 @@ type GloablConfig struct {
 	Group                string   `json:"group"`
 	RenameFile           bool     `json:"rename_file"`
 	ShowDir              bool     `json:"show_dir"`
+	Extensions           []string `json:"extensions"`
 	RefreshInterval      int      `json:"refresh_interval"`
 	EnableWebUpload      bool     `json:"enable_web_upload"`
 	DownloadDomain       string   `json:"download_domain"`
@@ -1895,6 +1898,10 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	)
 	defer file.Close()
 	fileInfo.Name = header.Filename
+	if len(Config().Extensions) > 0 && !this.util.Contains(path.Ext(fileInfo.Name), Config().Extensions) {
+		return fileInfo, errors.New("(error)file extension mismatch")
+	}
+
 	if Config().RenameFile {
 		fileInfo.ReName = this.util.MD5(this.util.GetUUID()) + path.Ext(fileInfo.Name)
 	}
