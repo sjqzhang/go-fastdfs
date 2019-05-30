@@ -3181,6 +3181,11 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func init() {
+	flag.Parse()
+	if *v {
+		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BUILD_TIME, GO_VERSION, GIT_VERSION)
+		os.Exit(0)
+	}
 	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
 	if DOCKER_DIR != "" {
 		if !strings.HasSuffix(DOCKER_DIR, "/") {
@@ -3206,7 +3211,7 @@ func init() {
 		os.MkdirAll(folder, 0775)
 	}
 	server = NewServer()
-	flag.Parse()
+
 	peerId := fmt.Sprintf("%d", server.util.RandInt(0, 9))
 	if !server.util.FileExists(CONST_CONF_FILE_NAME) {
 		peer := "http://" + server.util.GetPulicIP() + ":8080"
@@ -3617,10 +3622,6 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	http.DefaultServeMux.ServeHTTP(res, req)
 }
 func (this *Server) Main() {
-	if *v {
-		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BUILD_TIME, GO_VERSION, GIT_VERSION)
-		return
-	}
 	go func() {
 		for {
 			this.CheckFileAndSendToPeer(this.util.GetToDay(), CONST_Md5_ERROR_FILE_NAME, false)
