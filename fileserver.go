@@ -2081,6 +2081,9 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Warn(" fileInfo.Md5 and md5sum !=")
 			return
 		}
+		if !Config().EnableDistinctFile { // bugfix filecount stat
+			fileInfo.Md5 = this.util.MD5(this.GetFilePathByInfo(&fileInfo))
+		}
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
 			if err = this.SaveSmallFile(&fileInfo); err != nil {
 				log.Error(err)
