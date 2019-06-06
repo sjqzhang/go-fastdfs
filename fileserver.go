@@ -593,7 +593,7 @@ func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 	stat.TotalSize = fileSize
 	return stat
 }
-func (this *Server) GetFilePathByInfo(fileInfo *FileInfo) string {
+func (this *Server) GetFilePathByInfo(fileInfo *FileInfo, withDocker bool) string {
 	var (
 		fn string
 	)
@@ -601,7 +601,10 @@ func (this *Server) GetFilePathByInfo(fileInfo *FileInfo) string {
 	if fileInfo.ReName != "" {
 		fn = fileInfo.ReName
 	}
-	return DOCKER_DIR + fileInfo.Path + "/" + fn
+	if withDocker {
+		return DOCKER_DIR + fileInfo.Path + "/" + fn
+	}
+	return fileInfo.Path + "/" + fn
 }
 func (this *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo) bool {
 	var (
@@ -620,7 +623,7 @@ func (this *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo) bool {
 			return false
 		}
 	}
-	fullpath = this.GetFilePathByInfo(fileInfo)
+	fullpath = this.GetFilePathByInfo(fileInfo, true)
 	if fi, err = os.Stat(fullpath); err != nil {
 		return false
 	}
@@ -678,11 +681,20 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	if this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) && Config().EnableDistinctFile {
+	if Config().EnableDistinctFile && this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
+		log.Info("DownloadFromPeer file Exist")
 		return
 	}
-	if !Config().EnableDistinctFile && this.util.FileExists(this.GetFilePathByInfo(fileInfo)) {
-		return
+	if !Config().EnableDistinctFile && this.util.FileExists(this.GetFilePathByInfo(fileInfo, true)) {
+		if fi, err = os.Stat(this.GetFilePathByInfo(fileInfo, true)); err == nil {
+			if fi.ModTime().Unix() > fileInfo.TimeStamp {
+				log.Info(fmt.Sprintf("ignore file sync path:%s", this.GetFilePathByInfo(fileInfo, false)))
+				fileInfo.TimeStamp = fi.ModTime().Unix()
+				this.postFileToPeer(fileInfo) // keep newer
+				return
+			}
+			os.Remove(this.GetFilePathByInfo(fileInfo, true))
+		}
 	}
 	if _, err = os.Stat(fileInfo.Path); err != nil {
 		os.MkdirAll(DOCKER_DIR+fileInfo.Path, 0775)
@@ -747,9 +759,13 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		os.Remove(fpath)
 		return
 	}
-	if sum, err = this.util.GetFileSumByName(fpath, Config().FileSumArithmetic); err != nil {
-		log.Error(err)
-		return
+	if Config().EnableDistinctFile { //DistinctFile
+		if sum, err = this.util.GetFileSumByName(fpath, Config().FileSumArithmetic); err != nil {
+			log.Error(err)
+			return
+		}
+	} else { //DistinctFile By path
+		sum = this.util.MD5(this.GetFilePathByInfo(fileInfo, false))
 	}
 	if fi.Size() != fileInfo.Size || sum != fileInfo.Md5 {
 		log.Error("file sum check error")
@@ -1246,7 +1262,8 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 				}
 			}
 		}
-		if fileInfo.OffSet != -2 { //not migrate file should check
+		if fileInfo.OffSet != -2 && Config().EnableDistinctFile { //not migrate file should check or update file
+			// where not EnableDistinctFile should check
 			if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
 				fileInfo.Peers = append(fileInfo.Peers, peer)
 				if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
@@ -2082,7 +2099,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !Config().EnableDistinctFile { // bugfix filecount stat
-			fileInfo.Md5 = this.util.MD5(this.GetFilePathByInfo(&fileInfo))
+			fileInfo.Md5 = this.util.MD5(this.GetFilePathByInfo(&fileInfo, false))
 		}
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
 			if err = this.SaveSmallFile(&fileInfo); err != nil {
