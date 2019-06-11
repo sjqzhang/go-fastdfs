@@ -126,8 +126,10 @@ const (
 	"host": "%s",
 	"集群": "集群列表,注意为了高可用，IP必须不能是同一个,同一不会自动备份，且不能为127.0.0.1,且必须为内网IP，默认自动生成",
 	"peers": ["%s"],
-	"组号": "用于区别不同的集群(上传或下载)与support_group_upload配合使用,带在下载路径中",
+	"组号": "用于区别不同的集群(上传或下载)与support_group_manage配合使用,带在下载路径中",
 	"group": "group1",
+	"是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认不支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
+	"support_group_manage": false,
 	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
 	"enable_merge_small_file": false,
     "允许后缀名": "允许可以上传的文件后缀名，如jpg,jpeg,png等。留空允许所有。",
@@ -155,8 +157,8 @@ const (
 		"host": "smtp.163.com:25"
 	},
 	"告警接收邮件列表": "接收人数组",
-	"alram_receivers": [],
-	"告警接收URL": "方法post,参数:subjet,message",
+	"alarm_receivers": [],
+	"告警接收URL": "方法post,参数:subject,message",
 	"alarm_url": "",
 	"下载是否需带token": "真假",
 	"download_use_token": false,
@@ -166,8 +168,6 @@ const (
 	"auto_repair": true,
 	"文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
 	"file_sum_arithmetic": "md5",
-	"是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认不支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
-	"support_group_manage": false,
 	"管理ip列表": "用于管理集的ip白名单,",
 	"admin_ips": ["127.0.0.1"],
 	"是否启用迁移": "默认不启用",
@@ -263,7 +263,7 @@ type GloablConfig struct {
 	DownloadDomain       string   `json:"download_domain"`
 	EnableCustomPath     bool     `json:"enable_custom_path"`
 	Scenes               []string `json:"scenes"`
-	AlramReceivers       []string `json:"alram_receivers"`
+	AlarmReceivers       []string `json:"alarm_receivers"`
 	DefaultScene         string   `json:"default_scene"`
 	Mail                 Mail     `json:"mail"`
 	AlarmUrl             string   `json:"alarm_url"`
@@ -288,12 +288,12 @@ type GloablConfig struct {
 	EnableTus            bool     `json:"enable_tus"`
 }
 type FileInfoResult struct {
-	Name    string    `json:"name"`
-	Md5     string    `json:"md5"`
-	Path    string    `json:"path"`
-	Size    int64     `json:"size"`
-	ModTime time.Time `json:"mtime"`
-	IsDir   bool      `json:"is_dir"`
+	Name    string `json:"name"`
+	Md5     string `json:"md5"`
+	Path    string `json:"path"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"mtime"`
+	IsDir   bool   `json:"is_dir"`
 }
 
 func NewServer() *Server {
@@ -2727,7 +2727,7 @@ func (this *Server) CheckClusterStatus() {
 			req.SetTimeout(time.Second*5, time.Second*5)
 			err = req.ToJSON(&status)
 			if status.Status != "ok" {
-				for _, to := range Config().AlramReceivers {
+				for _, to := range Config().AlarmReceivers {
 					subject = "fastdfs server error"
 					if err != nil {
 						body = fmt.Sprintf("%s\nserver:%s\nerror:\n%s", subject, peer, err.Error())
@@ -2984,7 +2984,7 @@ func (this *Server) ListDir(w http.ResponseWriter, r *http.Request) {
 			Name:    f.Name(),
 			Size:    f.Size(),
 			IsDir:   f.IsDir(),
-			ModTime: f.ModTime(),
+			ModTime: f.ModTime().Unix(),
 			Path:    dir,
 			Md5:     this.util.MD5(STORE_DIR_NAME + "/" + dir + "/" + f.Name()),
 		}
