@@ -1928,7 +1928,8 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 		fi      os.FileInfo
 	)
 	defer file.Close()
-	fileInfo.Name = header.Filename
+	_, fileInfo.Name = filepath.Split(header.Filename)
+	// bugfix for ie upload file contain fullpath
 	if len(Config().Extensions) > 0 && !this.util.Contains(path.Ext(fileInfo.Name), Config().Extensions) {
 		return fileInfo, errors.New("(error)file extension mismatch")
 	}
