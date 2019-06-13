@@ -548,6 +548,10 @@ func (this *Server) RepairFileInfoFromFile() {
 	if err == nil {
 		//link
 		pathname = pathPrefix
+		if strings.HasSuffix(pathPrefix, "/") {
+			//bugfix fullpath
+			pathPrefix = pathPrefix[0 : len(pathPrefix)-1]
+		}
 	}
 	fi, err = os.Stat(pathname)
 	if err != nil {
