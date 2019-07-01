@@ -187,7 +187,9 @@ const (
 	"本机是否只读": "默认可读可写",
 	"read_only": false,
 	"是否开启断点续传": "默认开启",
-	"enable_tus": true
+	"enable_tus": true,
+	"同步单一文件超时时间（单位秒）": "默认为0,程序自动计算，在特殊情况下，自已设定",
+	"sync_timeout": 0
 }
 	`
 )
@@ -286,6 +288,7 @@ type GloablConfig struct {
 	EnableDownloadAuth   bool     `json:"enable_download_auth"`
 	DefaultDownload      bool     `json:"default_download"`
 	EnableTus            bool     `json:"enable_tus"`
+	SyncTimeout          int64    `json:"sync_timeout"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -711,7 +714,10 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
-	timeout := fileInfo.Size/1024/1024/8 + 30
+	timeout := fileInfo.Size/1024/1024/1 + 30
+	if Config().SyncTimeout > 0 {
+		timeout = Config().SyncTimeout
+	}
 	this.lockMap.LockKey(fpath)
 	defer this.lockMap.UnLockKey(fpath)
 	download_key := fmt.Sprintf("downloading_%d_%s", time.Now().Unix(), fpath)
@@ -1387,6 +1393,9 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 		if err = this.RemoveKeyFromLevelDB(md5Path, this.ldb); err != nil {
 			log.Error("RemoveKeyFromLevelDB", err, fileInfo)
 		}
+		// remove files.md5 for stat info(repair from logDB)
+		logKey = fmt.Sprintf("%s_%s_%s", logDate, CONST_FILE_Md5_FILE_NAME, fileInfo.Md5)
+		this.RemoveKeyFromLevelDB(logKey, this.logDB)
 		return
 	}
 	this.SaveFileInfoToLevelDB(logKey, fileInfo, this.logDB)
