@@ -318,7 +318,7 @@ func NewServer() *Server {
 
 	defaultTransport := &http.Transport{
 		DisableKeepAlives:   true,
-		Dial:                httplib.TimeoutDialer(time.Second*6, time.Second*60),
+		Dial:                httplib.TimeoutDialer(time.Second*6, time.Second*300),
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100,
 	}
@@ -772,6 +772,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		return
 	}
 	if err = req.ToFile(fpath); err != nil {
+		os.Remove(fpath)
 		log.Error(err)
 		return
 	}
