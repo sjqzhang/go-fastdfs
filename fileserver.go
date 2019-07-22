@@ -6,19 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/astaxie/beego/httplib"
-	"github.com/deckarep/golang-set"
-	_ "github.com/eventials/go-tus"
-	"github.com/json-iterator/go"
-	"github.com/nfnt/resize"
-	"github.com/sjqzhang/googleAuthenticator"
-	"github.com/sjqzhang/goutil"
-	log "github.com/sjqzhang/seelog"
-	"github.com/sjqzhang/tusd"
-	"github.com/sjqzhang/tusd/filestore"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -45,6 +32,20 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/astaxie/beego/httplib"
+	"github.com/deckarep/golang-set"
+	_ "github.com/eventials/go-tus"
+	"github.com/json-iterator/go"
+	"github.com/nfnt/resize"
+	"github.com/sjqzhang/googleAuthenticator"
+	"github.com/sjqzhang/goutil"
+	log "github.com/sjqzhang/seelog"
+	"github.com/sjqzhang/tusd"
+	"github.com/sjqzhang/tusd/filestore"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var staticHandler http.Handler
@@ -677,6 +678,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		err         error
 		filename    string
 		fpath       string
+		fpathTmp    string
 		fi          os.FileInfo
 		sum         string
 		data        []byte
@@ -714,6 +716,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
+	fpathTmp = DOCKER_DIR + fileInfo.Path + "/" + fmt.Sprint("%s_%s", "tmp_", filename)
 	timeout := fileInfo.Size/1024/1024/1 + 30
 	if Config().SyncTimeout > 0 {
 		timeout = Config().SyncTimeout
@@ -735,12 +738,15 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		}
 		req := httplib.Get(downloadUrl)
 		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
-		if err = req.ToFile(fpath); err != nil {
+		if err = req.ToFile(fpathTmp); err != nil {
+			os.Remove(fpathTmp)
 			log.Error(err)
 			return
 		}
-		//this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
-		this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
+		if os.Rename(fpathTmp, fpath) == nil {
+			//this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+			this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
+		}
 		return
 	}
 	req := httplib.Get(downloadUrl)
@@ -771,31 +777,32 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 		return
 	}
-	if err = req.ToFile(fpath); err != nil {
-		os.Remove(fpath)
+	if err = req.ToFile(fpathTmp); err != nil {
+		os.Remove(fpathTmp)
 		log.Error(err)
 		return
 	}
-	if fi, err = os.Stat(fpath); err != nil {
-		os.Remove(fpath)
+	if fi, err = os.Stat(fpathTmp); err != nil {
+		os.Remove(fpathTmp)
 		return
 	}
-	if Config().EnableDistinctFile {
-		//DistinctFile
-		if sum, err = this.util.GetFileSumByName(fpath, Config().FileSumArithmetic); err != nil {
-			log.Error(err)
-			return
-		}
-	} else {
-		//DistinctFile By path
-		sum = this.util.MD5(this.GetFilePathByInfo(fileInfo, false))
-	}
-	if fi.Size() != fileInfo.Size || sum != fileInfo.Md5 {
+	_ = sum
+	//if Config().EnableDistinctFile {
+	//	//DistinctFile
+	//	if sum, err = this.util.GetFileSumByName(fpathTmp, Config().FileSumArithmetic); err != nil {
+	//		log.Error(err)
+	//		return
+	//	}
+	//} else {
+	//	//DistinctFile By path
+	//	sum = this.util.MD5(this.GetFilePathByInfo(fileInfo, false))
+	//}
+	if fi.Size() != fileInfo.Size { //  maybe has bug remove || sum != fileInfo.Md5
 		log.Error("file sum check error")
-		os.Remove(fpath)
+		os.Remove(fpathTmp)
 		return
 	}
-	if this.util.IsExist(fpath) {
+	if os.Rename(fpathTmp, fpath) == nil {
 		this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 	}
 }
@@ -1067,7 +1074,7 @@ func (this *Server) DownloadNotFound(w http.ResponseWriter, r *http.Request) {
 		pathMd5 = this.util.MD5(fullpath)
 	}
 	for _, peer = range Config().Peers {
-		if fileInfo, err = this.checkPeerFileExist(peer, pathMd5); err != nil {
+		if fileInfo, err = this.checkPeerFileExist(peer, pathMd5, fullpath); err != nil {
 			log.Error(err)
 			continue
 		}
@@ -1288,7 +1295,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		if fileInfo.OffSet != -2 && Config().EnableDistinctFile {
 			//not migrate file should check or update file
 			// where not EnableDistinctFile should check
-			if info, err = this.checkPeerFileExist(peer, fileInfo.Md5); info.Md5 != "" {
+			if info, err = this.checkPeerFileExist(peer, fileInfo.Md5, ""); info.Md5 != "" {
 				fileInfo.Peers = append(fileInfo.Peers, peer)
 				if _, err = this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb); err != nil {
 					log.Error(err)
@@ -1401,12 +1408,14 @@ func (this *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 	}
 	this.SaveFileInfoToLevelDB(logKey, fileInfo, this.logDB)
 }
-func (this *Server) checkPeerFileExist(peer string, md5sum string) (*FileInfo, error) {
+func (this *Server) checkPeerFileExist(peer string, md5sum string, fpath string) (*FileInfo, error) {
 	var (
 		err      error
 		fileInfo FileInfo
 	)
 	req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", peer, this.getRequestURI("check_file_exist"), md5sum))
+	req.Param("path", fpath)
+	req.Param("md5", md5sum)
 	req.SetTimeout(time.Second*5, time.Second*10)
 	if err = req.ToJSON(&fileInfo); err != nil {
 		return &FileInfo{}, err
@@ -1422,10 +1431,12 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 		err      error
 		fileInfo *FileInfo
 		fpath    string
+		fi       os.FileInfo
 	)
 	r.ParseForm()
 	md5sum := ""
 	md5sum = r.FormValue("md5")
+	fpath = r.FormValue("path")
 	if fileInfo, err = this.GetFileInfoFromLevelDB(md5sum); fileInfo != nil {
 		if fileInfo.OffSet != -1 {
 			if data, err = json.Marshal(fileInfo); err != nil {
@@ -1450,8 +1461,73 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 				this.RemoveKeyFromLevelDB(md5sum, this.ldb) // when file delete,delete from leveldb
 			}
 		}
+	} else {
+		if fpath != "" {
+			fi, err = os.Stat(fpath)
+			if err == nil {
+				fileInfo = &FileInfo{
+					Path:  path.Dir(fpath),
+					Name:  path.Base(fpath),
+					Size:  fi.Size(),
+					Md5:   this.util.MD5(fpath),
+					Peers: []string{Config().Host},
+				}
+				data, err = json.Marshal(fileInfo)
+				w.Write(data)
+				return
+			}
+		}
 	}
 	data, _ = json.Marshal(FileInfo{})
+	w.Write(data)
+	return
+}
+func (this *Server) CheckFilesExist(w http.ResponseWriter, r *http.Request) {
+	var (
+		data      []byte
+		err       error
+		fileInfo  *FileInfo
+		fileInfos []*FileInfo
+		fpath     string
+		result    JsonResult
+	)
+	r.ParseForm()
+	md5sum := ""
+	md5sum = r.FormValue("md5s")
+	md5s := strings.Split(md5sum, ",")
+	for _, m := range md5s {
+		if fileInfo, err = this.GetFileInfoFromLevelDB(m); fileInfo != nil {
+			if fileInfo.OffSet != -1 {
+				if data, err = json.Marshal(fileInfo); err != nil {
+					log.Error(err)
+				}
+				//w.Write(data)
+				//return
+				fileInfos = append(fileInfos, fileInfo)
+				continue
+			}
+			fpath = DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name
+			if fileInfo.ReName != "" {
+				fpath = DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName
+			}
+			if this.util.IsExist(fpath) {
+				if data, err = json.Marshal(fileInfo); err == nil {
+					fileInfos = append(fileInfos, fileInfo)
+					//w.Write(data)
+					//return
+					continue
+				} else {
+					log.Error(err)
+				}
+			} else {
+				if fileInfo.OffSet == -1 {
+					this.RemoveKeyFromLevelDB(md5sum, this.ldb) // when file delete,delete from leveldb
+				}
+			}
+		}
+	}
+	result.Data = fileInfos
+	data, _ = json.Marshal(result)
 	w.Write(data)
 	return
 }
@@ -1565,6 +1641,11 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *le
 	}
 	if err = db.Put([]byte(key), data, nil); err != nil {
 		return fileInfo, err
+	}
+	if db == this.ldb { //search slow ,write fast, double write logDB
+		logDate := this.util.GetDayFromTimeStamp(fileInfo.TimeStamp)
+		logKey := fmt.Sprintf("%s_%s_%s", logDate, CONST_FILE_Md5_FILE_NAME, fileInfo.Md5)
+		this.logDB.Put([]byte(logKey), data, nil)
 	}
 	return fileInfo, nil
 }
@@ -3736,6 +3817,7 @@ func (this *Server) Main() {
 		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Index)
 		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute, uploadPage), this.Index)
 	}
+	http.HandleFunc(fmt.Sprintf("%s/check_files_exist", groupRoute), this.CheckFilesExist)
 	http.HandleFunc(fmt.Sprintf("%s/check_file_exist", groupRoute), this.CheckFileExist)
 	http.HandleFunc(fmt.Sprintf("%s/upload", groupRoute), this.Upload)
 	http.HandleFunc(fmt.Sprintf("%s/delete", groupRoute), this.RemoveFile)
