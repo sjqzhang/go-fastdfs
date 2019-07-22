@@ -716,7 +716,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
-	fpathTmp = DOCKER_DIR + fileInfo.Path + "/" + fmt.Sprint("%s_%s", "tmp_", filename)
+	fpathTmp = DOCKER_DIR + fileInfo.Path + "/" + fmt.Sprintf("%s_%s", "tmp_", filename)
 	timeout := fileInfo.Size/1024/1024/1 + 30
 	if Config().SyncTimeout > 0 {
 		timeout = Config().SyncTimeout
