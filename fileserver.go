@@ -1465,12 +1465,21 @@ func (this *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 		if fpath != "" {
 			fi, err = os.Stat(fpath)
 			if err == nil {
+				sum := this.util.MD5(fpath)
+				//if Config().EnableDistinctFile {
+				//	sum, err = this.util.GetFileSumByName(fpath, Config().FileSumArithmetic)
+				//	if err != nil {
+				//		log.Error(err)
+				//	}
+				//}
 				fileInfo = &FileInfo{
-					Path:  path.Dir(fpath),
-					Name:  path.Base(fpath),
-					Size:  fi.Size(),
-					Md5:   this.util.MD5(fpath),
-					Peers: []string{Config().Host},
+					Path:      path.Dir(fpath),
+					Name:      path.Base(fpath),
+					Size:      fi.Size(),
+					Md5:       sum,
+					Peers:     []string{Config().Host},
+					OffSet:    -1, //very important
+					TimeStamp: fi.ModTime().Unix(),
 				}
 				data, err = json.Marshal(fileInfo)
 				w.Write(data)
