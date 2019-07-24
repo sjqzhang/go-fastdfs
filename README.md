@@ -66,11 +66,11 @@
 - 所有节点都可以同时读写
 
 
-
+[![asciicast](https://asciinema.org/a/258926.svg)](https://asciinema.org/a/258926)
 # 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)极速体验，只需一分钟）
 一键安装：（请将以下命令复制到linux console中执行）
 ```shell
-wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/download/v1.2.6/fileserver -O fileserver && chmod +x fileserver && ./fileserver
+wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/download/v1.3.1/fileserver -O fileserver && chmod +x fileserver && ./fileserver
 ```
 (注意：下载时要注意链接的版本号，windows下直接运行fileserver.exe，执行文件在这里[下载](https://github.com/sjqzhang/fastdfs/releases))
 
