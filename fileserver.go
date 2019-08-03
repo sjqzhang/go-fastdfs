@@ -836,6 +836,7 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	for k, v := range r.Header {
 		req.Header(k, v[0])
 	}
+	result, err = req.String()
 	result = strings.TrimSpace(result)
 	if strings.HasPrefix(result, "{") && strings.HasSuffix(result, "}") {
 		if err = json.Unmarshal([]byte(result), &jsonResult); err != nil {
