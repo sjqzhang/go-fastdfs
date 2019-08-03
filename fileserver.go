@@ -819,9 +819,10 @@ func (this *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	var (
-		err    error
-		req    *httplib.BeegoHTTPRequest
-		result string
+		err        error
+		req        *httplib.BeegoHTTPRequest
+		result     string
+		jsonResult JsonResult
 	)
 	if err = r.ParseForm(); err != nil {
 		log.Error(err)
@@ -832,14 +833,28 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	for k, _ := range r.Form {
 		req.Param(k, r.FormValue(k))
 	}
-	if result, err = req.String(); err != nil {
-		return false
+	for k, v := range r.Header {
+		req.Header(k, v[0])
 	}
-	if result != "ok" {
-		return false
+	result = strings.TrimSpace(result)
+	if strings.HasPrefix(result, "{") && strings.HasSuffix(result, "}") {
+		if err = json.Unmarshal([]byte(result), &jsonResult); err != nil {
+			log.Error(err)
+			return false
+		}
+		if jsonResult.Data != "ok" {
+			log.Warn(result)
+			return false
+		}
+	} else {
+		if result != "ok" {
+			log.Warn(result)
+			return false
+		}
 	}
 	return true
 }
+
 func (this *Server) NotPermit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(401)
 }
@@ -3010,6 +3025,7 @@ func (this *Server) Search(w http.ResponseWriter, r *http.Request) {
 	if !this.IsPeer(r) {
 		result.Message = this.GetClusterNotPermitMessage(r)
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
 	}
 	iter := this.ldb.NewIterator(nil, nil)
 	for iter.Next() {
@@ -3477,6 +3493,9 @@ func (err httpError) Body() []byte {
 	return []byte(err.Error())
 }
 func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) {
+	var (
+		jsonResult JsonResult
+	)
 	if Config().AuthUrl != "" {
 		if auth_token, ok := info.MetaData["auth_token"]; !ok {
 			msg := "token auth fail,auth_token is not in http header Upload-Metadata," +
@@ -3488,12 +3507,23 @@ func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) 
 			req.Param("auth_token", auth_token)
 			req.SetTimeout(time.Second*5, time.Second*10)
 			content, err := req.String()
-			if err != nil {
-				log.Error(err)
-				return "", err
-			}
-			if strings.TrimSpace(content) != "ok" {
-				return "", httpError{error: errors.New("auth fail"), statusCode: 401}
+			content = strings.TrimSpace(content)
+			if strings.HasPrefix(content, "{") && strings.HasSuffix(content, "}") {
+				if err = json.Unmarshal([]byte(content), &jsonResult); err != nil {
+					log.Error(err)
+					return "", httpError{error: errors.New(err.Error() + content), statusCode: 401}
+				}
+				if jsonResult.Data != "ok" {
+					return "", httpError{error: errors.New(content), statusCode: 401}
+				}
+			} else {
+				if err != nil {
+					log.Error(err)
+					return "", err
+				}
+				if strings.TrimSpace(content) != "ok" {
+					return "", httpError{error: errors.New(content), statusCode: 401}
+				}
 			}
 		}
 	}
