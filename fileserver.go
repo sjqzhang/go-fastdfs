@@ -343,13 +343,13 @@ func NewServer() *Server {
 	}
 	server.ldb, err = leveldb.OpenFile(CONST_LEVELDB_FILE_NAME, opts)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", CONST_LEVELDB_FILE_NAME))
 		log.Error(err)
 		panic(err)
 	}
 	server.logDB, err = leveldb.OpenFile(CONST_LOG_LEVELDB_FILE_NAME, opts)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", CONST_LOG_LEVELDB_FILE_NAME))
 		log.Error(err)
 		panic(err)
 
@@ -3577,12 +3577,17 @@ func (this *Server) initTus() {
 			length int
 			buffer []byte
 			fi     *FileInfo
+			fn     string
 		)
 		if fi, err = this.GetFileInfoFromLevelDB(id); err != nil {
 			log.Error(err)
 			return nil, err
 		} else {
-			fp := DOCKER_DIR + fi.Path + "/" + fi.ReName
+			fn = fi.Name
+			if fi.ReName != "" {
+				fn = fi.ReName
+			}
+			fp := DOCKER_DIR + fi.Path + "/" + fn
 			if this.util.FileExists(fp) {
 				log.Info(fmt.Sprintf("download:%s", fp))
 				return os.Open(fp)
