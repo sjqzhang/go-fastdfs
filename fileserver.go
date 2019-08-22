@@ -1682,7 +1682,11 @@ func (this *Server) IsPeer(r *http.Request) bool {
 	)
 	//return true
 	ip = this.util.GetClientIp(r)
-	if ip == "127.0.0.1" || ip == this.util.GetPulicIP() {
+	realIp := os.Getenv("GO_FASTDFS_IP")
+	if realIp == "" {
+		realIp = this.util.GetPulicIP()
+	}
+	if ip == "127.0.0.1" || ip == realIp {
 		return true
 	}
 	if this.util.Contains(ip, Config().AdminIps) {
@@ -3393,7 +3397,11 @@ func init() {
 
 	peerId := fmt.Sprintf("%d", server.util.RandInt(0, 9))
 	if !server.util.FileExists(CONST_CONF_FILE_NAME) {
-		peer := "http://" + server.util.GetPulicIP() + ":8080"
+		var ip string
+		if ip = os.Getenv("GO_FASTDFS_IP"); ip == "" {
+			ip = server.util.GetPulicIP()
+		}
+		peer := "http://" + ip + ":8080"
 		cfg := fmt.Sprintf(cfgJson, peerId, peer, peer)
 		server.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
@@ -3748,7 +3756,9 @@ func (this *Server) initComponent(isReload bool) {
 	var (
 		ip string
 	)
-	ip = this.util.GetPulicIP()
+	if ip = os.Getenv("GO_FASTDFS_IP"); ip == "" {
+		ip = this.util.GetPulicIP()
+	}
 	if Config().Host == "" {
 		if len(strings.Split(Config().Addr, ":")) == 2 {
 			server.host = fmt.Sprintf("http://%s:%s", ip, strings.Split(Config().Addr, ":")[1])
