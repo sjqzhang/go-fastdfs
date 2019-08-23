@@ -2141,7 +2141,11 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	output = r.FormValue("output")
 	if Config().EnableCrossOrigin {
 		this.CrossOrigin(w, r)
+		if r.Method == http.MethodOptions {
+			return
+		}
 	}
+
 	if Config().AuthUrl != "" {
 		if !this.CheckAuth(w, r) {
 			log.Warn("auth fail", r.Form)
@@ -2150,7 +2154,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if r.Method == "POST" {
+	if r.Method == http.MethodPost {
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
 		if Config().ReadOnly {
