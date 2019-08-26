@@ -346,8 +346,9 @@ issue中chengyuansen同学向我提议使用增加扩容特性，我觉得对代
 
 ## 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
 ## 有问题请加群
-![二维码](doc/wechat.jpg)
+![二维码](https://raw.githubusercontent.com/sjqzhang/go-fastdfs/master/doc/wechat.jpg)
 
 #### 进群请改昵称，昵称格式：城市－公司－昵称，如果你喜欢这项目，请关注(star)此项目，关注是对项目的肯定，也是作者创新的动力。
 
-#### [捐赠](doc/pay.png)
+#### [捐赠](https://raw.githubusercontent.com/sjqzhang/go-fastdfs/master/doc/pay.png)
+

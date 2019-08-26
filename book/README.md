@@ -3,10 +3,11 @@
 ## 现在开源的分布式文件系非常多，功能也很强大，那为什么还要重新造轮子呢？可能这是很多人都关心的问题。重复造轮主要解决以下几个问题：
 - 解决软件架构复杂问题
 - 解决运维部署维护问题
-- 解决使用复杂到处找文档
+- 解决使用复杂问题
 
 
 # go-fastdfs是什么？ {#what}
+![logo](https://raw.githubusercontent.com/sjqzhang/go-fastdfs/master/doc/logo.png)
 ### go-fastdfs是一个基于http协议的分布式文件系统，它基于大道至简的设计理念，一切从简设计，使得它的运维及扩展变得更加简单，它具有高性能、高可靠、无中心、免维护等优点。
 
 #### 大家担心的是这么简单的文件系统，靠不靠谱，可不可以用于生产环境？答案是肯定的，正因为简单所以高效，因为简单所以稳定。如果你担心功能，那就跑单元测试，如果担心性能，那就跑压力测试，项目都自带了，跑一跑更放心^_^。
@@ -69,38 +70,4 @@
 - 运维简单，只有一个角色（不像fastdfs有三个角色Tracker Server,Storage Server,Client），配置自动生成
 - 每个节点对等（简化运维）
 - 所有节点都可以同时读写
-
-
-[![asciicast](https://asciinema.org/a/258926.svg)](https://asciinema.org/a/258926)
-# 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)极速体验，只需一分钟）
-一键安装：（请将以下命令复制到linux console中执行）
-```shell
-wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/download/v1.3.1/fileserver -O fileserver && chmod +x fileserver && ./fileserver
-```
-(注意：下载时要注意链接的版本号，windows下直接运行fileserver.exe，执行文件在这里[下载](https://github.com/sjqzhang/fastdfs/releases))
-
-
-
-部署图
-![部署图](doc/go-fastdfs-deploy.png)
-
-通用文件认证时序图
-![通用文件认证时序图](doc/authentication2.png)
-
-文件google认证时序图
-![文件认证时序图](doc/authentication.png)
-
-# 有问题请[点击反馈](https://github.com/sjqzhang/go-fastdfs/issues/new)
-
-# 重要说明
-## 在issue中有很多实际使用的问题及回答（很多已关闭，请查看已关闭的issue）
-
-## 项目从v1.1.8开始进入稳定状态
-
-# 更新说明
-## 从低版升给到高版本，可能存在配置项变动的情况，一定要注意使用新的版本时的配置项。如何获得新版本的配置项及说明？先备份旧的配置项（文件名不能为cfg.json），再运行新的版本，配置项就自动生成。然后再修改相应的配置项。
-
-- v1.1.9 增加文件自动迁移功能，支持同名文件重复覆盖选项。
-
- # <span id="qa">Q&A</span>
 

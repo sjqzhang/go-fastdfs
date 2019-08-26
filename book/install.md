@@ -1,4 +1,5 @@
 # 极速体验{#quick}
+#### 适用于开发，或验证功能阶段。
 
 ### linux
 
@@ -30,6 +31,7 @@ GOPATH=$pwd go build -o fileserver fileserver.go
 
 
 # 小集群安装{#small-cluster}
+### 适用于单一的集群，扩展性相对差一点。
 
 ```nginx
 worker_processes  1;
@@ -68,6 +70,7 @@ http {
 ```
 
 ## 海量集群安装{#big-cluster}
+### 适用于海量集群，扩展性较好。
 
 ```nginx
 worker_processes  1;

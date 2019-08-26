@@ -4,7 +4,7 @@
     <head>
         <meta charset="UTF-8">
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
-        <title>管理API · GitBook</title>
+        <title>更新历史 · GitBook</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
         <meta name="description" content="">
         <meta name="generator" content="GitBook 3.2.3">
@@ -57,10 +57,8 @@
     <link rel="shortcut icon" href="gitbook/images/favicon.ico" type="image/x-icon">
 
     
-    <link rel="next" href="QA.html" />
     
-    
-    <link rel="prev" href="breakpoint.html" />
+    <link rel="prev" href="QA.html" />
     
 
     </head>
@@ -411,7 +409,7 @@
             
         </li>
     
-        <li class="chapter active" data-level="1.7" data-path="api.html">
+        <li class="chapter " data-level="1.7" data-path="api.html">
             
                 <a href="api.html">
             
@@ -469,7 +467,7 @@
             
         </li>
     
-        <li class="chapter " data-level="1.9" data-path="upgrade.html">
+        <li class="chapter active" data-level="1.9" data-path="upgrade.html">
             
                 <a href="upgrade.html">
             
@@ -512,7 +510,7 @@
     <!-- Title -->
     <h1>
         <i class="fa fa-circle-o-notch fa-spin"></i>
-        <a href="." >管理API</a>
+        <a href="." >更新历史</a>
     </h1>
 </div>
 
@@ -527,77 +525,35 @@
     
                                 <section class="normal markdown-section">
                                 
-                                <h2 id="api&#x901A;&#x7528;&#x8BF4;&#x660E;">API&#x901A;&#x7528;&#x8BF4;&#x660E;</h2>
-<pre><code>&#x4E00;&#x3001;&#x7EDF;&#x4E00;&#x4F7F;&#x7528;POST&#x8BF7;&#x6C42;
-&#x4E8C;&#x3001;&#x8FD4;&#x56DE;&#x683C;&#x5F0F;&#x7EDF;&#x4E00;&#x4E3A;json
-&#x3000;&#x3000;&#x683C;&#x5F0F;&#x5982;&#x4E0B;
-    {
-      &quot;status&quot;:&quot;ok&quot;,
-      &quot;message&quot;:&quot;&quot;,
-      &quot;data&quot;:{}
-    }
-&#x4E8C;&#x3001;url&#x4E2D;&#x7684;group&#x53EA;&#x6709;&#x5728;support_group_manage&#x8BBE;&#x7F6E;&#x4E3A;true&#x624D;&#x6709;&#x3002;
-    &#x4F8B;&#x5982;&#xFF1A;
-    http://10.1.5.9:8080/group/reload
-    &#x9ED8;&#x8BA4;&#xFF1A;
-    http://10.1.5.9:8080/reload
-    &#x8BF4;&#x660E;&#xFF1A;url&#x4E2D;&#x7684;group&#x4E3A;cfg.json&#x4E2D;&#x7684;group&#x53C2;&#x6570;&#x503C;&#x3002;
-</code></pre><h2 id="&#x914D;&#x7F6E;&#x7BA1;&#x7406;api">&#x914D;&#x7F6E;&#x7BA1;&#x7406;API</h2>
-<pre><code>http://10.1.5.9:8080/group/reload
-
-&#x53C2;&#x6570;&#xFF1A;
-action: set(&#x4FEE;&#x6539;&#x53C2;&#x6570;),get&#x83B7;&#x53D6;&#x53C2;&#x6570;,reload&#x91CD;&#x65B0;&#x52A0;&#x8F7D;&#x53C2;&#x6570;
-cfg:json&#x53C2;&#x6570;&#x3000;&#x4E0E; action=set&#x914D;&#x5408;&#x5B8C;&#x6210;&#x53C2;&#x6570;&#x8BBE;&#x7F6E;
-</code></pre><h2 id="&#x6587;&#x4EF6;&#x7EDF;&#x8BA1;&#x4FE1;&#x606F;api">&#x6587;&#x4EF6;&#x7EDF;&#x8BA1;&#x4FE1;&#x606F;API</h2>
-<pre><code>http://10.1.50.90:8080/group/stat
-</code></pre><h2 id="&#x6587;&#x4EF6;&#x4E0A;&#x4F20;api">&#x6587;&#x4EF6;&#x4E0A;&#x4F20;API</h2>
-<pre><code>http://10.1.50.90:8080/group/upload
-&#x53C2;&#x6570;&#xFF1A;
-file:&#x4E0A;&#x4F20;&#x7684;&#x6587;&#x4EF6;
-scene:&#x573A;&#x666F;
-output:&#x8F93;&#x51FA;
-path:&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;
-&#x5177;&#x4F53;&#x8BF7;&#x53C2;&#x9605;&#x793A;&#x4F8B;&#x4EE3;&#x7801;&#xFF08;&#x7528;&#x6D4F;&#x89C8;&#x5668;&#x8BBF;&#x95EE;http://127.0.0.1:8080&#xFF09;
-</code></pre><h2 id="&#x6587;&#x4EF6;&#x79D2;&#x4F20;">&#x6587;&#x4EF6;&#x79D2;&#x4F20;</h2>
-<pre><code>http://10.1.50.90:8080/group/upload
-&#x53C2;&#x6570;&#xFF1A;
-md5:&#x6587;&#x4EF6;&#x7684;&#x6458;&#x8981;
-&#x6458;&#x8981;&#x7B97;&#x6CD5;&#x8981;&#x4E0E;cfg.json&#x4E2D;&#x914D;&#x7F6E;&#x7684;&#x4E00;&#x6837;
-&#x4F8B;&#x5B50;&#xFF1A;http://127.0.0.1:8080/upload?md5=430a71f5c5e093a105452819cc48cc9c&amp;output=json
-</code></pre><h2 id="&#x6587;&#x4EF6;&#x5220;&#x9664;">&#x6587;&#x4EF6;&#x5220;&#x9664;</h2>
-<pre><code>http://10.1.50.90:8080/group/delete
-&#x53C2;&#x6570;&#xFF1A;
-md5:&#x6587;&#x4EF6;&#x7684;&#x6458;&#x8981;&#xFF08;md5|sha1&#xFF09; &#x89C6;&#x914D;&#x7F6E;&#x5B9A;
-path:&#x6587;&#x4EF6;&#x8DEF;&#x5F84;
-md5&#x4E0E;path&#x4E8C;&#x9009;&#x4E00;
-&#x8BF4;&#x660E;&#xFF1A;md5&#x6216;path&#x90FD;&#x662F;&#x4E0A;&#x4F20;&#x6587;&#x4EF6;&#x65F6;&#x8FD4;&#x56DE;&#x7684;&#x4FE1;&#x606F;&#xFF0C;&#x8981;&#x4EE5;json&#x65B9;&#x5F0F;&#x8FD4;&#x56DE;&#x624D;&#x80FD;&#x770B;&#x5230;&#xFF08;&#x53C2;&#x9605;&#x6D4F;&#x89C8;&#x5668;&#x4E0A;&#x4F20;&#xFF09;
-http://127.0.0.1:8080/delete?md5=430a71f5c5e093a105452819cc48cc9c
-</code></pre><h2 id="&#x6587;&#x4EF6;&#x4FE1;&#x606F;">&#x6587;&#x4EF6;&#x4FE1;&#x606F;</h2>
-<pre><code>http://10.1.50.90:8080/group/get_file_info
-&#x53C2;&#x6570;&#xFF1A;
-md5:&#x6587;&#x4EF6;&#x7684;&#x6458;&#x8981;&#xFF08;md5|sha1&#xFF09; &#x89C6;&#x914D;&#x7F6E;&#x5B9A;
-path:&#x6587;&#x4EF6;&#x8DEF;&#x5F84;
-md5&#x4E0E;path&#x4E8C;&#x9009;&#x4E00;
-&#x8BF4;&#x660E;&#xFF1A;md5&#x6216;path&#x90FD;&#x662F;&#x4E0A;&#x4F20;&#x6587;&#x4EF6;&#x65F6;&#x8FD4;&#x56DE;&#x7684;&#x4FE1;&#x606F;&#xFF0C;&#x8981;&#x4EE5;json&#x65B9;&#x5F0F;&#x8FD4;&#x56DE;&#x624D;&#x80FD;&#x770B;&#x5230;&#xFF08;&#x53C2;&#x9605;&#x6D4F;&#x89C8;&#x5668;&#x4E0A;&#x4F20;&#xFF09;
-&#x4F8B;&#x5B50;&#xFF1A;http://127.0.0.1:8080/get_file_info?md5=430a71f5c5e093a105452819cc48cc9c
-</code></pre><h2 id="&#x6587;&#x4EF6;&#x5217;&#x8868;">&#x6587;&#x4EF6;&#x5217;&#x8868;</h2>
-<pre><code>http://10.1.50.90:8080/group/list_dir
-&#x53C2;&#x6570;&#xFF1A;
-dir&#xFF1A;&#x8981;&#x67E5;&#x770B;&#x6587;&#x4EF6;&#x5217;&#x8868;&#x7684;&#x76EE;&#x5F55;&#x540D;
-&#x4F8B;&#x5B50;&#xFF1A;http://127.0.0.1:8080/list_dir?dir=default
-</code></pre><h2 id="&#x4FEE;&#x590D;&#x7EDF;&#x8BA1;&#x4FE1;&#x606F;">&#x4FEE;&#x590D;&#x7EDF;&#x8BA1;&#x4FE1;&#x606F;</h2>
-<pre><code>http://10.1.50.90:8080/group/repair_stat
-&#x53C2;&#x6570;&#xFF1A;
-date:&#x8981;&#x4FEE;&#x590D;&#x7684;&#x65E5;&#x671F;&#xFF0C;&#x683C;&#x5F0F;&#x5982;&#xFF1A;20190725
-&#x4F8B;&#x5B50;&#xFF1A;http://127.0.0.1:8080/repair_stat?date=20190725
-</code></pre><h2 id="&#x540C;&#x6B65;&#x5931;&#x8D25;&#x4FEE;&#x590D;">&#x540C;&#x6B65;&#x5931;&#x8D25;&#x4FEE;&#x590D;</h2>
-<pre><code>http://10.1.50.90:8080/group/repair
-&#x53C2;&#x6570;&#xFF1A;
-force:&#x662F;&#x5426;&#x5F3A;&#x884C;&#x4FEE;&#x590D;(0|1)
-&#x4F8B;&#x5B50;&#xFF1A;http://127.0.0.1:8080/repair?force=1
-</code></pre><h2 id="&#x4ECE;&#x6587;&#x4EF6;&#x76EE;&#x5F55;&#x4E2D;&#x4FEE;&#x590D;&#x5143;&#x6570;&#x636E;&#xFF08;&#x6027;&#x80FD;&#x8F83;&#x5DEE;&#xFF09;">&#x4ECE;&#x6587;&#x4EF6;&#x76EE;&#x5F55;&#x4E2D;&#x4FEE;&#x590D;&#x5143;&#x6570;&#x636E;&#xFF08;&#x6027;&#x80FD;&#x8F83;&#x5DEE;&#xFF09;</h2>
-<pre><code>http://10.1.50.90:8080/group/repair_fileinfo
-&#x9700;&#x8981;&#x5F00;&#x542F;&#x642C;&#x8FC1;&#x529F;&#x80FD;&#xFF0C;&#x4FEE;&#x6539;cfg.json&#x914D;&#x7F6E;&#x6587;&#x4EF6;&#x4E2D;&#x7684; enable_migrate &#x8BBE;&#x4E3A;true
+                                <pre><code>v1.3.1 &#x4FEE;&#x590D;&#x540C;&#x6B65;&#x8D85;&#x65F6;&#x6587;&#x4EF6;&#x5F02;&#x5E38;&#x60C5;&#x51B5;
+v1.3.0 &#x589E;&#x52A0;nginx&#x96C6;&#x7FA4;&#x914D;&#x7F6E;&#x6837;&#x4F8B;&#xFF0C;&#x652F;&#x6301;&#x6587;&#x4EF6;&#x7C7B;&#x578B;&#x4E0A;&#x4F20;&#x767D;&#x540D;&#x5355;
+v1.2.9 &#x652F;&#x6301;&#x65AD;&#x70B9;&#x7EED;&#x4F20;&#x8BA4;&#x8BC1;(&#x5177;&#x4F53;&#x53C2;&#x9605;&#x6D4F;&#x89C8;&#x5668;&#x4E0A;&#x4F20;)&#x4F18;&#x5316;&#x5185;&#x5B58;&#x5360;&#x7528;
+v1.2.8 &#x589E;&#x52A0;&#x6587;&#x4EF6;&#x5217;&#x8868;&#x63A5;&#x53E3;&#xFF0C;&#x4F18;&#x5316;&#x6587;&#x4EF6;&#x5FEB;&#x901F;&#x8FC1;&#x79FB;&#x529F;&#x80FD;(&#x5B9E;&#x6D4B;&#x6027;&#x80FD;&#x53EF;&#x4EE5;&#x8DD1;&#x5230;&#x673A;&#x5668;&#x4E0A;&#x9650;&#xFF0C;&#x5982;&#xFF1A;&#x78C1;&#x76D8;&#x6216;&#x7F51;&#x7EDC;)
+v1.2.7 &#x589E;&#x52A0;nginx&#x914D;&#x7F6E;&#x6A21;&#x7248;&#xFF0C;&#x5B8C;&#x5584;README&#x6587;&#x6863;
+v1.2.6 &#x652F;&#x6301;&#x901A;&#x7528;&#x6587;&#x4EF6;&#x8BA4;&#x8BC1;&#x63A5;&#x53E3;
+v1.2.5 &#x652F;&#x6301;&#x56FE;&#x7247;&#x7F29;&#x653E;
+v1.2.4 &#x652F;&#x6301;google&#x8BA4;&#x8BC1;&#xFF0C;&#x5B9E;&#x73B0;&#x6587;&#x4EF6;&#x5B89;&#x5168;&#x8BBF;&#x95EE;
+v1.2.3 &#x589E;&#x52A0;&#x8DE8;&#x57DF;&#x8BBF;&#x95EE;&#x652F;&#x6301;
+v1.2.2 &#x589E;&#x52A0;&#x8282;&#x70B9;&#x53EA;&#x8BFB;&#x9009;&#x9879;&#xFF0C;&#x4FDD;&#x8BC1;&#x78C1;&#x76D8;&#x6EE1;&#x7684;&#x60C5;&#x51B5;&#x4E0B;&#x8FD8;&#x80FD;&#x8FC1;&#x79FB;&#x96C6;&#x7FA4;
+v1.2.1 &#x4F18;&#x5316;&#x4E0B;&#x8F7D;&#x4F53;&#x9A8C;&#xFF0C;&#x4E0D;&#x518D;&#x91CD;&#x5B9A;&#x5411;&#xFF0C;&#x7B80;&#x5316;nginx&#x914D;&#x7F6E;,&#x53EF;&#x91CD;&#x590D;&#x6587;&#x4EF6;&#x540C;&#x6B65;bug&#x4FEE;&#x590D;
+v1.2.0 &#x589E;&#x52A0;&#x540E;&#x53F0;&#x542F;&#x52A8;&#x811A;&#x672C;&#xFF0C;&#x652F;&#x6301;&#x540E;&#x53F0;&#x8FD0;&#x884C;
+v1.1.9 &#x589E;&#x52A0;&#x6587;&#x4EF6;&#x81EA;&#x52A8;&#x8FC1;&#x79FB;&#x529F;&#x80FD;&#xFF0C;&#x589E;&#x52A0;&#x6587;&#x4EF6;&#x53EF;&#x91CD;&#x590D;&#x9009;&#x9879;
+v1.1.8 &#x7EDF;&#x4E00;&#x5220;&#x9664;&#x63A5;&#x53E3;&#xFF0C;&#x4F18;&#x5316;&#x5185;&#x5B58;&#x5360;&#x7528;&#xFF0C;&#x4F18;&#x5316;&#x6587;&#x4EF6;&#x540C;&#x6B65;
+v1.1.7 &#x589E;&#x52A0;&#x5355;&#x5143;&#x6D4B;&#x8BD5;&#xFF0C;&#x4E3A;go-fastdfs&#x7A33;&#x5B9A;&#x8FD0;&#x884C;&#x4FDD;&#x9A7E;&#x62A4;&#x884C;
+v1.1.6 &#x652F;&#x6301;web&#x65AD;&#x70B9;&#x7EED;&#x4F20;
+v1.1.5 &#x652F;&#x6301;&#x65AD;&#x70B9;&#x4E0A;&#x4F20;&#x529F;&#x80FD;(tus)
+v1.1.4 &#x589E;&#x52A0;docker&#x90E8;&#x7F72;&#x529F;&#x80FD;
+v1.1.3 &#x589E;&#x52A0;&#x5C0F;&#x6587;&#x4EF6;&#x5408;&#x5E76;&#x529F;&#x80FD;
+v1.1.2 &#x4FEE;&#x8BC1;&#x540C;&#x65F6;&#x4F20;&#x8F93;&#x5927;&#x6587;&#x4EF6;&#x65F6;&#x540C;&#x6B65;&#x5931;&#x8D25;&#x95EE;&#x9898;
+v1.1.1 &#x652F;&#x6301;&#x6309;&#x7EC4;&#xFF08;&#x96C6;&#x7FA4;&#xFF09;&#x4E0A;&#x4F20;&#x6587;&#x4EF6;
+v1.1.0 &#x589E;&#x52A0;peer_id&#x9632;&#x6B62;&#x6587;&#x4EF6;&#x88AB;&#x8986;&#x76D6;
+v1.0.9 &#x91CD;&#x6784;&#x4EE3;&#x7801;&#xFF0C;&#x4F18;&#x5316;&#x540C;&#x6B65;&#x903B;&#x8F91;&#xFF0C;&#x51CF;&#x5C11;&#x5185;&#x5B58;&#x5360;&#x7528;
+v1.0.8 &#x589E;&#x52A0;sha1&#x6587;&#x4EF6;&#x53BB;&#x91CD;&#x7B97;&#x6CD5;
+v1.0.7 &#x589E;&#x52A0;&#x52A8;&#x6001;&#x52A0;&#x8F7D;&#x914D;&#x7F6E;&#x529F;&#x80FD;
+v1.0.6 &#x4FEE;&#x6539;&#x6587;&#x4EF6;&#x540C;&#x6B65;&#x7684;&#x65B9;&#x5F0F;&#xFF0C;&#x7531;&#x539F;&#x6765;&#x7684;&#x63A8;&#x6539;&#x4E3A;&#x62C9;&#xFF0C;&#x63D0;&#x5347;&#x5927;&#x6587;&#x4EF6;&#x540C;&#x6B65;&#x6027;&#x80FD;
+v1.0.5 &#x4F18;&#x5316;&#x6587;&#x4EF6;&#x7EDF;&#x8BA1;&#x8BB0;&#x5F55;&#x65B9;&#x5F0F;
+v1.0.4 &#x589E;&#x52A0;&#x538B;&#x529B;&#x6D4B;&#x8BD5;
+v1.0.3 &#x589E;&#x52A0;&#x81EA;&#x52A8;&#x4FEE;&#x590D;&#x7EDF;&#x8BA1;&#x4FE1;&#x606F;
 </code></pre>
                                 
                                 </section>
@@ -625,14 +581,10 @@ force:&#x662F;&#x5426;&#x5F3A;&#x884C;&#x4FEE;&#x590D;(0|1)
 
             
                 
-                <a href="breakpoint.html#js" class="navigation navigation-prev " aria-label="Previous page: Javascript">
+                <a href="QA.html" class="navigation navigation-prev navigation-unique" aria-label="Previous page: 维护问题">
                     <i class="fa fa-angle-left"></i>
                 </a>
                 
-                
-                <a href="QA.html" class="navigation navigation-next " aria-label="Next page: 问题汇总">
-                    <i class="fa fa-angle-right"></i>
-                </a>
                 
             
         
@@ -641,7 +593,7 @@ force:&#x662F;&#x5426;&#x5F3A;&#x884C;&#x4FEE;&#x590D;(0|1)
     <script>
         var gitbook = gitbook || [];
         gitbook.push(function() {
-            gitbook.page.hasChanged({"page":{"title":"管理API","level":"1.7","depth":1,"next":{"title":"问题汇总","level":"1.8","depth":1,"path":"QA.md","ref":"QA.md","articles":[{"title":"常见问题","level":"1.8.1","depth":2,"path":"QA.md","ref":"QA.md","articles":[]},{"title":"维护问题","level":"1.8.2","depth":2,"path":"QA.md","ref":"QA.md","articles":[]}]},"previous":{"title":"Javascript","level":"1.6.2","depth":2,"anchor":"#js","path":"breakpoint.md","ref":"breakpoint.md#js","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"api.md","mtime":"2019-08-23T03:25:24.133Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-08-26T03:09:08.160Z"},"basePath":".","book":{"language":""}});
+            gitbook.page.hasChanged({"page":{"title":"更新历史","level":"1.9","depth":1,"previous":{"title":"维护问题","level":"1.8.2","depth":2,"path":"QA.md","ref":"QA.md","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"upgrade.md","mtime":"2019-08-26T02:32:14.286Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-08-26T03:09:08.160Z"},"basePath":".","book":{"language":""}});
         });
     </script>
 </div>
