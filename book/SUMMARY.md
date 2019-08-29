@@ -19,6 +19,7 @@
     * [Python语言](usage.md#python)
     * [GO使用](usage.md#go)
     * [Java语言](usage.md#java)
+        * [Java流上传](usage.md#java-stream)
 * [断点续传"SDK"](breakpoint.md#go)
     * [GO](breakpoint.md#go)
     * [Javascript](breakpoint.md#js)
