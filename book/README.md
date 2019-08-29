@@ -12,7 +12,7 @@
 
 #### 大家担心的是这么简单的文件系统，靠不靠谱，可不可以用于生产环境？答案是肯定的，正因为简单所以高效，因为简单所以稳定。如果你担心功能，那就跑单元测试，如果担心性能，那就跑压力测试，项目都自带了，跑一跑更放心^_^。
 
-注意：使用前请认真阅读注意：使用前请认真阅读[使用文档](https://sjqzhang.github.io/go-fastdfs/#character)。
+注意：使用前请认真阅读使用文档（如果是移动端访问，导航栏默认隐藏，导航栏在页面顶部左侧）
 
 # 特性{#advantage}
 
@@ -73,6 +73,6 @@
 
 
 
-### [使用文档](https://sjqzhang.github.io/go-fastdfs/#character)
+### [使用文档](https://sjqzhang.github.io/go-fastdfs/#character) （如果是移动端访问，导航栏默认隐藏，导航栏在页面顶部左侧）
 
 [![asciicast](https://asciinema.org/a/258926.svg)](https://asciinema.org/a/258926)
