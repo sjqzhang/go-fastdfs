@@ -6,6 +6,7 @@
     * [go-fastdfs优点](README.md#advantage)
 * [安装](install.md)
     * [极速体验](install.md#quick)
+    * [Docker体验](install.md#docker)
     * [编译安装](install.md#compiler_install)
     * [小集群安装](install.md#small-cluster)
     * [海量集群安装](install.md#big-cluster)

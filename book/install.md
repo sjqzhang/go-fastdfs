@@ -10,7 +10,12 @@ wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/dow
 ### window
 (注意：下载时要注意链接的版本号，windows下直接运行fileserver.exe，执行文件在这里[下载](https://github.com/sjqzhang/fastdfs/releases))
 
+# Docker体验{#docker}
 
+```
+ docker run --name fastdfs -v /data/fastdfs_data:/data -p 8080:8080 -e GO_FASTDFS_DIR=/data sjqzhang/go-fastdfs
+
+```
 
 ## 编译安装{#compiler_install}
 
@@ -28,6 +33,8 @@ GOPATH=$pwd go build -o fileserver fileserver.go
 ```
 ./fileserver
 ```
+
+
 
 
 # 集群部署图{#deploy}
