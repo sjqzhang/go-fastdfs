@@ -1,5 +1,5 @@
 # 目录
-
+* [愿景](README.md#vision)
 * [背景](README.md#background)
     * [go-fastdfs是什么？](README.md#what)
 * [特性](README.md#character)
@@ -9,7 +9,7 @@
     * [Docker体验](install.md#docker)
     * [编译安装](install.md#compiler_install)
     * [小集群安装](install.md#small-cluster)
-    * [海量集群安装](install.md#big-cluster)
+    * [海量集群安装(推荐)](install.md#big-cluster)
 * [认证](authentication.md)
     * [按文件指纹认证](authentication.md#fingerprint)
     * [按google认证码认证](authentication.md#google)
