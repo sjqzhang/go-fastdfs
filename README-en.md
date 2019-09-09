@@ -1,5 +1,5 @@
 # [中文](README.md) [English](README-en.md)
-
+## Vision: Provide users with the most simple, reliable and efficient distributed file system.
 ![logo](doc/logo.png)
 
 
