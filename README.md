@@ -1,6 +1,8 @@
 
 # [中文](README.md)  [English](README-en.md)
 
+## 愿景：为用户提供最简单、可靠、高效的分布式文件系统。
+
 ![logo](doc/logo.png)
 
 
