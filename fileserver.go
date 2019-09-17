@@ -129,8 +129,8 @@ const (
 	"peers": ["%s"],
 	"组号": "用于区别不同的集群(上传或下载)与support_group_manage配合使用,带在下载路径中",
 	"group": "group1",
-	"是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认不支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
-	"support_group_manage": false,
+	"是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
+	"support_group_manage": true,
 	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
 	"enable_merge_small_file": false,
     "允许后缀名": "允许可以上传的文件后缀名，如jpg,jpeg,png等。留空允许所有。",
@@ -865,11 +865,19 @@ func (this *Server) GetFilePathFromRequest(w http.ResponseWriter, r *http.Reques
 		err       error
 		fullpath  string
 		smallPath string
+		prefix    string
 	)
-	fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+	fullpath = r.RequestURI[1:]
+	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/") {
+		fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
+	}
 	fullpath = strings.Split(fullpath, "?")[0] // just path
 	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
-	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/"+LARGE_DIR_NAME+"/") {
+	prefix = "/" + LARGE_DIR_NAME + "/"
+	if Config().SupportGroupManage {
+		prefix = "/" + Config().Group + "/" + LARGE_DIR_NAME + "/"
+	}
+	if strings.HasPrefix(r.RequestURI, prefix) {
 		smallPath = fullpath //notice order
 		fullpath = strings.Split(fullpath, ",")[0]
 	}
@@ -1115,6 +1123,13 @@ func (this *Server) Download(w http.ResponseWriter, r *http.Request) {
 		smallPath string
 		fi        os.FileInfo
 	)
+	// redirect to upload
+	if r.RequestURI == "/" || r.RequestURI == "" ||
+		r.RequestURI == "/"+Config().Group ||
+		r.RequestURI == "/"+Config().Group+"/" {
+		this.Index(w, r)
+		return
+	}
 	if ok, err = this.CheckDownloadAuth(w, r); !ok {
 		log.Error(err)
 		this.NotPermit(w, r)
@@ -2017,8 +2032,15 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 		downloadUrl string
 		domain      string
 	)
+	if !strings.HasPrefix(Config().DownloadDomain, "http") {
+		if Config().DownloadDomain == "" {
+			Config().DownloadDomain = fmt.Sprintf("http://%s", r.Host)
+		} else {
+			Config().DownloadDomain = fmt.Sprintf("http://%s", Config().DownloadDomain)
+		}
+	}
 	if Config().DownloadDomain != "" {
-		domain = fmt.Sprintf("http://%s", Config().DownloadDomain)
+		domain = Config().DownloadDomain
 	} else {
 		domain = fmt.Sprintf("http://%s", r.Host)
 	}
@@ -2027,10 +2049,14 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 		outname = fileInfo.ReName
 	}
 	p = strings.Replace(fileInfo.Path, STORE_DIR_NAME+"/", "", 1)
-	p = Config().Group + "/" + p + "/" + outname
+	if Config().SupportGroupManage {
+		p = Config().Group + "/" + p + "/" + outname
+	} else {
+		p = p + "/" + outname
+	}
 	downloadUrl = fmt.Sprintf("http://%s/%s", r.Host, p)
 	if Config().DownloadDomain != "" {
-		downloadUrl = fmt.Sprintf("http://%s/%s", Config().DownloadDomain, p)
+		downloadUrl = fmt.Sprintf("%s/%s", Config().DownloadDomain, p)
 	}
 	fileResult.Url = downloadUrl
 	fileResult.Md5 = fileInfo.Md5
@@ -3427,7 +3453,11 @@ func init() {
 	if Config().PeerId == "" {
 		Config().PeerId = peerId
 	}
-	staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
+	if Config().SupportGroupManage {
+		staticHandler = http.StripPrefix("/"+Config().Group+"/", http.FileServer(http.Dir(STORE_DIR)))
+	} else {
+		staticHandler = http.StripPrefix("/", http.FileServer(http.Dir(STORE_DIR)))
+	}
 	server.initComponent(false)
 }
 func (this *Server) test() {
@@ -3870,10 +3900,11 @@ func (this *Server) Main() {
 	}
 	uploadPage := "upload.html"
 	if groupRoute == "" {
-		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Index)
+		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
 		http.HandleFunc(fmt.Sprintf("/%s", uploadPage), this.Index)
 	} else {
-		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Index)
+		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
+		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Download)
 		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute, uploadPage), this.Index)
 	}
 	http.HandleFunc(fmt.Sprintf("%s/check_files_exist", groupRoute), this.CheckFilesExist)
