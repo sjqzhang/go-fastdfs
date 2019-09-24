@@ -1,6 +1,18 @@
+# 统一说明（重要）{#description}
+```
+从1.3.3开始，默认开启组(support_group_manage=true)功能（有更好的扩展性）
+访问的url中都会带上group的名称，例如：
+http://10.1.5.9:8080/这里是组名/upload
+如:
+http://10.1.5.9:8080/group1/upload
+如果（support_group_manage=false）
+url变为
+http://10.1.5.9:8080/upload
+
+```
 # 命令上传{#cmdline}
 
-`curl -F file=@http-index-fs http://10.1.xx.60:8080/upload` 	
+`curl -F file=@http-index-fs http://10.1.xx.60:8080/group1/upload` 	
 
 
 # WEB上传（浏览器打开）{#web}
@@ -12,7 +24,7 @@
 ## python版本: {#python}
 ```python
 import requests
-url = 'http://10.1.5.9:8080/upload'
+url = 'http://10.1.5.9:8080/group1/upload'
 files = {'file': open('report.xls', 'rb')}
 options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
 r = requests.post(url,data=options, files=files)
@@ -29,7 +41,7 @@ import (
 
 func main()  {
 	var obj interface{}
-	req:=httplib.Post("http://10.1.5.9:8080/upload")
+	req:=httplib.Post("http://10.1.5.9:8080/group1/upload")
 	req.PostFile("file","filename")//注意不是全路径
 	req.Param("output","json")
 	req.Param("scene","")
@@ -63,7 +75,7 @@ public static void main(String[] args) {
     //场景
     paramMap.put("scene","image");
     //上传
-    String result= HttpUtil.post("http://xxxxx:xxxx/upload", paramMap);
+    String result= HttpUtil.post("http://xxxxx:xxxx/group1/upload", paramMap);
     //输出json结果
     System.out.println(result);
 }

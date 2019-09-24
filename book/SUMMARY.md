@@ -15,6 +15,7 @@
     * [按google认证码认证](authentication.md#google)
     * [用户自定义认证](authentication.md#custom)
 * [语言"SDK"](usage.md)
+    * [统一说明（重要）](usage.md#description)
     * [命令行上传](usage.md#cmdline)
     * [浏览器上传](usage.md#web)
     * [Python语言](usage.md#python)

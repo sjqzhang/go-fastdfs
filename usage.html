@@ -324,6 +324,19 @@
     
         <li class="chapter " data-level="1.6.1" data-path="usage.html">
             
+                <a href="usage.html#description">
+            
+                    
+                    统一说明（重要）
+            
+                </a>
+            
+
+            
+        </li>
+    
+        <li class="chapter " data-level="1.6.2" data-path="usage.html">
+            
                 <a href="usage.html#cmdline">
             
                     
@@ -335,7 +348,7 @@
             
         </li>
     
-        <li class="chapter " data-level="1.6.2" data-path="usage.html">
+        <li class="chapter " data-level="1.6.3" data-path="usage.html">
             
                 <a href="usage.html#web">
             
@@ -348,7 +361,7 @@
             
         </li>
     
-        <li class="chapter " data-level="1.6.3" data-path="usage.html">
+        <li class="chapter " data-level="1.6.4" data-path="usage.html">
             
                 <a href="usage.html#python">
             
@@ -361,7 +374,7 @@
             
         </li>
     
-        <li class="chapter " data-level="1.6.4" data-path="usage.html">
+        <li class="chapter " data-level="1.6.5" data-path="usage.html">
             
                 <a href="usage.html#go">
             
@@ -374,7 +387,7 @@
             
         </li>
     
-        <li class="chapter " data-level="1.6.5" data-path="usage.html">
+        <li class="chapter " data-level="1.6.6" data-path="usage.html">
             
                 <a href="usage.html#java">
             
@@ -388,7 +401,7 @@
             <ul class="articles">
                 
     
-        <li class="chapter " data-level="1.6.5.1" data-path="usage.html">
+        <li class="chapter " data-level="1.6.6.1" data-path="usage.html">
             
                 <a href="usage.html#java-stream">
             
@@ -572,13 +585,22 @@
     
                                 <section class="normal markdown-section">
                                 
-                                <h1 id="cmdline">&#x547D;&#x4EE4;&#x4E0A;&#x4F20;</h1>
-<p><code>curl -F file=@http-index-fs http://10.1.xx.60:8080/upload</code>     </p>
+                                <h1 id="description">&#x7EDF;&#x4E00;&#x8BF4;&#x660E;&#xFF08;&#x91CD;&#x8981;&#xFF09;</h1>
+<pre><code>&#x4ECE;1.3.3&#x5F00;&#x59CB;&#xFF0C;&#x9ED8;&#x8BA4;&#x5F00;&#x542F;&#x7EC4;(support_group_manage=true)&#x529F;&#x80FD;&#xFF08;&#x6709;&#x66F4;&#x597D;&#x7684;&#x6269;&#x5C55;&#x6027;&#xFF09;
+&#x8BBF;&#x95EE;&#x7684;url&#x4E2D;&#x90FD;&#x4F1A;&#x5E26;&#x4E0A;group&#x7684;&#x540D;&#x79F0;&#xFF0C;&#x4F8B;&#x5982;&#xFF1A;
+http://10.1.5.9:8080/&#x8FD9;&#x91CC;&#x662F;&#x7EC4;&#x540D;/upload
+&#x5982;:
+http://10.1.5.9:8080/group1/upload
+&#x5982;&#x679C;&#xFF08;support_group_manage=false&#xFF09;
+url&#x53D8;&#x4E3A;
+http://10.1.5.9:8080/upload
+</code></pre><h1 id="cmdline">&#x547D;&#x4EE4;&#x4E0A;&#x4F20;</h1>
+<p><code>curl -F file=@http-index-fs http://10.1.xx.60:8080/group1/upload</code>     </p>
 <h1 id="web">WEB&#x4E0A;&#x4F20;&#xFF08;&#x6D4F;&#x89C8;&#x5668;&#x6253;&#x5F00;&#xFF09;</h1>
 <p><code>http://yourserver ip:8080/upload.html</code> &#x6CE8;&#x610F;&#xFF1A;&#x4E0D;&#x8981;&#x4F7F;&#x7528;127.0.0.1&#x4E0A;&#x4F20;     </p>
 <h2 id="python">python&#x7248;&#x672C;: </h2>
 <pre><code class="lang-python"><span class="hljs-keyword">import</span> requests
-url = <span class="hljs-string">&apos;http://10.1.5.9:8080/upload&apos;</span>
+url = <span class="hljs-string">&apos;http://10.1.5.9:8080/group1/upload&apos;</span>
 files = {<span class="hljs-string">&apos;file&apos;</span>: open(<span class="hljs-string">&apos;report.xls&apos;</span>, <span class="hljs-string">&apos;rb&apos;</span>)}
 options={<span class="hljs-string">&apos;output&apos;</span>:<span class="hljs-string">&apos;json&apos;</span>,<span class="hljs-string">&apos;path&apos;</span>:<span class="hljs-string">&apos;&apos;</span>,<span class="hljs-string">&apos;scene&apos;</span>:<span class="hljs-string">&apos;&apos;</span>} <span class="hljs-comment">#&#x53C2;&#x9605;&#x6D4F;&#x89C8;&#x5668;&#x4E0A;&#x4F20;&#x7684;&#x9009;&#x9879;</span>
 r = requests.post(url,data=options, files=files)
@@ -594,7 +616,7 @@ print(r.text)
 
 <span class="hljs-keyword">func</span> main()  {
     <span class="hljs-keyword">var</span> obj <span class="hljs-keyword">interface</span>{}
-    req:=httplib.Post(<span class="hljs-string">&quot;http://10.1.5.9:8080/upload&quot;</span>)
+    req:=httplib.Post(<span class="hljs-string">&quot;http://10.1.5.9:8080/group1/upload&quot;</span>)
     req.PostFile(<span class="hljs-string">&quot;file&quot;</span>,<span class="hljs-string">&quot;filename&quot;</span>)<span class="hljs-comment">//&#x6CE8;&#x610F;&#x4E0D;&#x662F;&#x5168;&#x8DEF;&#x5F84;</span>
     req.Param(<span class="hljs-string">&quot;output&quot;</span>,<span class="hljs-string">&quot;json&quot;</span>)
     req.Param(<span class="hljs-string">&quot;scene&quot;</span>,<span class="hljs-string">&quot;&quot;</span>)
@@ -626,7 +648,7 @@ print(r.text)
     <span class="hljs-comment">//&#x573A;&#x666F;</span>
     paramMap.put(<span class="hljs-string">&quot;scene&quot;</span>,<span class="hljs-string">&quot;image&quot;</span>);
     <span class="hljs-comment">//&#x4E0A;&#x4F20;</span>
-    String result= HttpUtil.post(<span class="hljs-string">&quot;http://xxxxx:xxxx/upload&quot;</span>, paramMap);
+    String result= HttpUtil.post(<span class="hljs-string">&quot;http://xxxxx:xxxx/group1/upload&quot;</span>, paramMap);
     <span class="hljs-comment">//&#x8F93;&#x51FA;json&#x7ED3;&#x679C;</span>
     System.out.println(result);
 }
@@ -787,7 +809,7 @@ pom&#x6587;&#x4EF6;&#x4F9D;&#x8D56;</p>
                 </a>
                 
                 
-                <a href="usage.html#cmdline" class="navigation navigation-next " aria-label="Next page: 命令行上传">
+                <a href="usage.html#description" class="navigation navigation-next " aria-label="Next page: 统一说明（重要）">
                     <i class="fa fa-angle-right"></i>
                 </a>
                 
@@ -798,7 +820,7 @@ pom&#x6587;&#x4EF6;&#x4F9D;&#x8D56;</p>
     <script>
         var gitbook = gitbook || [];
         gitbook.push(function() {
-            gitbook.page.hasChanged({"page":{"title":"语言\"SDK\"","level":"1.6","depth":1,"next":{"title":"命令行上传","level":"1.6.1","depth":2,"anchor":"#cmdline","path":"usage.md","ref":"usage.md#cmdline","articles":[]},"previous":{"title":"用户自定义认证","level":"1.5.3","depth":2,"anchor":"#custom","path":"authentication.md","ref":"authentication.md#custom","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":["livereload"],"pluginsConfig":{"livereload":{},"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"usage.md","mtime":"2019-08-29T03:41:07.639Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-09-09T06:03:49.371Z"},"basePath":".","book":{"language":""}});
+            gitbook.page.hasChanged({"page":{"title":"语言\"SDK\"","level":"1.6","depth":1,"next":{"title":"统一说明（重要）","level":"1.6.1","depth":2,"anchor":"#description","path":"usage.md","ref":"usage.md#description","articles":[]},"previous":{"title":"用户自定义认证","level":"1.5.3","depth":2,"anchor":"#custom","path":"authentication.md","ref":"authentication.md#custom","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"usage.md","mtime":"2019-09-24T02:43:29.637Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-09-24T03:07:54.323Z"},"basePath":".","book":{"language":""}});
         });
     </script>
 </div>
@@ -806,10 +828,6 @@ pom&#x6587;&#x4EF6;&#x4F9D;&#x8D56;</p>
         
     <script src="gitbook/gitbook.js"></script>
     <script src="gitbook/theme.js"></script>
-    
-        
-        <script src="gitbook/gitbook-plugin-livereload/plugin.js"></script>
-        
     
         
         <script src="gitbook/gitbook-plugin-search/search-engine.js"></script>
