@@ -2140,7 +2140,12 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if fi.Size() != header.Size {
 		return fileInfo, errors.New("(error)file uncomplete")
 	}
-	v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	v :=this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	//if Config().EnableDistinctFile {
+	//	v= this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	//} else {
+	//	v=this.util.MD5(this.GetFilePathByInfo(fileInfo,false))
+	//}
 	fileInfo.Md5 = v
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
@@ -2149,6 +2154,42 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	return fileInfo, nil
 }
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
+	var (
+		err    error
+		fn     string
+		folder string
+		fpTmp  *os.File
+		fpBody *os.File
+	)
+	if r.Method == http.MethodGet {
+		this.upload(w, r)
+		return
+	}
+	folder = STORE_DIR + "/_tmp/" + time.Now().Format("20060102")
+	os.MkdirAll(folder, 0777)
+	fn = folder + "/" + this.util.GetUUID()
+	defer func() {
+		os.Remove(fn)
+	}()
+	fpTmp, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0777)
+	if err != nil {
+		log.Error(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	defer fpTmp.Close()
+	if _, err = io.Copy(fpTmp, r.Body); err != nil {
+		log.Error(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	fpBody, err = os.Open(fn)
+	defer fpBody.Close()
+	r.Body = fpBody
+	this.upload(w, r)
+}
+
+func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
 		ok  bool
