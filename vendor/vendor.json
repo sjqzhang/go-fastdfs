@@ -70,6 +70,12 @@
 			"revisionTime": "2018-02-21T19:10:11Z"
 		},
 		{
+			"checksumSHA1": "Crg+PtCi5YDq7UNP5JzeE8K1uY8=",
+			"path": "github.com/radovskyb/watcher",
+			"revision": "f5989f8deca223d590d5a130c77ea375fe9fde30",
+			"revisionTime": "2019-08-17T01:08:44Z"
+		},
+		{
 			"checksumSHA1": "kYRQcthIIU5NEqwba/Jfve+1myw=",
 			"path": "github.com/sjqzhang/googleAuthenticator",
 			"revision": "f198f070e0b1c610476cd4af49f75cb861900208",
