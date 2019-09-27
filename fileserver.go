@@ -38,6 +38,7 @@ import (
 	_ "github.com/eventials/go-tus"
 	"github.com/json-iterator/go"
 	"github.com/nfnt/resize"
+	"github.com/radovskyb/watcher"
 	"github.com/sjqzhang/googleAuthenticator"
 	"github.com/sjqzhang/goutil"
 	log "github.com/sjqzhang/seelog"
@@ -220,6 +221,7 @@ type FileInfo struct {
 	Scene     string   `json:"scene"`
 	TimeStamp int64    `json:"timeStamp"`
 	OffSet    int64    `json:"offset"`
+	Retry     int      `json:"retry"`
 }
 type FileLog struct {
 	FileInfo *FileInfo
@@ -290,6 +292,8 @@ type GloablConfig struct {
 	DefaultDownload      bool     `json:"default_download"`
 	EnableTus            bool     `json:"enable_tus"`
 	SyncTimeout          int64    `json:"sync_timeout"`
+	EnableFsnotify       bool     `json:"enable_fsnotify"`
+	EnableDiskCache      bool     `json:"enable_disk_cache"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -566,6 +570,71 @@ func (this *Server) RepairFileInfoFromFile() {
 	}
 	log.Info("RepairFileInfoFromFile is finish.")
 }
+func (this *Server) WatchFilesChange() {
+	var (
+		w        *watcher.Watcher
+		fileInfo FileInfo
+		curDir   string
+		err      error
+		qchan    chan *FileInfo
+	)
+	qchan = make(chan *FileInfo, 10000)
+	w = watcher.New()
+	w.FilterOps(watcher.Create, watcher.Remove)
+	curDir, err = filepath.Abs(filepath.Dir(STORE_DIR_NAME))
+	if err != nil {
+		log.Error(err)
+	}
+	go func() {
+		for {
+			select {
+			case event := <-w.Event:
+				if event.IsDir() {
+					continue
+				}
+				fpath := strings.Replace(event.Path, curDir+string(os.PathSeparator), "", 1)
+				fpath = strings.Replace(fpath, string(os.PathSeparator), "/", -1)
+				sum := this.util.MD5(fpath)
+				fileInfo = FileInfo{
+					Size:      event.Size(),
+					Name:      event.Name(),
+					Path:      strings.TrimRight(fpath, "/"+event.Name()), // files/default/20190927/xxx
+					Md5:       sum,
+					TimeStamp: event.ModTime().Unix(),
+					Peers:     []string{this.host},
+					OffSet:    -2,
+				}
+				log.Info(fpath)
+				qchan <- &fileInfo
+				//this.AppendToQueue(&fileInfo)
+			case err := <-w.Error:
+				log.Error(err)
+			case <-w.Closed:
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			c := <-qchan
+			if time.Now().Unix()-c.TimeStamp < 3 {
+				qchan <- c
+				time.Sleep(time.Second * 1)
+				continue
+			} else {
+				this.AppendToQueue(c)
+			}
+		}
+	}()
+	if err := w.AddRecursive("./" + STORE_DIR_NAME); err != nil {
+		log.Error(err)
+	}
+	w.Ignore("./" + STORE_DIR_NAME + "/_tmp/")
+	if err := w.Start(time.Millisecond * 100); err != nil {
+		log.Error(err)
+	}
+}
+
 func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 	defer func() {
 		if re := recover(); re != nil {
@@ -688,6 +757,12 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		log.Warn("ReadOnly", fileInfo)
 		return
 	}
+	if fileInfo.Retry > 5 {
+		log.Error("DownloadFromPeer Error ", fileInfo)
+		return
+	} else {
+		fileInfo.Retry = fileInfo.Retry + 1
+	}
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
@@ -739,6 +814,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		req := httplib.Get(downloadUrl)
 		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 		if err = req.ToFile(fpathTmp); err != nil {
+			this.AppendToDownloadQueue(fileInfo) //retry
 			os.Remove(fpathTmp)
 			log.Error(err)
 			return
@@ -755,6 +831,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		//small file download
 		data, err = req.Bytes()
 		if err != nil {
+			this.AppendToDownloadQueue(fileInfo) //retry
 			log.Error(err)
 			return
 		}
@@ -778,6 +855,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		return
 	}
 	if err = req.ToFile(fpathTmp); err != nil {
+		this.AppendToDownloadQueue(fileInfo) //retry
 		os.Remove(fpathTmp)
 		log.Error(err)
 		return
@@ -2140,7 +2218,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if fi.Size() != header.Size {
 		return fileInfo, errors.New("(error)file uncomplete")
 	}
-	v :=this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
 	//if Config().EnableDistinctFile {
 	//	v= this.util.GetFileSum(outFile, Config().FileSumArithmetic)
 	//} else {
@@ -3794,6 +3872,7 @@ func (this *Server) initTus() {
 	}
 	http.Handle(bigDir, http.StripPrefix(bigDir, handler))
 }
+
 func (this *Server) FormatStatInfo() {
 	var (
 		data  []byte
@@ -3880,9 +3959,9 @@ type HttpHandler struct {
 func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	status_code := "200"
 	defer func(t time.Time) {
-		logStr := fmt.Sprintf("[Access] %s | %v | %s | %s | %s | %s |%s",
+		logStr := fmt.Sprintf("[Access] %s | %s | %s | %s | %s |%s",
 			time.Now().Format("2006/01/02 - 15:04:05"),
-			res.Header(),
+			//res.Header(),
 			time.Since(t).String(),
 			server.util.GetClientIp(req),
 			req.Method,
@@ -3922,6 +4001,9 @@ func (this *Server) Main() {
 	go this.ConsumerLog()
 	go this.ConsumerDownLoad()
 	go this.RemoveDownloading()
+	if Config().EnableFsnotify {
+		go this.WatchFilesChange()
+	}
 	//go this.LoadSearchDict()
 	if Config().EnableMigrate {
 		go this.RepairFileInfoFromFile()
