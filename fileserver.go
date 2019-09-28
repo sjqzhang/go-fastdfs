@@ -577,6 +577,7 @@ func (this *Server) WatchFilesChange() {
 		curDir   string
 		err      error
 		qchan    chan *FileInfo
+		isLink   bool
 	)
 	qchan = make(chan *FileInfo, 10000)
 	w = watcher.New()
@@ -593,12 +594,15 @@ func (this *Server) WatchFilesChange() {
 					continue
 				}
 				fpath := strings.Replace(event.Path, curDir+string(os.PathSeparator), "", 1)
+				if isLink {
+					fpath = strings.Replace(event.Path, curDir, STORE_DIR_NAME, 1)
+				}
 				fpath = strings.Replace(fpath, string(os.PathSeparator), "/", -1)
 				sum := this.util.MD5(fpath)
 				fileInfo = FileInfo{
 					Size:      event.Size(),
 					Name:      event.Name(),
-					Path:      strings.TrimRight(fpath, "/"+event.Name()), // files/default/20190927/xxx
+					Path:      strings.TrimSuffix(fpath, "/"+event.Name()), // files/default/20190927/xxx
 					Md5:       sum,
 					TimeStamp: event.ModTime().Unix(),
 					Peers:     []string{this.host},
@@ -623,9 +627,20 @@ func (this *Server) WatchFilesChange() {
 				continue
 			} else {
 				this.AppendToQueue(c)
+				this.SaveFileInfoToLevelDB(c.Md5, c, this.ldb)
 			}
 		}
 	}()
+	if dir,err:=os.Readlink(STORE_DIR_NAME);err==nil {
+		if strings.HasSuffix(dir,string(os.PathSeparator)) {
+			dir=strings.TrimSuffix(dir,string(os.PathSeparator))
+		}
+		curDir=dir
+		isLink=true
+		if err := w.AddRecursive(dir); err != nil {
+			log.Error(err)
+		}
+	}
 	if err := w.AddRecursive("./" + STORE_DIR_NAME); err != nil {
 		log.Error(err)
 	}
