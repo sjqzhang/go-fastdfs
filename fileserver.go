@@ -221,7 +221,8 @@ type FileInfo struct {
 	Scene     string   `json:"scene"`
 	TimeStamp int64    `json:"timeStamp"`
 	OffSet    int64    `json:"offset"`
-	Retry     int      `json:"retry"`
+	retry     int
+	op        string
 }
 type FileLog struct {
 	FileInfo *FileInfo
@@ -593,6 +594,7 @@ func (this *Server) WatchFilesChange() {
 				if event.IsDir() {
 					continue
 				}
+
 				fpath := strings.Replace(event.Path, curDir+string(os.PathSeparator), "", 1)
 				if isLink {
 					fpath = strings.Replace(event.Path, curDir, STORE_DIR_NAME, 1)
@@ -607,6 +609,7 @@ func (this *Server) WatchFilesChange() {
 					TimeStamp: event.ModTime().Unix(),
 					Peers:     []string{this.host},
 					OffSet:    -2,
+					op:        event.Op.String(),
 				}
 				log.Info(fpath)
 				qchan <- &fileInfo
@@ -626,17 +629,25 @@ func (this *Server) WatchFilesChange() {
 				time.Sleep(time.Second * 1)
 				continue
 			} else {
-				this.AppendToQueue(c)
-				this.SaveFileInfoToLevelDB(c.Md5, c, this.ldb)
+				if c.op == watcher.Remove.String() {
+					req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", this.host, this.getRequestURI("delete"), c.Md5))
+					req.Param("md5", c.Md5)
+					req.SetTimeout(time.Second*5, time.Second*10)
+					log.Infof(req.String())
+				}
+				if c.op == watcher.Create.String() {
+					this.AppendToQueue(c)
+					this.SaveFileInfoToLevelDB(c.Md5, c, this.ldb)
+				}
 			}
 		}
 	}()
-	if dir,err:=os.Readlink(STORE_DIR_NAME);err==nil {
-		if strings.HasSuffix(dir,string(os.PathSeparator)) {
-			dir=strings.TrimSuffix(dir,string(os.PathSeparator))
+	if dir, err := os.Readlink(STORE_DIR_NAME); err == nil {
+		if strings.HasSuffix(dir, string(os.PathSeparator)) {
+			dir = strings.TrimSuffix(dir, string(os.PathSeparator))
 		}
-		curDir=dir
-		isLink=true
+		curDir = dir
+		isLink = true
 		if err := w.AddRecursive(dir); err != nil {
 			log.Error(err)
 		}
@@ -772,11 +783,11 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		log.Warn("ReadOnly", fileInfo)
 		return
 	}
-	if fileInfo.Retry > 5 {
+	if fileInfo.retry > 5 {
 		log.Error("DownloadFromPeer Error ", fileInfo)
 		return
 	} else {
-		fileInfo.Retry = fileInfo.Retry + 1
+		fileInfo.retry = fileInfo.retry + 1
 	}
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
