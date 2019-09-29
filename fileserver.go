@@ -202,6 +202,7 @@ type Server struct {
 	util           *goutil.Common
 	statMap        *goutil.CommonMap
 	sumMap         *goutil.CommonMap
+	rtMap          *goutil.CommonMap
 	queueToPeers   chan FileInfo
 	queueFromPeers chan FileInfo
 	queueFileLog   chan *FileLog
@@ -295,6 +296,12 @@ type GloablConfig struct {
 	SyncTimeout          int64    `json:"sync_timeout"`
 	EnableFsnotify       bool     `json:"enable_fsnotify"`
 	EnableDiskCache      bool     `json:"enable_disk_cache"`
+	ConnectTimeout       bool     `json:"connect_timeout"`
+	ReadTimeout          int      `json:"read_timeout"`
+	WriteTimeout         int      `json:"write_timeout"`
+	IdleTimeout          int      `json:"idle_timeout"`
+	ReadHeaderTimeout    int      `json:"read_header_timeout"`
+	SyncWorker           int      `json:"sync_worker"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -314,6 +321,7 @@ func NewServer() *Server {
 		util:           &goutil.Common{},
 		statMap:        goutil.NewCommonMap(0),
 		lockMap:        goutil.NewCommonMap(0),
+		rtMap:          goutil.NewCommonMap(0),
 		sceneMap:       goutil.NewCommonMap(0),
 		searchMap:      goutil.NewCommonMap(0),
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
@@ -324,14 +332,14 @@ func NewServer() *Server {
 
 	defaultTransport := &http.Transport{
 		DisableKeepAlives:   true,
-		Dial:                httplib.TimeoutDialer(time.Second*6, time.Second*300),
+		Dial:                httplib.TimeoutDialer(time.Second*15, time.Second*300),
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100,
 	}
 	settins := httplib.BeegoHTTPSettings{
 		UserAgent:        "Go-FastDFS",
-		ConnectTimeout:   10 * time.Second,
-		ReadWriteTimeout: 10 * time.Second,
+		ConnectTimeout:   15 * time.Second,
+		ReadWriteTimeout: 15 * time.Second,
 		Gzip:             true,
 		DumpBody:         true,
 		Transport:        defaultTransport,
@@ -582,7 +590,8 @@ func (this *Server) WatchFilesChange() {
 	)
 	qchan = make(chan *FileInfo, 10000)
 	w = watcher.New()
-	w.FilterOps(watcher.Create, watcher.Remove)
+	w.FilterOps(watcher.Create)
+	//w.FilterOps(watcher.Create, watcher.Remove)
 	curDir, err = filepath.Abs(filepath.Dir(STORE_DIR_NAME))
 	if err != nil {
 		log.Error(err)
@@ -611,7 +620,7 @@ func (this *Server) WatchFilesChange() {
 					OffSet:    -2,
 					op:        event.Op.String(),
 				}
-				log.Info(fpath)
+				log.Info("WatchFilesChange op:"+event.Op.String(), fpath)
 				qchan <- &fileInfo
 				//this.AppendToQueue(&fileInfo)
 			case err := <-w.Error:
@@ -629,13 +638,14 @@ func (this *Server) WatchFilesChange() {
 				time.Sleep(time.Second * 1)
 				continue
 			} else {
-				if c.op == watcher.Remove.String() {
-					req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", this.host, this.getRequestURI("delete"), c.Md5))
-					req.Param("md5", c.Md5)
-					req.SetTimeout(time.Second*5, time.Second*10)
-					log.Infof(req.String())
-				}
+				//if c.op == watcher.Remove.String() {
+				//	req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", this.host, this.getRequestURI("delete"), c.Md5))
+				//	req.Param("md5", c.Md5)
+				//	req.SetTimeout(time.Second*5, time.Second*10)
+				//	log.Infof(req.String())
+				//}
 				if c.op == watcher.Create.String() {
+					log.Info("Syncfile", fileInfo.Path+"/"+fileInfo.Name)
 					this.AppendToQueue(c)
 					this.SaveFileInfoToLevelDB(c.Md5, c, this.ldb)
 				}
@@ -643,6 +653,7 @@ func (this *Server) WatchFilesChange() {
 		}
 	}()
 	if dir, err := os.Readlink(STORE_DIR_NAME); err == nil {
+
 		if strings.HasSuffix(dir, string(os.PathSeparator)) {
 			dir = strings.TrimSuffix(dir, string(os.PathSeparator))
 		}
@@ -793,11 +804,13 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	if Config().EnableDistinctFile && this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
-		log.Info("DownloadFromPeer file Exist")
+	if fileInfo.OffSet != -2 && Config().EnableDistinctFile && this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
+		// ignore migrate file
+		log.Info("DownloadFromPeer file Exist", fileInfo.Path+"/"+fileInfo.Name)
 		return
 	}
-	if !Config().EnableDistinctFile && this.util.FileExists(this.GetFilePathByInfo(fileInfo, true)) {
+	if (!Config().EnableDistinctFile || fileInfo.OffSet == -2) && this.util.FileExists(this.GetFilePathByInfo(fileInfo, true)) {
+		// ignore migrate file
 		if fi, err = os.Stat(this.GetFilePathByInfo(fileInfo, true)); err == nil {
 			if fi.ModTime().Unix() > fileInfo.TimeStamp {
 				log.Info(fmt.Sprintf("ignore file sync path:%s", this.GetFilePathByInfo(fileInfo, false)))
@@ -842,7 +855,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		if err = req.ToFile(fpathTmp); err != nil {
 			this.AppendToDownloadQueue(fileInfo) //retry
 			os.Remove(fpathTmp)
-			log.Error(err)
+			log.Error(err, fpathTmp)
 			return
 		}
 		if os.Rename(fpathTmp, fpath) == nil {
@@ -1447,6 +1460,13 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 		b.Param("fileInfo", string(data))
 		result, err = b.String()
+		if err != nil {
+			if fileInfo.retry < 5 {
+				fileInfo.retry = fileInfo.retry + 1
+				this.AppendToQueue(fileInfo)
+			}
+			log.Error(err, fileInfo)
+		}
 		if !strings.HasPrefix(result, "http://") || err != nil {
 			this.SaveFileMd5Log(fileInfo, CONST_Md5_ERROR_FILE_NAME)
 		}
@@ -2733,7 +2753,7 @@ func (this *Server) ConsumerDownLoad() {
 			}
 		}
 	}
-	for i := 0; i < 200; i++ {
+	for i := 0; i < Config().SyncWorker; i++ {
 		go ConsumerFunc()
 	}
 }
@@ -2817,7 +2837,7 @@ func (this *Server) ConsumerPostToPeer() {
 			this.postFileToPeer(&fileInfo)
 		}
 	}
-	for i := 0; i < 200; i++ {
+	for i := 0; i < Config().SyncWorker; i++ {
 		go ConsumerFunc()
 	}
 }
@@ -3977,6 +3997,15 @@ func (this *Server) initComponent(isReload bool) {
 			this.sceneMap.Put(kv[0], kv[1])
 		}
 	}
+	if Config().ReadTimeout == 0 {
+		Config().ReadTimeout = 60 * 10
+	}
+	if Config().WriteTimeout == 0 {
+		Config().WriteTimeout = 60 * 10
+	}
+	if Config().SyncWorker == 0 {
+		Config().SyncWorker = 200
+	}
 }
 
 type HttpHandler struct {
@@ -4047,6 +4076,12 @@ func (this *Server) Main() {
 	if Config().SupportGroupManage {
 		groupRoute = "/" + Config().Group
 	}
+	go func() { // force free memory
+		for {
+			time.Sleep(time.Minute * 1)
+			debug.FreeOSMemory()
+		}
+	}()
 	uploadPage := "upload.html"
 	if groupRoute == "" {
 		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
@@ -4080,7 +4115,15 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), this.GenGoogleCode)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
-	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
+	srv := &http.Server{
+		Addr:              Config().Addr,
+		Handler:           new(HttpHandler),
+		ReadTimeout:       time.Duration(Config().ReadTimeout) * time.Second,
+		ReadHeaderTimeout: time.Duration(Config().ReadHeaderTimeout) * time.Second,
+		WriteTimeout:      time.Duration(Config().WriteTimeout) * time.Second,
+		IdleTimeout:       time.Duration(Config().IdleTimeout) * time.Second,
+	}
+	err := srv.ListenAndServe()
 	log.Error(err)
 	fmt.Println(err)
 }
