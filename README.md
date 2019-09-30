@@ -21,7 +21,8 @@
 - 支持小文件自动合并(减少inode占用)
 - 支持秒传
 - 支持跨域访问
-- 支持一键迁移
+- 支持一键迁移（搬迁）
+- 支持异地备份（特别是小文件1M以下）
 - 支持并行体验
 - 支持断点续传([tus](https://tus.io/))
 - 支持docker部署
@@ -61,6 +62,7 @@
 - 支持断点续传([tus](https://tus.io/))
 - 支持docker部署
 - 支持一键迁移（从其他系统文件系统迁移过来）
+- 支持异地备份（特别是小文件）
 - 支持并行体验（与现有的文件系统并行体验，确认OK再一键迁移）
 - 支持token下载　token=md5(file_md5+timestamp)
 - 运维简单，只有一个角色（不像fastdfs有三个角色Tracker Server,Storage Server,Client），配置自动生成

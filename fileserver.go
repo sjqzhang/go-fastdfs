@@ -620,7 +620,7 @@ func (this *Server) WatchFilesChange() {
 					OffSet:    -2,
 					op:        event.Op.String(),
 				}
-				log.Info("WatchFilesChange op:"+event.Op.String(), fpath)
+				log.Info(fmt.Sprintf("WatchFilesChange op:%s path:%s", event.Op.String(), fpath))
 				qchan <- &fileInfo
 				//this.AppendToQueue(&fileInfo)
 			case err := <-w.Error:
@@ -645,7 +645,7 @@ func (this *Server) WatchFilesChange() {
 				//	log.Infof(req.String())
 				//}
 				if c.op == watcher.Create.String() {
-					log.Info("Syncfile", fileInfo.Path+"/"+fileInfo.Name)
+					log.Info(fmt.Sprintf("Syncfile Add to Queue path:%s", fileInfo.Path+"/"+fileInfo.Name))
 					this.AppendToQueue(c)
 					this.SaveFileInfoToLevelDB(c.Md5, c, this.ldb)
 				}
@@ -1465,7 +1465,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 				fileInfo.retry = fileInfo.retry + 1
 				this.AppendToQueue(fileInfo)
 			}
-			log.Error(err, fileInfo)
+			log.Error(err, fmt.Sprintf(" path:%s", fileInfo.Path+"/"+fileInfo.Name))
 		}
 		if !strings.HasPrefix(result, "http://") || err != nil {
 			this.SaveFileMd5Log(fileInfo, CONST_Md5_ERROR_FILE_NAME)
@@ -3563,6 +3563,15 @@ func init() {
 	if *v {
 		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BUILD_TIME, GO_VERSION, GIT_VERSION)
 		os.Exit(0)
+	}
+	appDir, e1 := filepath.Abs(filepath.Dir(os.Args[0]))
+	curDir, e2 := filepath.Abs(".")
+	if e1 == nil && e2 == nil && appDir != curDir {
+		msg := fmt.Sprintf("please change directory to '%s' start fileserver\n", appDir)
+		msg = msg + fmt.Sprintf("请切换到 '%s' 目录启动 fileserver ", appDir)
+		log.Warn(msg)
+		fmt.Println(msg)
+		os.Exit(1)
 	}
 	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
 	if DOCKER_DIR != "" {
