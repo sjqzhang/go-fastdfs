@@ -78,6 +78,7 @@ var (
 	CONST_STAT_FILE_NAME        = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME        = CONF_DIR + "/cfg.json"
 	CONST_SEARCH_FILE_NAME      = DATA_DIR + "/search.txt"
+	CONST_UPLOAD_COUNTER_KEY    = "__CONST_UPLOAD_COUNTER_KEY__"
 	logConfigStr                = `
 <seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
 	<outputs formatid="common">  
@@ -662,11 +663,14 @@ func (this *Server) WatchFilesChange() {
 		if err := w.AddRecursive(dir); err != nil {
 			log.Error(err)
 		}
+		w.Ignore(dir + "/_tmp/")
+		w.Ignore(dir + "/" + LARGE_DIR_NAME + "/")
 	}
 	if err := w.AddRecursive("./" + STORE_DIR_NAME); err != nil {
 		log.Error(err)
 	}
 	w.Ignore("./" + STORE_DIR_NAME + "/_tmp/")
+	w.Ignore("./" + STORE_DIR_NAME + "/" + LARGE_DIR_NAME + "/")
 	if err := w.Start(time.Millisecond * 100); err != nil {
 		log.Error(err)
 	}
@@ -806,7 +810,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	}
 	if fileInfo.OffSet != -2 && Config().EnableDistinctFile && this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
 		// ignore migrate file
-		log.Info("DownloadFromPeer file Exist", fileInfo.Path+"/"+fileInfo.Name)
+		log.Info(fmt.Sprintf("DownloadFromPeer file Exist, path:%s", fileInfo.Path+"/"+fileInfo.Name))
 		return
 	}
 	if (!Config().EnableDistinctFile || fileInfo.OffSet == -2) && this.util.FileExists(this.GetFilePathByInfo(fileInfo, true)) {
