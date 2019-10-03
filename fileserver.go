@@ -39,6 +39,8 @@ import (
 	"github.com/json-iterator/go"
 	"github.com/nfnt/resize"
 	"github.com/radovskyb/watcher"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
 	"github.com/sjqzhang/googleAuthenticator"
 	"github.com/sjqzhang/goutil"
 	log "github.com/sjqzhang/seelog"
@@ -207,6 +209,7 @@ type Server struct {
 	queueToPeers   chan FileInfo
 	queueFromPeers chan FileInfo
 	queueFileLog   chan *FileLog
+	queueUpload    chan WrapReqResp
 	lockMap        *goutil.CommonMap
 	sceneMap       *goutil.CommonMap
 	searchMap      *goutil.CommonMap
@@ -229,6 +232,11 @@ type FileInfo struct {
 type FileLog struct {
 	FileInfo *FileInfo
 	FileName string
+}
+type WrapReqResp struct {
+	w    *http.ResponseWriter
+	r    *http.Request
+	done chan bool
 }
 type JsonResult struct {
 	Message string      `json:"message"`
@@ -303,6 +311,8 @@ type GloablConfig struct {
 	IdleTimeout          int      `json:"idle_timeout"`
 	ReadHeaderTimeout    int      `json:"read_header_timeout"`
 	SyncWorker           int      `json:"sync_worker"`
+	UploadWorker         int      `json:"upload_worker"`
+	UploadQueueSize      int      `json:"upload_queue_size"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -328,6 +338,7 @@ func NewServer() *Server {
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFileLog:   make(chan *FileLog, CONST_QUEUE_SIZE),
+		queueUpload:    make(chan WrapReqResp, 100),
 		sumMap:         goutil.NewCommonMap(365 * 3),
 	}
 
@@ -2312,9 +2323,11 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fpBody, err = os.Open(fn)
-	defer fpBody.Close()
 	r.Body = fpBody
-	this.upload(w, r)
+	done := make(chan bool, 1)
+	this.queueUpload <- WrapReqResp{&w, r, done}
+	<-done
+
 }
 
 func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
@@ -2842,6 +2855,26 @@ func (this *Server) ConsumerPostToPeer() {
 		}
 	}
 	for i := 0; i < Config().SyncWorker; i++ {
+		go ConsumerFunc()
+	}
+}
+func (this *Server) ConsumerUpload() {
+	ConsumerFunc := func() {
+		for {
+			wr := <-this.queueUpload
+			this.upload(*wr.w, wr.r)
+			this.rtMap.AddCountInt64(CONST_UPLOAD_COUNTER_KEY, wr.r.ContentLength)
+			if v, ok := this.rtMap.GetValue(CONST_UPLOAD_COUNTER_KEY); ok {
+				if v.(int64) > 1*1024*1024*1024 {
+					var _v int64
+					this.rtMap.Put(CONST_UPLOAD_COUNTER_KEY, _v)
+					debug.FreeOSMemory()
+				}
+			}
+			wr.done <- true
+		}
+	}
+	for i := 0; i < Config().UploadWorker; i++ {
 		go ConsumerFunc()
 	}
 }
@@ -3434,12 +3467,16 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	var (
-		status JsonResult
-		sts    map[string]interface{}
-		today  string
-		sumset mapset.Set
-		ok     bool
-		v      interface{}
+		status   JsonResult
+		sts      map[string]interface{}
+		today    string
+		sumset   mapset.Set
+		ok       bool
+		v        interface{}
+		err      error
+		appDir   string
+		diskInfo *disk.UsageStat
+		memInfo  *mem.VirtualMemoryStat
 	)
 	memStat := new(runtime.MemStats)
 	runtime.ReadMemStats(memStat)
@@ -3480,6 +3517,20 @@ func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	sts["Sys.GCCPUFraction"] = memStat.GCCPUFraction
 	sts["Sys.GCSys"] = memStat.GCSys
 	//sts["Sys.MemInfo"] = memStat
+	appDir, err = filepath.Abs(".")
+	if err != nil {
+		log.Error(err)
+	}
+	diskInfo, err = disk.Usage(appDir)
+	if err != nil {
+		log.Error(err)
+	}
+	sts["Sys.DiskInfo"] = diskInfo
+	memInfo, err = mem.VirtualMemory()
+	if err != nil {
+		log.Error(err)
+	}
+	sts["Sys.MemInfo"] = memInfo
 	status.Status = "ok"
 	status.Data = sts
 	w.Write([]byte(this.util.JsonEncodePretty(status)))
@@ -4019,6 +4070,16 @@ func (this *Server) initComponent(isReload bool) {
 	if Config().SyncWorker == 0 {
 		Config().SyncWorker = 200
 	}
+	if Config().UploadWorker == 0 {
+		Config().UploadWorker = runtime.NumCPU() + 4
+		if runtime.NumCPU() < 4 {
+			Config().UploadWorker = 8
+		}
+	}
+	if Config().UploadQueueSize == 0 {
+		Config().UploadQueueSize = 200
+	}
+
 }
 
 type HttpHandler struct {
@@ -4068,6 +4129,7 @@ func (this *Server) Main() {
 	go this.ConsumerPostToPeer()
 	go this.ConsumerLog()
 	go this.ConsumerDownLoad()
+	go this.ConsumerUpload()
 	go this.RemoveDownloading()
 	if Config().EnableFsnotify {
 		go this.WatchFilesChange()
