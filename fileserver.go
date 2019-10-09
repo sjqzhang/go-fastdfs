@@ -313,6 +313,7 @@ type GloablConfig struct {
 	SyncWorker           int      `json:"sync_worker"`
 	UploadWorker         int      `json:"upload_worker"`
 	UploadQueueSize      int      `json:"upload_queue_size"`
+	RetryCount           int      `json:"retry_count"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -809,7 +810,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		log.Warn("ReadOnly", fileInfo)
 		return
 	}
-	if fileInfo.retry > 5 {
+	if Config().RetryCount > 0 && fileInfo.retry >= Config().RetryCount {
 		log.Error("DownloadFromPeer Error ", fileInfo)
 		return
 	} else {
@@ -1476,7 +1477,7 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		b.Param("fileInfo", string(data))
 		result, err = b.String()
 		if err != nil {
-			if fileInfo.retry < 5 {
+			if fileInfo.retry <= Config().RetryCount {
 				fileInfo.retry = fileInfo.retry + 1
 				this.AppendToQueue(fileInfo)
 			}
@@ -3082,7 +3083,7 @@ func (this *Server) CheckClusterStatus() {
 			req = httplib.Get(fmt.Sprintf("%s%s", peer, this.getRequestURI("status")))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			err = req.ToJSON(&status)
-			if status.Status != "ok" {
+			if err != nil || status.Status != "ok" {
 				for _, to := range Config().AlarmReceivers {
 					subject = "fastdfs server error"
 					if err != nil {
@@ -4079,7 +4080,9 @@ func (this *Server) initComponent(isReload bool) {
 	if Config().UploadQueueSize == 0 {
 		Config().UploadQueueSize = 200
 	}
-
+	if Config().RetryCount == 0 {
+		Config().RetryCount = 3
+	}
 }
 
 type HttpHandler struct {
