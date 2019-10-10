@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "PtxcNVRg/bTjv9aaYTzLtUA9MjE=",
+			"path": "github.com/StackExchange/wmi",
+			"revision": "cbe66965904dbe8a6cd589e2298e5d8b986bd7dd",
+			"revisionTime": "2019-05-23T21:33:15Z"
+		},
+		{
 			"checksumSHA1": "dWgEPq8x7MKYs5/W94TLusoh1b8=",
 			"path": "github.com/astaxie/beego/httplib",
 			"revision": "1b6edafc96ad27b6515fafeccd7339dda3e997b1",
@@ -56,6 +62,18 @@
 			"path": "github.com/fsnotify/fsnotify",
 			"revision": "1485a34d5d5723fea214f5710708e19a831720e4",
 			"revisionTime": "2019-03-12T18:14:46Z"
+		},
+		{
+			"checksumSHA1": "bVbKkV6S83baAEWs65RpqK41zK4=",
+			"path": "github.com/go-ole/go-ole",
+			"revision": "14974a1cf6477f616180232977d8ab4791ea8820",
+			"revisionTime": "2019-09-20T10:46:07Z"
+		},
+		{
+			"checksumSHA1": "8WEwmkTfx50YYgQZblE1fKHsgDI=",
+			"path": "github.com/go-ole/go-ole/oleutil",
+			"revision": "14974a1cf6477f616180232977d8ab4791ea8820",
+			"revisionTime": "2019-09-20T10:46:07Z"
 		},
 		{
 			"checksumSHA1": "h1d2lPZf6j2dW/mIqVnd1RdykDo=",
