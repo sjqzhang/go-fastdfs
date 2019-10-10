@@ -2280,12 +2280,12 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if fi.Size() != header.Size {
 		return fileInfo, errors.New("(error)file uncomplete")
 	}
-	v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
-	//if Config().EnableDistinctFile {
-	//	v= this.util.GetFileSum(outFile, Config().FileSumArithmetic)
-	//} else {
-	//	v=this.util.MD5(this.GetFilePathByInfo(fileInfo,false))
-	//}
+	v := "" // this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	if Config().EnableDistinctFile {
+		v = this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	} else {
+		v = this.util.MD5(this.GetFilePathByInfo(fileInfo, false))
+	}
 	fileInfo.Md5 = v
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
@@ -3502,6 +3502,7 @@ func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sts["Fs.AutoRepair"] = Config().AutoRepair
+	sts["Fs.QueueUpload"] = len(this.queueUpload)
 	sts["Fs.RefreshInterval"] = Config().RefreshInterval
 	sts["Fs.Peers"] = Config().Peers
 	sts["Fs.Local"] = this.host
