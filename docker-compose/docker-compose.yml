@@ -1,0 +1,67 @@
+version: '3.2'
+services:
+  fastdfs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fastdfs:1.0.0         #docker pull sjqzhang/go-fastdfs
+    container_name: land-fastdfs
+    privileged: true
+    restart: always
+    networks:
+      - extnetwork
+    volumes:
+      - type: bind
+        source: ./fastdfs/data
+        target: /usr/local/go-fastdfs/data
+    ports:
+      - "8080:8080"
+    depends_on:
+      - nginx
+  nginx:
+    image: nginx:latest
+    container_name: land-nginx
+    privileged: true
+    restart: always
+    networks:
+      - extnetwork
+    ports:
+      - "9528:80"
+    volumes:
+      - type: bind
+        source: ./nginx/conf/nginx.conf
+        target: /etc/nginx/nginx.conf
+      - type: bind
+        source: ./nginx/static
+        target: /usr/share/nginx/html
+      - type: bind
+        source: ./nginx/log
+        target: /var/log/nginx
+  fastdfs-web:
+    build:
+      context: ./fastdfs-web
+      dockerfile: Dockerfile
+    image: fastdfs-web:1.0.0         #docker pull sjqzhang/go-fastdfs
+    container_name: land-fastdfs-web
+    volumes:
+      - type: bind
+        source: ./fastdfs-web/db/go-fastdfs.db
+        target: /db/go-fastdfs.db
+      - type: bind
+        source: ./fastdfs-web/logs
+        target: /logs
+    privileged: true
+    restart: always
+    networks:
+      extnetwork:
+        ipv4_address: 172.19.0.20
+    ports:
+      - "8099:8099"
+    depends_on:
+      - fastdfs
+networks:
+  extnetwork:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
