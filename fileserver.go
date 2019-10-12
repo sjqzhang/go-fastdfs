@@ -2160,7 +2160,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		scene        string
 		output       string
 		fileResult   FileResult
-		result JsonResult
+		result       JsonResult
 		data         []byte
 		code         string
 		secret       interface{}
