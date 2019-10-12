@@ -1,0 +1,182 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="zh-CN">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>go-fastdfs report</title>
+    <!-- 引入 echarts.js -->
+    <script type="text/javascript" src="https://cdn.bootcss.com/echarts/3.7.0/echarts.min.js"></script>
+    <!-- 引入jquery.js -->
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/1.12.3/jquery.js"></script>
+</head>
+
+<body>
+<!-- 为ECharts准备一个具备大小（宽高）的Dom -->
+<div id="main" style="width:600px;height:400px"></div>
+<div id="toolbar">
+    <button id="repair_stat" title="耗时较长">修证统计(最近30天)</button>
+    <button id="backup" title="耗时较长">备份元数据(最近30天)</button>
+    <button id="remove_empty_dir" title="耗时较长">删除空目录</button>
+    <button id="repair" title="耗时较长">自动修复</button>
+</div>
+<script type="text/javascript">
+
+    Date.prototype.Format = function(fmt)
+    { //author: meizz
+        var o = {
+            "M+" : this.getMonth()+1,                 //月份
+            "d+" : this.getDate(),                    //日
+            "h+" : this.getHours(),                   //小时
+            "m+" : this.getMinutes(),                 //分
+            "s+" : this.getSeconds(),                 //秒
+            "q+" : Math.floor((this.getMonth()+3)/3), //季度
+            "S"  : this.getMilliseconds()             //毫秒
+        };
+        if(/(y+)/.test(fmt))
+            fmt=fmt.replace(RegExp.$1, (this.getFullYear()+"").substr(4 - RegExp.$1.length));
+        for(var k in o)
+            if(new RegExp("("+ k +")").test(fmt))
+                fmt = fmt.replace(RegExp.$1, (RegExp.$1.length==1) ? (o[k]) : (("00"+ o[k]).substr((""+ o[k]).length)));
+        return fmt;
+    }
+
+
+    var groupPrefix='{group}'
+    $('#repair_stat').click(function () {
+
+            for(var i=0;i<30;i++) {
+                var date=new Date()
+                var time=new Date(date.getTime()-60*60*24*1000*i)
+                $.post(groupPrefix+"/repair_stat",{'date':time.Format('yyyyMMdd')},function (data) {
+                    console.log(data)
+                })
+
+            }
+
+    })
+    $('#backup').click(function () {
+        for(var i=0;i<30;i++) {
+            var date=new Date()
+            var time=new Date(date.getTime()-60*60*24*1000*i)
+            $.post(groupPrefix+"/backup",{'date':time.Format('yyyyMMdd')},function (data) {
+                console.log(data)
+            })
+        }
+    })
+    $('#repair').click(function () {
+        $.post(groupPrefix+ '/repair?force=1',{},function (data) {
+           console.log(data)
+        })
+    })
+    $('#remove_empty_dir').click(function () {
+        $.post(groupPrefix+ '/remove_empty_dir',{},function (data) {
+            console.log(data)
+        })
+    })
+
+$('#main').css({'width':window.innerWidth+'px','height':window.innerHeight/2+'px'})
+
+var myChart = echarts.init(document.getElementById('main'));
+// 显示标题，图例和空的坐标轴
+myChart.setOption({
+    title: {
+        text: '文件信息'
+    },
+    tooltip: {},
+    legend: {
+        data: ['文件数','文件大小']
+    },
+    xAxis: {
+        data: []
+    },
+    yAxis: {},
+    series: [{
+        name: '文件数',
+        type: 'bar',
+        data: []
+    },{
+        name: '文件大小',
+        type: 'bar',
+        data: []
+    }],
+
+    tooltip : {
+        trigger: 'axis',
+        formatter:function(params)
+        {
+            var relVal = params[0].name;
+            for (var i = 0, l = params.length; i < l; i++) {
+                if (params[i].seriesName=='文件数') {
+                    relVal += '<br/>' + params[i].seriesName + ' : ' + params[i].value+"";
+                }
+                if (params[i].seriesName=='文件大小') {
+                    relVal += '<br/>' + params[i].seriesName + ' : ' + params[i].value + "M";
+                }
+            }
+            return relVal;
+        }
+    }
+});
+
+myChart.showLoading(); //数据加载完之前先显示一段简单的loading动画
+var names = []; //类别数组（实际用来盛放X轴坐标值）
+var nums = []; //销量数组（实际用来盛放Y坐标值）
+var nums2 = []; //销量数组（实际用来盛放Y坐标值）
+var title='文件信息'
+
+$.ajax({
+    type: "post",
+    async: true,
+    //异步请求（同步请求将会锁住浏览器，用户其他操作必须等待请求完成才可以执行）
+    url: groupPrefix+ "/stat?echart=1",
+    //请求发送到TestServlet处
+    data: {},
+    dataType: "json",
+    //返回数据形式为json
+    success: function(result) {
+        //请求成功时执行该函数内容，result即为服务器返回的json对象
+        if (result) {
+            console.log(result)
+            names=result.data.category
+            nums=result.data.barCount
+            nums2=result.data.barSize
+            for(var i=0;i<nums2.length;i++) {
+                nums2[i]=Math.round( nums2[i]/1024/1024)
+            }
+            if (names.length>0) {
+                names.pop()
+                title="文件总数："+ nums.pop()+"\n"+"文件大小："+ nums2.pop()+'M'
+               myChart.setOption({
+                 'title':{
+                     'text':title
+                 }
+                })
+            }
+            myChart.hideLoading(); //隐藏加载动画
+            myChart.setOption({ //加载数据图表
+                xAxis: {
+                    data: names
+                },
+                series: [{
+                    // 根据名字对应到相应的系列
+                    name: '文件数',
+                    data: nums
+                },{
+                    // 根据名字对应到相应的系列
+                    name: '文件大小',
+                    data: nums2
+                }]
+            });
+
+        }
+
+    },
+    error: function(errorMsg) {
+        //请求失败时执行该函数
+        alert("图表请求数据失败!");
+        myChart.hideLoading();
+    }
+})</script>
+</body>
+
+</html>
