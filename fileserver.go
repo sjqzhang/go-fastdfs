@@ -2160,6 +2160,7 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		scene        string
 		output       string
 		fileResult   FileResult
+		result JsonResult
 		data         []byte
 		code         string
 		secret       interface{}
@@ -2284,6 +2285,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileResult = this.BuildFileResult(&fileInfo, r)
+		 result.Data = fileResult
+	     result.Status = "ok"
 		if output == "json" {
 			if data, err = json.Marshal(fileResult); err != nil {
 				log.Error(err)
@@ -2304,6 +2307,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 		if v, _ := this.GetFileInfoFromLevelDB(md5sum); v != nil && v.Md5 != "" {
 			fileResult = this.BuildFileResult(v, r)
+			 result.Data = fileResult
+	         result.Status = "ok"
 		}
 		if output == "json" {
 			if data, err = json.Marshal(fileResult); err != nil {
