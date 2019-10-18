@@ -643,7 +643,7 @@ http {
 </code></pre>
 <h2 id="big-cluster">&#x6D77;&#x91CF;&#x96C6;&#x7FA4;&#x5B89;&#x88C5;(&#x63A8;&#x8350;)</h2>
 <h3 id="&#x9002;&#x7528;&#x4E8E;&#x6D77;&#x91CF;&#x96C6;&#x7FA4;&#xFF0C;&#x6269;&#x5C55;&#x6027;&#x8F83;&#x597D;&#x3002;">&#x9002;&#x7528;&#x4E8E;&#x6D77;&#x91CF;&#x96C6;&#x7FA4;&#xFF0C;&#x6269;&#x5C55;&#x6027;&#x8F83;&#x597D;&#x3002;</h3>
-<pre><code class="lang-nginx">worker_processes  1;
+<pre><code class="lang-nginx">worker_processes  auto;
 events {
         worker_connections  1024;
 }
@@ -672,15 +672,21 @@ http {
                 #server 10.1.14.36:8083;
                 ip_hash;     #notice:very important(&#x6CE8;&#x610F;)
         }
+
         server {
-                listen       8000;
+                listen       8001;
                 server_name  localhost;
-                location ~ /godfs/group(\d) { 
+
+
+        if ( $request_uri ~ /godfs/group ) {
+                    # &#x6CE8;&#x610F;group&#x4F1A;&#x968F;&#x7EC4;&#x7684;&#x524D;&#x7F00;&#x6539;&#x53D8;&#x800C;&#x6539;&#x53D8;
+            rewrite ^/godfs/(.*)$ /$1 last;
+                }
+                location ~ /group(\d) { 
                     #&#x7EDF;&#x4E00;&#x5728;url&#x524D;&#x589E;&#x52A0;godfs,&#x4EE5;&#x4FBF;&#x7EDF;&#x4E00;&#x51FA;&#x5165;&#x53E3;&#x3002;
                     proxy_set_header Host $host;
                     proxy_set_header X-Real-IP $remote_addr;
                     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; 
-                    rewrite ^/godfs/group(\d) /group$1 break;
                     proxy_pass http://gofastdfs-group$1;
                 }
                 location ~ /godfs/upload { 
@@ -747,7 +753,7 @@ http {
     <script>
         var gitbook = gitbook || [];
         gitbook.push(function() {
-            gitbook.page.hasChanged({"page":{"title":"安装","level":"1.4","depth":1,"next":{"title":"极速体验","level":"1.4.1","depth":2,"anchor":"#quick","path":"install.md","ref":"install.md#quick","articles":[]},"previous":{"title":"go-fastdfs优点","level":"1.3.1","depth":2,"anchor":"#advantage","path":"README.md","ref":"README.md#advantage","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"install.md","mtime":"2019-09-09T06:06:32.826Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-09-24T03:07:54.323Z"},"basePath":".","book":{"language":""}});
+            gitbook.page.hasChanged({"page":{"title":"安装","level":"1.4","depth":1,"next":{"title":"极速体验","level":"1.4.1","depth":2,"anchor":"#quick","path":"install.md","ref":"install.md#quick","articles":[]},"previous":{"title":"go-fastdfs优点","level":"1.3.1","depth":2,"anchor":"#advantage","path":"README.md","ref":"README.md#advantage","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":["livereload"],"pluginsConfig":{"livereload":{},"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"install.md","mtime":"2019-10-18T09:41:45.852Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-10-18T09:52:12.919Z"},"basePath":".","book":{"language":""}});
         });
     </script>
 </div>
@@ -755,6 +761,10 @@ http {
         
     <script src="gitbook/gitbook.js"></script>
     <script src="gitbook/theme.js"></script>
+    
+        
+        <script src="gitbook/gitbook-plugin-livereload/plugin.js"></script>
+        
     
         
         <script src="gitbook/gitbook-plugin-search/search-engine.js"></script>

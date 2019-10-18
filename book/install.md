@@ -88,7 +88,7 @@ http {
 ### 适用于海量集群，扩展性较好。
 
 ```nginx
-worker_processes  1;
+worker_processes  auto;
 events {
         worker_connections  1024;
 }
@@ -117,15 +117,21 @@ http {
                 #server 10.1.14.36:8083;
                 ip_hash;     #notice:very important(注意)
         }
+       
         server {
-                listen       8000;
+                listen       8001;
                 server_name  localhost;
-                location ~ /godfs/group(\d) { 
+
+	
+		if ( $request_uri ~ /godfs/group ) {
+                    # 注意group会随组的前缀改变而改变
+		    rewrite ^/godfs/(.*)$ /$1 last;
+                }
+                location ~ /group(\d) { 
                     #统一在url前增加godfs,以便统一出入口。
                     proxy_set_header Host $host;
                     proxy_set_header X-Real-IP $remote_addr;
                     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; 
-                    rewrite ^/godfs/group(\d) /group$1 break;
                     proxy_pass http://gofastdfs-group$1;
                 }
                 location ~ /godfs/upload { 
@@ -148,4 +154,5 @@ http {
 
         }
 }
+
 ```
