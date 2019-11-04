@@ -17,7 +17,7 @@ http://10.1.5.9:8080/upload
 
 # WEB上传（浏览器打开）{#web}
 
-`http://yourserver ip:8080/upload.html` 注意：不要使用127.0.0.1上传 	
+`http://yourserver ip:8080/group1/upload.html` 注意：不要使用127.0.0.1上传 	
 
 
 

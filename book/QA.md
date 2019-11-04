@@ -381,4 +381,3 @@ https://github.com/sjqzhang/go-fastdfs/wiki
 #### 进群请改昵称，昵称格式：城市－公司－昵称，如果你喜欢这项目，请关注(star)此项目，关注是对项目的肯定，也是作者创新的动力。
 
 #### [捐赠](https://raw.githubusercontent.com/sjqzhang/go-fastdfs/master/doc/pay.png)
-
