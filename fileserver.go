@@ -34,9 +34,9 @@ import (
 	"unsafe"
 
 	"github.com/astaxie/beego/httplib"
-	"github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 	_ "github.com/eventials/go-tus"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/nfnt/resize"
 	"github.com/radovskyb/watcher"
 	"github.com/shirou/gopsutil/disk"
@@ -2254,7 +2254,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	}
 	if this.util.FileExists(outPath) && Config().EnableDistinctFile {
 		for i := 0; i < 10000; i++ {
-			outPath = fmt.Sprintf(folder+"/%d_%s", i, header.Filename)
+			outPath = fmt.Sprintf(folder+"/%d_%s", i, filepath.Base(header.Filename))
 			fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
 			if !this.util.FileExists(outPath) {
 				break
