@@ -14,7 +14,7 @@ from gevent import monkey
 
 monkey.patch_all()
 import os
-out=commands.getoutput('find ./files -type f')
+out=commands.getoutput('find . -type f')
 
 lines=out.split("\n")
 
@@ -27,7 +27,7 @@ def task():
         name=q.get(block=False)
         if name=="":
             break
-        url = 'http://10.1.5.20:8080/upload'
+        url = 'http://10.1.5.20:8080/group1/upload'
         files = {'file': open(name, 'rb')}
         options = {'output': 'json', 'path': '', 'scene': ''}
         try:

@@ -38,6 +38,9 @@ import (
 	_ "github.com/eventials/go-tus"
 	"github.com/json-iterator/go"
 	"github.com/nfnt/resize"
+	"github.com/radovskyb/watcher"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
 	"github.com/sjqzhang/googleAuthenticator"
 	"github.com/sjqzhang/goutil"
 	log "github.com/sjqzhang/seelog"
@@ -77,6 +80,7 @@ var (
 	CONST_STAT_FILE_NAME        = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME        = CONF_DIR + "/cfg.json"
 	CONST_SEARCH_FILE_NAME      = DATA_DIR + "/search.txt"
+	CONST_UPLOAD_COUNTER_KEY    = "__CONST_UPLOAD_COUNTER_KEY__"
 	logConfigStr                = `
 <seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
 	<outputs formatid="common">  
@@ -201,9 +205,11 @@ type Server struct {
 	util           *goutil.Common
 	statMap        *goutil.CommonMap
 	sumMap         *goutil.CommonMap
+	rtMap          *goutil.CommonMap
 	queueToPeers   chan FileInfo
 	queueFromPeers chan FileInfo
 	queueFileLog   chan *FileLog
+	queueUpload    chan WrapReqResp
 	lockMap        *goutil.CommonMap
 	sceneMap       *goutil.CommonMap
 	searchMap      *goutil.CommonMap
@@ -220,10 +226,17 @@ type FileInfo struct {
 	Scene     string   `json:"scene"`
 	TimeStamp int64    `json:"timeStamp"`
 	OffSet    int64    `json:"offset"`
+	retry     int
+	op        string
 }
 type FileLog struct {
 	FileInfo *FileInfo
 	FileName string
+}
+type WrapReqResp struct {
+	w    *http.ResponseWriter
+	r    *http.Request
+	done chan bool
 }
 type JsonResult struct {
 	Message string      `json:"message"`
@@ -290,6 +303,17 @@ type GloablConfig struct {
 	DefaultDownload      bool     `json:"default_download"`
 	EnableTus            bool     `json:"enable_tus"`
 	SyncTimeout          int64    `json:"sync_timeout"`
+	EnableFsnotify       bool     `json:"enable_fsnotify"`
+	EnableDiskCache      bool     `json:"enable_disk_cache"`
+	ConnectTimeout       bool     `json:"connect_timeout"`
+	ReadTimeout          int      `json:"read_timeout"`
+	WriteTimeout         int      `json:"write_timeout"`
+	IdleTimeout          int      `json:"idle_timeout"`
+	ReadHeaderTimeout    int      `json:"read_header_timeout"`
+	SyncWorker           int      `json:"sync_worker"`
+	UploadWorker         int      `json:"upload_worker"`
+	UploadQueueSize      int      `json:"upload_queue_size"`
+	RetryCount           int      `json:"retry_count"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -309,24 +333,26 @@ func NewServer() *Server {
 		util:           &goutil.Common{},
 		statMap:        goutil.NewCommonMap(0),
 		lockMap:        goutil.NewCommonMap(0),
+		rtMap:          goutil.NewCommonMap(0),
 		sceneMap:       goutil.NewCommonMap(0),
 		searchMap:      goutil.NewCommonMap(0),
 		queueToPeers:   make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFromPeers: make(chan FileInfo, CONST_QUEUE_SIZE),
 		queueFileLog:   make(chan *FileLog, CONST_QUEUE_SIZE),
+		queueUpload:    make(chan WrapReqResp, 100),
 		sumMap:         goutil.NewCommonMap(365 * 3),
 	}
 
 	defaultTransport := &http.Transport{
 		DisableKeepAlives:   true,
-		Dial:                httplib.TimeoutDialer(time.Second*6, time.Second*300),
+		Dial:                httplib.TimeoutDialer(time.Second*15, time.Second*300),
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100,
 	}
 	settins := httplib.BeegoHTTPSettings{
 		UserAgent:        "Go-FastDFS",
-		ConnectTimeout:   10 * time.Second,
-		ReadWriteTimeout: 10 * time.Second,
+		ConnectTimeout:   15 * time.Second,
+		ReadWriteTimeout: 15 * time.Second,
 		Gzip:             true,
 		DumpBody:         true,
 		Transport:        defaultTransport,
@@ -566,6 +592,102 @@ func (this *Server) RepairFileInfoFromFile() {
 	}
 	log.Info("RepairFileInfoFromFile is finish.")
 }
+func (this *Server) WatchFilesChange() {
+	var (
+		w        *watcher.Watcher
+		fileInfo FileInfo
+		curDir   string
+		err      error
+		qchan    chan *FileInfo
+		isLink   bool
+	)
+	qchan = make(chan *FileInfo, 10000)
+	w = watcher.New()
+	w.FilterOps(watcher.Create)
+	//w.FilterOps(watcher.Create, watcher.Remove)
+	curDir, err = filepath.Abs(filepath.Dir(STORE_DIR_NAME))
+	if err != nil {
+		log.Error(err)
+	}
+	go func() {
+		for {
+			select {
+			case event := <-w.Event:
+				if event.IsDir() {
+					continue
+				}
+
+				fpath := strings.Replace(event.Path, curDir+string(os.PathSeparator), "", 1)
+				if isLink {
+					fpath = strings.Replace(event.Path, curDir, STORE_DIR_NAME, 1)
+				}
+				fpath = strings.Replace(fpath, string(os.PathSeparator), "/", -1)
+				sum := this.util.MD5(fpath)
+				fileInfo = FileInfo{
+					Size:      event.Size(),
+					Name:      event.Name(),
+					Path:      strings.TrimSuffix(fpath, "/"+event.Name()), // files/default/20190927/xxx
+					Md5:       sum,
+					TimeStamp: event.ModTime().Unix(),
+					Peers:     []string{this.host},
+					OffSet:    -2,
+					op:        event.Op.String(),
+				}
+				log.Info(fmt.Sprintf("WatchFilesChange op:%s path:%s", event.Op.String(), fpath))
+				qchan <- &fileInfo
+				//this.AppendToQueue(&fileInfo)
+			case err := <-w.Error:
+				log.Error(err)
+			case <-w.Closed:
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			c := <-qchan
+			if time.Now().Unix()-c.TimeStamp < 3 {
+				qchan <- c
+				time.Sleep(time.Second * 1)
+				continue
+			} else {
+				//if c.op == watcher.Remove.String() {
+				//	req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", this.host, this.getRequestURI("delete"), c.Md5))
+				//	req.Param("md5", c.Md5)
+				//	req.SetTimeout(time.Second*5, time.Second*10)
+				//	log.Infof(req.String())
+				//}
+				if c.op == watcher.Create.String() {
+					log.Info(fmt.Sprintf("Syncfile Add to Queue path:%s", fileInfo.Path+"/"+fileInfo.Name))
+					this.AppendToQueue(c)
+					this.SaveFileInfoToLevelDB(c.Md5, c, this.ldb)
+				}
+			}
+		}
+	}()
+	if dir, err := os.Readlink(STORE_DIR_NAME); err == nil {
+
+		if strings.HasSuffix(dir, string(os.PathSeparator)) {
+			dir = strings.TrimSuffix(dir, string(os.PathSeparator))
+		}
+		curDir = dir
+		isLink = true
+		if err := w.AddRecursive(dir); err != nil {
+			log.Error(err)
+		}
+		w.Ignore(dir + "/_tmp/")
+		w.Ignore(dir + "/" + LARGE_DIR_NAME + "/")
+	}
+	if err := w.AddRecursive("./" + STORE_DIR_NAME); err != nil {
+		log.Error(err)
+	}
+	w.Ignore("./" + STORE_DIR_NAME + "/_tmp/")
+	w.Ignore("./" + STORE_DIR_NAME + "/" + LARGE_DIR_NAME + "/")
+	if err := w.Start(time.Millisecond * 100); err != nil {
+		log.Error(err)
+	}
+}
+
 func (this *Server) RepairStatByDate(date string) StatDateFileInfo {
 	defer func() {
 		if re := recover(); re != nil {
@@ -688,15 +810,23 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		log.Warn("ReadOnly", fileInfo)
 		return
 	}
+	if Config().RetryCount > 0 && fileInfo.retry >= Config().RetryCount {
+		log.Error("DownloadFromPeer Error ", fileInfo)
+		return
+	} else {
+		fileInfo.retry = fileInfo.retry + 1
+	}
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	if Config().EnableDistinctFile && this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
-		log.Info("DownloadFromPeer file Exist")
+	if fileInfo.OffSet != -2 && Config().EnableDistinctFile && this.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
+		// ignore migrate file
+		log.Info(fmt.Sprintf("DownloadFromPeer file Exist, path:%s", fileInfo.Path+"/"+fileInfo.Name))
 		return
 	}
-	if !Config().EnableDistinctFile && this.util.FileExists(this.GetFilePathByInfo(fileInfo, true)) {
+	if (!Config().EnableDistinctFile || fileInfo.OffSet == -2) && this.util.FileExists(this.GetFilePathByInfo(fileInfo, true)) {
+		// ignore migrate file
 		if fi, err = os.Stat(this.GetFilePathByInfo(fileInfo, true)); err == nil {
 			if fi.ModTime().Unix() > fileInfo.TimeStamp {
 				log.Info(fmt.Sprintf("ignore file sync path:%s", this.GetFilePathByInfo(fileInfo, false)))
@@ -739,8 +869,9 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		req := httplib.Get(downloadUrl)
 		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 		if err = req.ToFile(fpathTmp); err != nil {
+			this.AppendToDownloadQueue(fileInfo) //retry
 			os.Remove(fpathTmp)
-			log.Error(err)
+			log.Error(err, fpathTmp)
 			return
 		}
 		if os.Rename(fpathTmp, fpath) == nil {
@@ -755,6 +886,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		//small file download
 		data, err = req.Bytes()
 		if err != nil {
+			this.AppendToDownloadQueue(fileInfo) //retry
 			log.Error(err)
 			return
 		}
@@ -778,6 +910,7 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		return
 	}
 	if err = req.ToFile(fpathTmp); err != nil {
+		this.AppendToDownloadQueue(fileInfo) //retry
 		os.Remove(fpathTmp)
 		log.Error(err)
 		return
@@ -830,6 +963,8 @@ func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	}
 	req = httplib.Post(Config().AuthUrl)
 	req.SetTimeout(time.Second*10, time.Second*10)
+	req.Param("__path__", r.URL.Path)
+	req.Param("__query__", r.URL.RawQuery)
 	for k, _ := range r.Form {
 		req.Param(k, r.FormValue(k))
 	}
@@ -1343,6 +1478,13 @@ func (this *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 		b.Param("fileInfo", string(data))
 		result, err = b.String()
+		if err != nil {
+			if fileInfo.retry <= Config().RetryCount {
+				fileInfo.retry = fileInfo.retry + 1
+				this.AppendToQueue(fileInfo)
+			}
+			log.Error(err, fmt.Sprintf(" path:%s", fileInfo.Path+"/"+fileInfo.Name))
+		}
 		if !strings.HasPrefix(result, "http://") || err != nil {
 			this.SaveFileMd5Log(fileInfo, CONST_Md5_ERROR_FILE_NAME)
 		}
@@ -2140,7 +2282,12 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if fi.Size() != header.Size {
 		return fileInfo, errors.New("(error)file uncomplete")
 	}
-	v := this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	v := "" // this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	if Config().EnableDistinctFile {
+		v = this.util.GetFileSum(outFile, Config().FileSumArithmetic)
+	} else {
+		v = this.util.MD5(this.GetFilePathByInfo(fileInfo, false))
+	}
 	fileInfo.Md5 = v
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
@@ -2149,6 +2296,44 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	return fileInfo, nil
 }
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
+	var (
+		err    error
+		fn     string
+		folder string
+		fpTmp  *os.File
+		fpBody *os.File
+	)
+	if r.Method == http.MethodGet {
+		this.upload(w, r)
+		return
+	}
+	folder = STORE_DIR + "/_tmp/" + time.Now().Format("20060102")
+	os.MkdirAll(folder, 0777)
+	fn = folder + "/" + this.util.GetUUID()
+	defer func() {
+		os.Remove(fn)
+	}()
+	fpTmp, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0777)
+	if err != nil {
+		log.Error(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	defer fpTmp.Close()
+	if _, err = io.Copy(fpTmp, r.Body); err != nil {
+		log.Error(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	fpBody, err = os.Open(fn)
+	r.Body = fpBody
+	done := make(chan bool, 1)
+	this.queueUpload <- WrapReqResp{&w, r, done}
+	<-done
+
+}
+
+func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
 		ok  bool
@@ -2593,7 +2778,7 @@ func (this *Server) ConsumerDownLoad() {
 			}
 		}
 	}
-	for i := 0; i < 200; i++ {
+	for i := 0; i < Config().SyncWorker; i++ {
 		go ConsumerFunc()
 	}
 }
@@ -2677,7 +2862,27 @@ func (this *Server) ConsumerPostToPeer() {
 			this.postFileToPeer(&fileInfo)
 		}
 	}
-	for i := 0; i < 200; i++ {
+	for i := 0; i < Config().SyncWorker; i++ {
+		go ConsumerFunc()
+	}
+}
+func (this *Server) ConsumerUpload() {
+	ConsumerFunc := func() {
+		for {
+			wr := <-this.queueUpload
+			this.upload(*wr.w, wr.r)
+			this.rtMap.AddCountInt64(CONST_UPLOAD_COUNTER_KEY, wr.r.ContentLength)
+			if v, ok := this.rtMap.GetValue(CONST_UPLOAD_COUNTER_KEY); ok {
+				if v.(int64) > 1*1024*1024*1024 {
+					var _v int64
+					this.rtMap.Put(CONST_UPLOAD_COUNTER_KEY, _v)
+					debug.FreeOSMemory()
+				}
+			}
+			wr.done <- true
+		}
+	}
+	for i := 0; i < Config().UploadWorker; i++ {
 		go ConsumerFunc()
 	}
 }
@@ -2885,7 +3090,7 @@ func (this *Server) CheckClusterStatus() {
 			req = httplib.Get(fmt.Sprintf("%s%s", peer, this.getRequestURI("status")))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			err = req.ToJSON(&status)
-			if status.Status != "ok" {
+			if err != nil || status.Status != "ok" {
 				for _, to := range Config().AlarmReceivers {
 					subject = "fastdfs server error"
 					if err != nil {
@@ -3270,12 +3475,16 @@ func (this *Server) Repair(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	var (
-		status JsonResult
-		sts    map[string]interface{}
-		today  string
-		sumset mapset.Set
-		ok     bool
-		v      interface{}
+		status   JsonResult
+		sts      map[string]interface{}
+		today    string
+		sumset   mapset.Set
+		ok       bool
+		v        interface{}
+		err      error
+		appDir   string
+		diskInfo *disk.UsageStat
+		memInfo  *mem.VirtualMemoryStat
 	)
 	memStat := new(runtime.MemStats)
 	runtime.ReadMemStats(memStat)
@@ -3300,6 +3509,7 @@ func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sts["Fs.AutoRepair"] = Config().AutoRepair
+	sts["Fs.QueueUpload"] = len(this.queueUpload)
 	sts["Fs.RefreshInterval"] = Config().RefreshInterval
 	sts["Fs.Peers"] = Config().Peers
 	sts["Fs.Local"] = this.host
@@ -3316,6 +3526,20 @@ func (this *Server) Status(w http.ResponseWriter, r *http.Request) {
 	sts["Sys.GCCPUFraction"] = memStat.GCCPUFraction
 	sts["Sys.GCSys"] = memStat.GCSys
 	//sts["Sys.MemInfo"] = memStat
+	appDir, err = filepath.Abs(".")
+	if err != nil {
+		log.Error(err)
+	}
+	diskInfo, err = disk.Usage(appDir)
+	if err != nil {
+		log.Error(err)
+	}
+	sts["Sys.DiskInfo"] = diskInfo
+	memInfo, err = mem.VirtualMemory()
+	if err != nil {
+		log.Error(err)
+	}
+	sts["Sys.MemInfo"] = memInfo
 	status.Status = "ok"
 	status.Data = sts
 	w.Write([]byte(this.util.JsonEncodePretty(status)))
@@ -3403,6 +3627,15 @@ func init() {
 	if *v {
 		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BUILD_TIME, GO_VERSION, GIT_VERSION)
 		os.Exit(0)
+	}
+	appDir, e1 := filepath.Abs(filepath.Dir(os.Args[0]))
+	curDir, e2 := filepath.Abs(".")
+	if e1 == nil && e2 == nil && appDir != curDir {
+		msg := fmt.Sprintf("please change directory to '%s' start fileserver\n", appDir)
+		msg = msg + fmt.Sprintf("请切换到 '%s' 目录启动 fileserver ", appDir)
+		log.Warn(msg)
+		fmt.Println(msg)
+		os.Exit(1)
 	}
 	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
 	if DOCKER_DIR != "" {
@@ -3758,6 +3991,7 @@ func (this *Server) initTus() {
 	}
 	http.Handle(bigDir, http.StripPrefix(bigDir, handler))
 }
+
 func (this *Server) FormatStatInfo() {
 	var (
 		data  []byte
@@ -3836,6 +4070,27 @@ func (this *Server) initComponent(isReload bool) {
 			this.sceneMap.Put(kv[0], kv[1])
 		}
 	}
+	if Config().ReadTimeout == 0 {
+		Config().ReadTimeout = 60 * 10
+	}
+	if Config().WriteTimeout == 0 {
+		Config().WriteTimeout = 60 * 10
+	}
+	if Config().SyncWorker == 0 {
+		Config().SyncWorker = 200
+	}
+	if Config().UploadWorker == 0 {
+		Config().UploadWorker = runtime.NumCPU() + 4
+		if runtime.NumCPU() < 4 {
+			Config().UploadWorker = 8
+		}
+	}
+	if Config().UploadQueueSize == 0 {
+		Config().UploadQueueSize = 200
+	}
+	if Config().RetryCount == 0 {
+		Config().RetryCount = 3
+	}
 }
 
 type HttpHandler struct {
@@ -3844,9 +4099,9 @@ type HttpHandler struct {
 func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	status_code := "200"
 	defer func(t time.Time) {
-		logStr := fmt.Sprintf("[Access] %s | %v | %s | %s | %s | %s |%s",
+		logStr := fmt.Sprintf("[Access] %s | %s | %s | %s | %s |%s",
 			time.Now().Format("2006/01/02 - 15:04:05"),
-			res.Header(),
+			//res.Header(),
 			time.Since(t).String(),
 			server.util.GetClientIp(req),
 			req.Method,
@@ -3885,7 +4140,11 @@ func (this *Server) Main() {
 	go this.ConsumerPostToPeer()
 	go this.ConsumerLog()
 	go this.ConsumerDownLoad()
+	go this.ConsumerUpload()
 	go this.RemoveDownloading()
+	if Config().EnableFsnotify {
+		go this.WatchFilesChange()
+	}
 	//go this.LoadSearchDict()
 	if Config().EnableMigrate {
 		go this.RepairFileInfoFromFile()
@@ -3903,6 +4162,12 @@ func (this *Server) Main() {
 	if Config().SupportGroupManage {
 		groupRoute = "/" + Config().Group
 	}
+	go func() { // force free memory
+		for {
+			time.Sleep(time.Minute * 1)
+			debug.FreeOSMemory()
+		}
+	}()
 	uploadPage := "upload.html"
 	if groupRoute == "" {
 		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
@@ -3936,7 +4201,15 @@ func (this *Server) Main() {
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), this.GenGoogleCode)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
-	err := http.ListenAndServe(Config().Addr, new(HttpHandler))
+	srv := &http.Server{
+		Addr:              Config().Addr,
+		Handler:           new(HttpHandler),
+		ReadTimeout:       time.Duration(Config().ReadTimeout) * time.Second,
+		ReadHeaderTimeout: time.Duration(Config().ReadHeaderTimeout) * time.Second,
+		WriteTimeout:      time.Duration(Config().WriteTimeout) * time.Second,
+		IdleTimeout:       time.Duration(Config().IdleTimeout) * time.Second,
+	}
+	err := srv.ListenAndServe()
 	log.Error(err)
 	fmt.Println(err)
 }
