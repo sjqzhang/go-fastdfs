@@ -2255,7 +2255,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if this.util.FileExists(outPath) && Config().EnableDistinctFile {
 		for i := 0; i < 10000; i++ {
 			outPath = fmt.Sprintf(folder+"/%d_%s", i, filepath.Base(header.Filename))
-			fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
+			fileInfo.Name = fmt.Sprintf("%d_%s", i, filepath.Base(header.Filename))
 			if !this.util.FileExists(outPath) {
 				break
 			}
