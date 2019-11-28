@@ -2173,10 +2173,15 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 		p           string
 		downloadUrl string
 		domain      string
+		host        string
 	)
+	host = strings.Replace(Config().Host, "http://", "", -1)
+	if r != nil {
+		host = r.Host
+	}
 	if !strings.HasPrefix(Config().DownloadDomain, "http") {
 		if Config().DownloadDomain == "" {
-			Config().DownloadDomain = fmt.Sprintf("http://%s", r.Host)
+			Config().DownloadDomain = fmt.Sprintf("http://%s", host)
 		} else {
 			Config().DownloadDomain = fmt.Sprintf("http://%s", Config().DownloadDomain)
 		}
@@ -2184,7 +2189,7 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 	if Config().DownloadDomain != "" {
 		domain = Config().DownloadDomain
 	} else {
-		domain = fmt.Sprintf("http://%s", r.Host)
+		domain = fmt.Sprintf("http://%s", host)
 	}
 	outname = fileInfo.Name
 	if fileInfo.ReName != "" {
@@ -2196,7 +2201,7 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 	} else {
 		p = p + "/" + outname
 	}
-	downloadUrl = fmt.Sprintf("http://%s/%s", r.Host, p)
+	downloadUrl = fmt.Sprintf("http://%s/%s", host, p)
 	if Config().DownloadDomain != "" {
 		downloadUrl = fmt.Sprintf("%s/%s", Config().DownloadDomain, p)
 	}
@@ -3858,6 +3863,11 @@ func (this *Server) initTus() {
 			log.Error(err)
 			return nil, err
 		} else {
+			if Config().AuthUrl != "" {
+				fileResult := this.util.JsonEncodePretty(this.BuildFileResult(fi, nil))
+				bufferReader := bytes.NewBuffer([]byte(fileResult))
+				return bufferReader, nil
+			}
 			fn = fi.Name
 			if fi.ReName != "" {
 				fn = fi.ReName
