@@ -626,17 +626,20 @@ app = Flask(__name__)
 <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">index</span><span class="hljs-params">()</span>:</span>
     auth_token = request.form.get(<span class="hljs-string">&quot;auth_token&quot;</span>) <span class="hljs-comment"># check auth_token here</span>
     print(auth_token)
-    <span class="hljs-keyword">return</span> <span class="hljs-string">&apos;ok&apos;</span> <span class="hljs-comment">#success</span>
+    <span class="hljs-keyword">if</span> auth_token==<span class="hljs-string">&apos;abc&apos;</span>:
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&apos;ok&apos;</span> <span class="hljs-comment">#success</span>
+    <span class="hljs-keyword">else</span>:
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&apos;fail&apos;</span>
 <span class="hljs-keyword">if</span> __name__ == <span class="hljs-string">&apos;__main__&apos;</span>:
-    app.run(debug=<span class="hljs-keyword">True</span>)
+    app.run(host=<span class="hljs-string">&apos;0.0.0.0&apos;</span>,debug=<span class="hljs-keyword">True</span>)
 </code></pre>
 <h4 id="&#x542F;&#x52A8;&#x670D;&#x52A1;">&#x542F;&#x52A8;&#x670D;&#x52A1;</h4>
 <pre><code>python app.py
 </code></pre><h4 id="&#x4E0A;&#x4F20;&#x793A;&#x4F8B;">&#x4E0A;&#x4F20;&#x793A;&#x4F8B;</h4>
 <pre><code class="lang-python"><span class="hljs-keyword">import</span> requests
-url = <span class="hljs-string">&apos;http://10.1.5.9:8080/upload&apos;</span>
+url = <span class="hljs-string">&apos;http://10.1.5.9:8080/group1/upload&apos;</span>
 files = {<span class="hljs-string">&apos;file&apos;</span>: open(<span class="hljs-string">&apos;report.xls&apos;</span>, <span class="hljs-string">&apos;rb&apos;</span>)}
-options={<span class="hljs-string">&apos;output&apos;</span>:<span class="hljs-string">&apos;json&apos;</span>,<span class="hljs-string">&apos;path&apos;</span>:<span class="hljs-string">&apos;&apos;</span>,<span class="hljs-string">&apos;scene&apos;</span>:<span class="hljs-string">&apos;&apos;</span>,<span class="hljs-string">&apos;auth_token&apos;</span>:<span class="hljs-string">&apos;2b33b60980b1a37454f008daf7e5d558&apos;</span>} <span class="hljs-comment">#&#x53C2;&#x9605;&#x6D4F;&#x89C8;&#x5668;&#x4E0A;&#x4F20;&#x7684;&#x9009;&#x9879;</span>
+options={<span class="hljs-string">&apos;output&apos;</span>:<span class="hljs-string">&apos;json&apos;</span>,<span class="hljs-string">&apos;path&apos;</span>:<span class="hljs-string">&apos;&apos;</span>,<span class="hljs-string">&apos;scene&apos;</span>:<span class="hljs-string">&apos;&apos;</span>,<span class="hljs-string">&apos;auth_token&apos;</span>:<span class="hljs-string">&apos;abc&apos;</span>} <span class="hljs-comment">#&#x53C2;&#x9605;&#x6D4F;&#x89C8;&#x5668;&#x4E0A;&#x4F20;&#x7684;&#x9009;&#x9879;</span>
 r = requests.post(url,data=options, files=files)
 print(r.text)
 </code></pre>
@@ -684,7 +687,7 @@ print(r.text)
     <script>
         var gitbook = gitbook || [];
         gitbook.push(function() {
-            gitbook.page.hasChanged({"page":{"title":"认证","level":"1.5","depth":1,"next":{"title":"按文件指纹认证","level":"1.5.1","depth":2,"anchor":"#fingerprint","path":"authentication.md","ref":"authentication.md#fingerprint","articles":[]},"previous":{"title":"海量集群安装(推荐)","level":"1.4.5","depth":2,"anchor":"#big-cluster","path":"install.md","ref":"install.md#big-cluster","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":["livereload"],"pluginsConfig":{"livereload":{},"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"authentication.md","mtime":"2019-08-27T04:05:29.569Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-11-04T03:24:31.908Z"},"basePath":".","book":{"language":""}});
+            gitbook.page.hasChanged({"page":{"title":"认证","level":"1.5","depth":1,"next":{"title":"按文件指纹认证","level":"1.5.1","depth":2,"anchor":"#fingerprint","path":"authentication.md","ref":"authentication.md#fingerprint","articles":[]},"previous":{"title":"海量集群安装(推荐)","level":"1.4.5","depth":2,"anchor":"#big-cluster","path":"install.md","ref":"install.md#big-cluster","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":["livereload"],"pluginsConfig":{"livereload":{},"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"authentication.md","mtime":"2019-11-28T06:38:39.157Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2019-11-28T06:39:40.626Z"},"basePath":".","book":{"language":""}});
         });
     </script>
 </div>

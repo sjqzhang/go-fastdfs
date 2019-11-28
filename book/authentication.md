@@ -58,9 +58,12 @@ app = Flask(__name__)
 def index():
     auth_token = request.form.get("auth_token") # check auth_token here
     print(auth_token)
-    return 'ok' #success
+    if auth_token=='abc':
+        return 'ok' #success
+    else:
+        return 'fail'
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0',debug=True)
 ```
 
 #### 启动服务
@@ -71,9 +74,9 @@ python app.py
 #### 上传示例
 ```python
 import requests
-url = 'http://10.1.5.9:8080/upload'
+url = 'http://10.1.5.9:8080/group1/upload'
 files = {'file': open('report.xls', 'rb')}
-options={'output':'json','path':'','scene':'','auth_token':'2b33b60980b1a37454f008daf7e5d558'} #参阅浏览器上传的选项
+options={'output':'json','path':'','scene':'','auth_token':'abc'} #参阅浏览器上传的选项
 r = requests.post(url,data=options, files=files)
 print(r.text)
 ```
