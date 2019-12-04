@@ -2254,7 +2254,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 		os.MkdirAll(folder, 0775)
 	}
 	outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
-	if Config().RenameFile {
+	if fileInfo.ReName != "" {
 		outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
 	}
 	if this.util.FileExists(outPath) && Config().EnableDistinctFile {
@@ -2344,6 +2344,7 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		ok  bool
 		//		pathname     string
 		md5sum       string
+		fileName     string
 		fileInfo     FileInfo
 		uploadFile   multipart.File
 		uploadHeader *multipart.FileHeader
@@ -2372,6 +2373,7 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodPost {
 		md5sum = r.FormValue("md5")
+		fileName = r.FormValue("filename")
 		output = r.FormValue("output")
 		if Config().ReadOnly {
 			w.Write([]byte("(error) readonly"))
@@ -2397,6 +2399,7 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		fileInfo.Md5 = md5sum
+		fileInfo.ReName = fileName
 		fileInfo.OffSet = -1
 		if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
 			log.Error(err)
@@ -3576,6 +3579,8 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					  <input type="file" id="file" name="file" /></span>
 					<span class="form-line">场景(scene):
 					  <input type="text" id="scene" name="scene" value="%s" /></span>
+					<span class="form-line">文件名(filename):
+					  <input type="text" id="filename" name="filename" value="" /></span>
 					<span class="form-line">输出(output):
 					  <input type="text" id="output" name="output" value="json" /></span>
 					<span class="form-line">自定义路径(path):
@@ -3601,7 +3606,8 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					uppy.on('complete', (result) => {
 					 // console.log(result) console.log('Upload complete! We’ve uploaded these files:', result.successful)
 					})
-					uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca',callback_url:'http://127.0.0.1/callback' })//这里是传递上传的认证参数,callback_url参数中 id为文件的ID,info 文转的基本信息json
+					//uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca',callback_url:'http://127.0.0.1/callback' ,filename:'自定义文件名','path':'自定义path',scene:'自定义场景' })//这里是传递上传的认证参数,callback_url参数中 id为文件的ID,info 文转的基本信息json
+					uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca',callback_url:'http://127.0.0.1/callback'})//自定义参数与普通上传类似（虽然支持自定义，建议不要自定义，海量文件情况下，自定义很可能给自已给埋坑）
                 </script>
 				</div>
 			  </body>
@@ -3920,8 +3926,16 @@ func (this *Server) initTus() {
 			case info := <-handler.CompleteUploads:
 				log.Info("CompleteUploads", info)
 				name := ""
+				pathCustom := ""
+				scene := Config().DefaultScene
 				if v, ok := info.MetaData["filename"]; ok {
 					name = v
+				}
+				if v, ok := info.MetaData["scene"]; ok {
+					scene = v
+				}
+				if v, ok := info.MetaData["path"]; ok {
+					pathCustom = v
 				}
 				var err error
 				md5sum := ""
@@ -3933,13 +3947,26 @@ func (this *Server) initTus() {
 				}
 				ext := path.Ext(name)
 				filename := md5sum + ext
+				if name != "" {
+					filename = name
+				}
+				if Config().RenameFile {
+					filename = md5sum + ext
+				}
 				timeStamp := time.Now().Unix()
 				fpath := time.Now().Format("/20060102/15/04/")
-				newFullPath := STORE_DIR + "/" + Config().DefaultScene + fpath + Config().PeerId + "/" + filename
+				if pathCustom != "" {
+					fpath = "/" + strings.Replace(pathCustom, ".", "", -1) + "/"
+				}
+				newFullPath := STORE_DIR + "/" + scene + fpath + Config().PeerId + "/" + filename
+				if pathCustom != "" {
+					newFullPath = STORE_DIR + "/" + scene + fpath + filename
+				}
 				if fi, err := this.GetFileInfoFromLevelDB(md5sum); err != nil {
 					log.Error(err)
 				} else {
-					if fi.Md5 != "" {
+					tpath := this.GetFilePathByInfo(fi, true)
+					if fi.Md5 != "" && this.util.FileExists(tpath) {
 						if _, err := this.SaveFileInfoToLevelDB(info.ID, fi, this.ldb); err != nil {
 							log.Error(err)
 						}
