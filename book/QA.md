@@ -55,6 +55,14 @@ go-fastdfs的文件定位与其它分布式系统不同，它的寻址是直接�
 
 ```
 
+
+## 进程自动退出是怎么办？
+```
+进程退出主要是没有放到后台运行 ，放到后后台行要吧使用项目的
+control https://github.com/sjqzhang/go-fastdfs/blob/master/control
+文件进行控制或者使用supervisor等工具
+```
+
 ## 什么是集群，如何用Nginx管理多集群？
 
 ```
