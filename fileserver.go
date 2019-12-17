@@ -948,7 +948,12 @@ func (this *Server) CrossOrigin(w http.ResponseWriter, r *http.Request) {
 }
 func (this *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", "attachment")
+	filename := r.FormValue("filename")
+	if filename != "" {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment;filename=\"%s\"", filename))
+	} else {
+		w.Header().Set("Content-Disposition", "attachment")
+	}
 }
 func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	var (
