@@ -3978,11 +3978,17 @@ func (this *Server) initTus() {
 						continue
 					}
 				}
-				fpath = STORE_DIR_NAME + "/" + Config().DefaultScene + fpath + Config().PeerId
-				os.MkdirAll(DOCKER_DIR+fpath, 0775)
+				fpath2 := ""
+				fpath2 = STORE_DIR_NAME + "/" + Config().DefaultScene + fpath + Config().PeerId
+				if pathCustom != "" {
+					fpath2 = STORE_DIR_NAME + "/" + Config().DefaultScene + fpath
+					fpath2 = strings.TrimRight(fpath2, "/")
+				}
+
+				os.MkdirAll(DOCKER_DIR+fpath2, 0775)
 				fileInfo := &FileInfo{
 					Name:      name,
-					Path:      fpath,
+					Path:      fpath2,
 					ReName:    filename,
 					Size:      info.Size,
 					TimeStamp: timeStamp,
