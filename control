@@ -6,7 +6,12 @@ cd $WORKSPACE
 mkdir -p log conf
 
 module=
-app=fileserver
+appname=$(basename $WORKSPACE)
+## 注意：这里每个应用的启动命令是不一样的，
+## 启动命令必须在前端运行(即不需要nohup)运行，
+## 系统会自动加上nohup运行 
+## 例如：run_cmd=java -jar spring-hello.jar
+run_cmd=./fileserver
 conf=conf/cfg.json
 pidfile=conf/app.pid
 logfile=log/app.log
@@ -21,25 +26,35 @@ function check_pid() {
     fi
     return 0
 }
+#应用发布接口
+function deploy() {
+#自定义发布
+#例如修改配置，移动文件夹等。。。
+echo "请修改deploy接口，以满足你的发布需求。"
 
+}
+
+#应用启动接口
 function start() {
     check_pid
     running=$?
     if [ $running -gt 0 ];then
-        echo -n "$app now is running already, pid="
-        cat $pidfile
+        echo -n "$appname now is running already, pid="
+          cat $pidfile
         return 1
     fi
-
-    nohup ./$app   &> $logfile &
+    
+    nohup $run_cmd   &> $logfile &
     echo $! > $pidfile
-    echo "$app started..., pid=$!"
+    #echo "$appname started..., pid=$!"
+	sleep 3
+	status
 }
-
+#停止应用接口
 function stop() {
     pid=`cat $pidfile`
     kill $pid
-    echo "$app stoped..."
+    echo "$appname stoped..."
 }
 
 function restart() {
@@ -47,48 +62,59 @@ function restart() {
     sleep 1
     start
 }
-
+#应用状态检测接口
 function status() {
     check_pid
     running=$?
     if [ $running -gt 0 ];then
-        echo -n "$app now is running, pid="
+        echo -n "$appname now is running, pid="
         cat $pidfile
+		#注意：以下输出不能修改，程序会自动根据这个输出做状态判断 
+		echo "app_status:running"
     else
-        echo "$app is stoped"
+	    #注意：以下输出不能修改，程序会自动根据这个输出做状态判断 
+        echo "$appname is stoped"
+		echo "app_status:stoped"
     fi
 }
 
 function tailf() {
-    tail -f $logfile
+    timeout 50 tail -f $logfile
 }
-
+#应用构建接口
 function build() {
-    go build
+    # 注意：如果需要定制编译命令，可以修改这里
+	git log -1 --pretty=%h > gitversion
+	if [[ -f ./build.sh ]];then
+		sh ./build.sh #custom
+	elif [[ -f ./pom.xml ]];then
+		mvn install #java
+	elif [[ -f ./package.json ]];then
+		npm install #node
+		npm run product
+	fi
+
     if [ $? -ne 0 ]; then
         exit $?
     fi
-    mv $module $app
-    ./$app -v | grep -v "config"
 }
 
 function pack() {
     build
-    git log -1 --pretty=%h > gitversion
-    version=`./$app -v|grep -v config`
-    file_list="control cfg.example.json $app"
-    tar zcf $app-$version.tar.gz gitversion $file_list
+    version=`cat gitversion`
+    file_list="control $appname"
+    tar zcf $appname-$version.tar.gz gitversion $file_list
 }
 
 function packbin() {
     build
     git log -1 --pretty=%h > gitversion
-    version=`./$app -v|grep -v config`
-    tar zcvf $app-bin-$version.tar.gz $app gitversion
+    version=`cat gitversion`
+    tar zcvf $appname-bin-$version.tar.gz $appname gitversion
 }
 
 function help() {
-    echo "$0 start|stop|restart|status|tail"
+    echo "$0 start|stop|restart|status|tail|build|pack|deploy|help"
 }
 
 if [ "$1" == "" ]; then
@@ -97,8 +123,14 @@ elif [ "$1" == "stop" ];then
     stop
 elif [ "$1" == "start" ];then
     start
+elif [ "$1" == "build" ];then
+    build
+elif [ "$1" == "deploy" ];then
+    deploy
 elif [ "$1" == "restart" ];then
     restart
+elif [ "$1" == "pack" ];then
+    pack
 elif [ "$1" == "status" ];then
     status
 elif [ "$1" == "tail" ];then
