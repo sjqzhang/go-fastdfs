@@ -2,6 +2,12 @@
 
 BIN_VERSION="go-fastdfs:${1-not set}"
 
+if [[ ! -d src ]];then
+
+cp -r vendor src
+
+fi
+
 
 #for linux
 GOPATH=`pwd` GOOS=linux GOARCH=amd64 go build -o fileserver -ldflags "-w -s -X 'main.VERSION=$BIN_VERSION' -X 'main.BUILD_TIME=build_time:`date`' -X 'main.GO_VERSION=`go version`' -X 'main.GIT_VERSION=git_version:`git rev-parse HEAD`'" fileserver.go
