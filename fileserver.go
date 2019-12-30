@@ -194,7 +194,7 @@ const (
 	"是否开启断点续传": "默认开启",
 	"enable_tus": true,
 	"同步单一文件超时时间（单位秒）": "默认为0,程序自动计算，在特殊情况下，自已设定",
-	"sync_timeout": 0
+	"sync_timeout": 0,
 }
 	`
 )
@@ -314,6 +314,8 @@ type GloablConfig struct {
 	UploadWorker         int      `json:"upload_worker"`
 	UploadQueueSize      int      `json:"upload_queue_size"`
 	RetryCount           int      `json:"retry_count"`
+	SyncDelay            int64    `json:"sync_delay"`
+	WatchChanSize        int      `json:"watch_chan_size"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -594,14 +596,14 @@ func (this *Server) RepairFileInfoFromFile() {
 }
 func (this *Server) WatchFilesChange() {
 	var (
-		w        *watcher.Watcher
-		fileInfo FileInfo
-		curDir   string
-		err      error
-		qchan    chan *FileInfo
-		isLink   bool
+		w *watcher.Watcher
+		//fileInfo FileInfo
+		curDir string
+		err    error
+		qchan  chan *FileInfo
+		isLink bool
 	)
-	qchan = make(chan *FileInfo, 10000)
+	qchan = make(chan *FileInfo, Config().WatchChanSize)
 	w = watcher.New()
 	w.FilterOps(watcher.Create)
 	//w.FilterOps(watcher.Create, watcher.Remove)
@@ -623,7 +625,7 @@ func (this *Server) WatchFilesChange() {
 				}
 				fpath = strings.Replace(fpath, string(os.PathSeparator), "/", -1)
 				sum := this.util.MD5(fpath)
-				fileInfo = FileInfo{
+				fileInfo := FileInfo{
 					Size:      event.Size(),
 					Name:      event.Name(),
 					Path:      strings.TrimSuffix(fpath, "/"+event.Name()), // files/default/20190927/xxx
@@ -646,7 +648,7 @@ func (this *Server) WatchFilesChange() {
 	go func() {
 		for {
 			c := <-qchan
-			if time.Now().Unix()-c.TimeStamp < 3 {
+			if time.Now().Unix()-c.TimeStamp < Config().SyncDelay {
 				qchan <- c
 				time.Sleep(time.Second * 1)
 				continue
@@ -657,8 +659,9 @@ func (this *Server) WatchFilesChange() {
 				//	req.SetTimeout(time.Second*5, time.Second*10)
 				//	log.Infof(req.String())
 				//}
+
 				if c.op == watcher.Create.String() {
-					log.Info(fmt.Sprintf("Syncfile Add to Queue path:%s", fileInfo.Path+"/"+fileInfo.Name))
+					log.Info(fmt.Sprintf("Syncfile Add to Queue path:%s", c.Path+"/"+c.Name))
 					this.AppendToQueue(c)
 					this.SaveFileInfoToLevelDB(c.Md5, c, this.ldb)
 				}
@@ -4128,6 +4131,12 @@ func (this *Server) initComponent(isReload bool) {
 	}
 	if Config().RetryCount == 0 {
 		Config().RetryCount = 3
+	}
+	if Config().SyncDelay == 0 {
+		Config().SyncDelay = 60
+	}
+	if Config().WatchChanSize == 0 {
+		Config().WatchChanSize = 100000
 	}
 }
 
