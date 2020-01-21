@@ -70,14 +70,16 @@
 - 所有节点都可以同时读写
 
 
-# 极速体验,只需一分钟
-## 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)极速体验，只需一分钟）
-./fileserver
+# 极速体验，只需一分钟
 
-命令上传
-curl -F file=@http-index-fs http://10.1.xx.60:8080/upload
+### 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)）
+./fileserver #注意：线上使用请使用项目的[control](https://github.com/sjqzhang/go-fastdfs/blob/master/control)文件进行管理,直接运行，关闭终端会退出。
 
-WEB上传（浏览器打开）
+
+### 命令上传
+curl -F file=@http-index-fs http://10.1.xx.60:8080/group1/upload
+
+### WEB上传（浏览器打开）
 http://yourserver ip:8080 注意：不要使用127.0.0.1上传
 
 ### [使用文档](https://sjqzhang.github.io/go-fastdfs/#character)
