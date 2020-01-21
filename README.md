@@ -69,6 +69,17 @@
 - 每个节点对等（简化运维）
 - 所有节点都可以同时读写
 
+
+# 极速体验,只需一分钟
+## 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)极速体验，只需一分钟）
+./fileserver
+
+命令上传
+curl -F file=@http-index-fs http://10.1.xx.60:8080/upload
+
+WEB上传（浏览器打开）
+http://yourserver ip:8080 注意：不要使用127.0.0.1上传
+
 ### [使用文档](https://sjqzhang.github.io/go-fastdfs/#character)
 
 [![asciicast](https://asciinema.org/a/258926.svg)](https://asciinema.org/a/258926)
