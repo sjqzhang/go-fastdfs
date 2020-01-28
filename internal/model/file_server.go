@@ -1722,7 +1722,8 @@ func (svr *Server) GetFileInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(util.JsonEncodePretty(result)))
 	return
 }
-func (svr *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
+
+func (svr *Server) RemoveFile(ctx *gin.Context) {
 	var (
 		err      error
 		md5sum   string
@@ -1733,19 +1734,19 @@ func (svr *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		inner    string
 		name     string
 	)
-	_ = delUrl
-	_ = inner
+	r := ctx.Request
+	w := ctx.Writer
 	r.ParseForm()
 	md5sum = r.FormValue("md5")
 	fpath = r.FormValue("path")
 	inner = r.FormValue("inner")
 	result.Status = "fail"
 	if !IsPeer(r) {
-		w.Write([]byte(svr.GetClusterNotPermitMessage(r)))
+		ctx.JSON(http.StatusUnauthorized, svr.GetClusterNotPermitMessage(r))
 		return
 	}
 	if config.CommonConfig.AuthUrl != "" && !CheckAuth(w, r) {
-		util.NotPermit(w, r)
+		ctx.JSON(http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	if fpath != "" && md5sum == "" {
@@ -1769,17 +1770,17 @@ func (svr *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(md5sum) < 32 {
 		result.Message = "md5 unvalid"
-		w.Write([]byte(util.JsonEncodePretty(result)))
+		ctx.JSON(http.StatusNotFound, result)
 		return
 	}
 	if fileInfo, err = svr.GetFileInfoFromLevelDB(md5sum); err != nil {
 		result.Message = err.Error()
-		w.Write([]byte(util.JsonEncodePretty(result)))
+		ctx.JSON(http.StatusNotFound, result)
 		return
 	}
 	if fileInfo.OffSet >= 0 {
 		result.Message = "small file delete not support"
-		w.Write([]byte(util.JsonEncodePretty(result)))
+		ctx.JSON(http.StatusNotFound, result)
 		return
 	}
 	name = fileInfo.Name
@@ -1791,18 +1792,19 @@ func (svr *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		svr.SaveFileMd5Log(fileInfo, config.CONST_REMOME_Md5_FILE_NAME)
 		if err = os.Remove(config.DOCKER_DIR + fpath); err != nil {
 			result.Message = err.Error()
-			w.Write([]byte(util.JsonEncodePretty(result)))
+			ctx.JSON(http.StatusNotFound, result)
 			return
 		} else {
 			result.Message = "remove success"
 			result.Status = "ok"
-			w.Write([]byte(util.JsonEncodePretty(result)))
+			ctx.JSON(http.StatusOK, result)
 			return
 		}
 	}
 	result.Message = "fail remove"
-	w.Write([]byte(util.JsonEncodePretty(result)))
+	ctx.JSON(http.StatusNotFound, result)
 }
+
 func (svr *Server) getRequestURI(action string) string {
 	var (
 		uri string
@@ -2857,20 +2859,22 @@ func (svr *Server) Reload(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("(error)action support set(json) get reload"))
 	}
 }
-func (svr *Server) RemoveEmptyDir(w http.ResponseWriter, r *http.Request) {
+func (svr *Server) RemoveEmptyDir(ctx *gin.Context) {
 	var (
 		result JsonResult
 	)
+	r := ctx.Request
 	result.Status = "ok"
 	if IsPeer(r) {
 		go util.RemoveEmptyDir(config.DATA_DIR)
 		go util.RemoveEmptyDir(config.STORE_DIR)
 		result.Message = "clean job start ..,don't try again!!!"
-		w.Write([]byte(util.JsonEncodePretty(result)))
-	} else {
-		result.Message = svr.GetClusterNotPermitMessage(r)
-		w.Write([]byte(util.JsonEncodePretty(result)))
+		ctx.JSON(http.StatusOK, result)
+		return
 	}
+	result.Message = svr.GetClusterNotPermitMessage(r)
+	ctx.JSON(http.StatusOK, result)
+
 }
 func (svr *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 	var (

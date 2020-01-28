@@ -41,8 +41,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	peerId := fmt.Sprintf("%d", util.RandInt(0, 9))
-	config.LoadDefaultConfig(peerId)
+	config.LoadDefaultConfig()
 	config.CommonConfig.AbsRunningDir = appDir
 	FOLDERS = []string{config.DATA_DIR, config.STORE_DIR, config.CONF_DIR, config.STATIC_DIR}
 
@@ -51,20 +50,9 @@ func init() {
 	}
 	model.Svr = model.NewServer()
 
-	//Read: if configure file does not exist, create one and write the default to it
-	if !util.FileExists(config.CONST_CONF_FILE_NAME) {
-		var ip string
-		if ip = os.Getenv("GO_FASTDFS_IP"); ip == "" {
-			ip = util.GetPublicIP()
-		}
-		peer := "http://" + ip + config.CommonConfig.Addr
-		cfg := fmt.Sprintf(config.CfgJson, peerId, peer, peer)
-		util.WriteFile(config.CONST_CONF_FILE_NAME, cfg)
-	}
-
 	prefix := "/"
 	if config.CommonConfig.SupportGroupManage {
-		prefix =  prefix + config.CommonConfig.Group+"/"
+		prefix = prefix + config.CommonConfig.Group + "/"
 	}
 	model.StaticHandler = http.StripPrefix(prefix, http.FileServer(http.Dir(config.STORE_DIR)))
 	model.Svr.InitComponent(false)

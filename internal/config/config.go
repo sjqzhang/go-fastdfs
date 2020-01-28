@@ -18,6 +18,7 @@ var (
 
 	Json                        = jsoniter.ConfigCompatibleWithStandardLibrary
 	FileName                    string
+	defaultPort                 = ":8080"
 	DOCKER_DIR                  = ""
 	STORE_DIR                   = STORE_DIR_NAME
 	CONF_DIR                    = CONF_DIR_NAME
@@ -125,7 +126,7 @@ const (
 	CONST_MESSAGE_CLUSTER_IP       = "Can only be called by the cluster ip or 127.0.0.1 or admin_ips(cfg.json),current ip:%s"
 	CfgJson                        = `{
 	"绑定端号": "端口",
-	"addr": ":8080",
+	"addr": "%s",
 	"PeerID": "集群内唯一,请使用0-9的单字符，默认自动生成",
 	"peer_id": "%s",
 	"本主机地址": "本机http地址,默认自动生成(注意端口必须与addr中的端口一致），必段为内网，自动生成不为内网请自行修改，下同",
@@ -278,7 +279,7 @@ func ParseConfig(filePath string) {
 	log.Info("config parse success")
 }
 
-func LoadDefaultConfig(peerId string) {
+func LoadDefaultConfig() {
 	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
 	if DOCKER_DIR != "" {
 		if !strings.HasSuffix(DOCKER_DIR, "/") {
@@ -299,6 +300,18 @@ func LoadDefaultConfig(peerId string) {
 	CONST_SEARCH_FILE_NAME = DATA_DIR + "/search.txt"
 	LogAccessConfigStr = strings.Replace(LogAccessConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
 	LogConfigStr = strings.Replace(LogConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
+
+	//Read: if configure file does not exist, create one and write the default to it
+	peerId := fmt.Sprintf("%d", util.RandInt(0, 9))
+	if !util.FileExists(CONST_CONF_FILE_NAME) {
+		var ip string
+		if ip = os.Getenv("GO_FASTDFS_IP"); ip == "" {
+			ip = util.GetPublicIP()
+		}
+		peer := "http://" + ip + defaultPort
+		cfg := fmt.Sprintf(CfgJson, defaultPort, peerId, peer, peer)
+		util.WriteFile(CONST_CONF_FILE_NAME, cfg)
+	}
 
 	ParseConfig(CONST_CONF_FILE_NAME)
 	if CommonConfig.QueueSize == 0 {
