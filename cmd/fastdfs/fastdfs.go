@@ -9,10 +9,10 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/config"
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/model"
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/server"
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/util"
+	"github.com/luoyunpeng/go-fastdfs/internal/config"
+	"github.com/luoyunpeng/go-fastdfs/internal/model"
+	"github.com/luoyunpeng/go-fastdfs/internal/server"
+	"github.com/luoyunpeng/go-fastdfs/internal/util"
 	log "github.com/sirupsen/logrus"
 )
 

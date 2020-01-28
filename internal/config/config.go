@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/util"
+	"github.com/luoyunpeng/go-fastdfs/internal/util"
 	log "github.com/sirupsen/logrus"
 )
 

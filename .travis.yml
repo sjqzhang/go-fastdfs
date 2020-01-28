@@ -1,0 +1,15 @@
+language: go
+
+go:
+  - 1.13.5
+
+os:
+  - linux
+
+script: make
+notifications:
+  email: false
+
+#cache:
+#  directories:
+#    - $HOME/gopath/pkg/mod

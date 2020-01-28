@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/astaxie/beego/httplib"
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/config"
+	"github.com/luoyunpeng/go-fastdfs/internal/config"
 	log "github.com/sirupsen/logrus"
 )
 

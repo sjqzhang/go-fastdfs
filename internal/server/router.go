@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/config"
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/model"
+	"github.com/luoyunpeng/go-fastdfs/internal/config"
+	"github.com/luoyunpeng/go-fastdfs/internal/model"
 )
 
 func registerRoutes(app *gin.Engine) {
