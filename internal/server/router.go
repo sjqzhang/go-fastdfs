@@ -20,8 +20,8 @@ func registerRoutes(app *gin.Engine) {
 	{
 		v1.GET("/index", model.Svr.Index)
 		v1.GET("/download", model.Svr.Download)
-		// curl http://47.97.117.196:9090/test/check_file_exist?md5=b628f8ef4bc0dce120788ab91aaa3ebb
-		// curl http://47.97.117.196:9090/test/check_file_exist?path=files/v1.0.0/bbs.log.txt
+		// curl http://ip:9090/test/check_file_exist?md5=b628f8ef4bc0dce120788ab91aaa3ebb
+		// curl http://ip:9090/test/check_file_exist?path=files/v1.0.0/bbs.log.txt
 		// TODO fix: no error message return, what does offset means? the peer port is wrong
 		v1.GET("/check_files_exist", model.Svr.CheckFileExist)
 		v1.GET("/check_file_exist")
@@ -35,9 +35,8 @@ func registerRoutes(app *gin.Engine) {
 		v1.GET("/list-dir")
 		v1.GET("/get_md5s_by_date")
 		v1.GET("/receive_md5s") //?
-		v1.GET("/stat")
 
-		v1.POST("/upload")
+		v1.POST("/upload", model.Svr.Upload)
 		v1.POST("/gen_google_secret")
 		v1.POST("/gen_google_code")
 

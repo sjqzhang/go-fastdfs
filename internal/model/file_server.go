@@ -1,6 +1,5 @@
 package model
 
-import "C"
 import (
 	"bufio"
 	"bytes"
@@ -74,8 +73,7 @@ type Server struct {
 }
 
 type WrapReqResp struct {
-	w    *http.ResponseWriter
-	r    *http.Request
+	ctx  *gin.Context
 	done chan bool
 }
 
@@ -776,6 +774,7 @@ func (svr *Server) GetSmallFileByURI(ctx *gin.Context) ([]byte, bool, error) {
 		return data, false, err
 	}
 }
+
 func (svr *Server) DownloadSmallFileByURI(ctx *gin.Context) (bool, error) {
 	var (
 		err        error
@@ -826,6 +825,7 @@ func (svr *Server) DownloadSmallFileByURI(ctx *gin.Context) (bool, error) {
 	}
 	return false, errors.New("not found")
 }
+
 func (svr *Server) DownloadNormalFileByURI(ctx *gin.Context) (bool, error) {
 	var (
 		err        error
@@ -870,6 +870,7 @@ func (svr *Server) DownloadNormalFileByURI(ctx *gin.Context) (bool, error) {
 	StaticHandler.ServeHTTP(w, r)
 	return true, nil
 }
+
 func (svr *Server) DownloadNotFound(ctx *gin.Context) {
 	var (
 		err        error
@@ -981,6 +982,7 @@ func (svr *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r *
 		log.Error(err)
 	}
 }
+
 func (svr *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width, height uint) {
 	var (
 		img     image.Image
@@ -1002,6 +1004,7 @@ func (svr *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width,
 		w.Write(data)
 	}
 }
+
 func (svr *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, height uint) {
 	var (
 		img     image.Image
@@ -1030,9 +1033,11 @@ func (svr *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, he
 		io.Copy(w, file)
 	}
 }
+
 func (svr *Server) GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
 }
+
 func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceUpload bool) {
 	var (
 		md5set mapset.Set
@@ -1074,6 +1079,7 @@ func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceU
 		}
 	}
 }
+
 func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 	var (
 		err      error
@@ -1168,6 +1174,7 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 	}
 }
+
 func (svr *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	var (
 		info FileInfo
@@ -1178,6 +1185,7 @@ func (svr *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	info = *fileInfo
 	svr.queueFileLog <- &FileLog{FileInfo: &info, FileName: filename}
 }
+
 func (svr *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 	var (
 		err      error
@@ -1247,6 +1255,7 @@ func (svr *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 	}
 	svr.SaveFileInfoToLevelDB(logKey, fileInfo, svr.logDB)
 }
+
 func (svr *Server) checkPeerFileExist(peer string, md5sum string, fpath string) (*FileInfo, error) {
 	var (
 		err      error
@@ -1264,6 +1273,7 @@ func (svr *Server) checkPeerFileExist(peer string, md5sum string, fpath string) 
 	}
 	return &fileInfo, nil
 }
+
 func (svr *Server) CheckFileExist(ctx *gin.Context) {
 	var (
 		err      error
@@ -1372,6 +1382,7 @@ func (svr *Server) CheckFilesExist(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 	return
 }
+
 func (svr *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
@@ -1419,9 +1430,11 @@ func (svr *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	result.Message = "job is running"
 	w.Write([]byte(util.JsonEncodePretty(result)))
 }
+
 func (svr *Server) IsExistFromLevelDB(key string, db *leveldb.DB) (bool, error) {
 	return db.Has([]byte(key), nil)
 }
+
 func (svr *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
 	var (
 		err      error
@@ -1535,6 +1548,7 @@ func (svr *Server) GetClusterNotPermitMessage(r *http.Request) string {
 	message = fmt.Sprintf(config.CONST_MESSAGE_CLUSTER_IP, util.GetClientIp(r))
 	return message
 }
+
 func (svr *Server) GetMd5sForWeb(w http.ResponseWriter, r *http.Request) {
 	var (
 		date   string
@@ -1643,6 +1657,7 @@ func (svr *Server) GetMd5sByDate(date string, filename string) (mapset.Set, erro
 	iter.Release()
 	return md5set, nil
 }
+
 func (svr *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 	var (
 		err         error
@@ -1676,6 +1691,7 @@ func (svr *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 	log.Info("SyncFileInfo: ", downloadUrl)
 	w.Write([]byte(downloadUrl))
 }
+
 func (svr *Server) CheckScene(scene string) (bool, error) {
 	var (
 		scenes []string
@@ -1691,6 +1707,7 @@ func (svr *Server) CheckScene(scene string) (bool, error) {
 	}
 	return true, nil
 }
+
 func (svr *Server) GetFileInfo(w http.ResponseWriter, r *http.Request) {
 	var (
 		fpath    string
@@ -1816,6 +1833,7 @@ func (svr *Server) getRequestURI(action string) string {
 	}
 	return uri
 }
+
 func (svr *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileResult {
 	var (
 		outname     string
@@ -1867,6 +1885,7 @@ func (svr *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileResu
 	fileResult.Scenes = fileInfo.Scene
 	return fileResult
 }
+
 func (svr *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeader, fileInfo *FileInfo, r *http.Request) (*FileInfo, error) {
 	var (
 		err     error
@@ -1950,7 +1969,8 @@ func (svr *Server) SaveUploadFile(file multipart.File, header *multipart.FileHea
 	//fmt.Println("upload",fileInfo)
 	return fileInfo, nil
 }
-func (svr *Server) Upload(w http.ResponseWriter, r *http.Request) {
+
+func (svr *Server) Upload(ctx *gin.Context) {
 	var (
 		err    error
 		fn     string
@@ -1958,10 +1978,6 @@ func (svr *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		fpTmp  *os.File
 		fpBody *os.File
 	)
-	if r.Method == http.MethodGet {
-		svr.upload(w, r)
-		return
-	}
 	folder = config.STORE_DIR + "/_tmp/" + time.Now().Format("20060102")
 	os.MkdirAll(folder, 0777)
 	fn = folder + "/" + util.GetUUID()
@@ -1971,28 +1987,26 @@ func (svr *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	fpTmp, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
 		log.Error(err)
-		w.Write([]byte(err.Error()))
+		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
 	defer fpTmp.Close()
-	if _, err = io.Copy(fpTmp, r.Body); err != nil {
+	if _, err = io.Copy(fpTmp, ctx.Request.Body); err != nil {
 		log.Error(err)
-		w.Write([]byte(err.Error()))
+		ctx.JSON(http.StatusNotFound, err.Error())
 		return
 	}
 	fpBody, err = os.Open(fn)
-	r.Body = fpBody
+	ctx.Request.Body = fpBody
 	done := make(chan bool, 1)
-	svr.queueUpload <- WrapReqResp{&w, r, done}
+	svr.queueUpload <- WrapReqResp{ctx, done}
 	<-done
-
 }
 
-func (svr *Server) upload(w http.ResponseWriter, r *http.Request) {
+func (svr *Server) upload(ctx *gin.Context) {
 	var (
-		err error
-		ok  bool
-		//		pathname     string
+		err          error
+		ok           bool
 		md5sum       string
 		fileName     string
 		fileInfo     FileInfo
@@ -2001,165 +2015,126 @@ func (svr *Server) upload(w http.ResponseWriter, r *http.Request) {
 		scene        string
 		output       string
 		fileResult   FileResult
-		data         []byte
 		code         string
 		secret       interface{}
 	)
+	r := ctx.Request
+	w := ctx.Writer
 	output = r.FormValue("output")
 	if config.CommonConfig.EnableCrossOrigin {
 		util.CrossOrigin(w, r)
-		if r.Method == http.MethodOptions {
-			return
-		}
 	}
 
 	if config.CommonConfig.AuthUrl != "" {
 		if !CheckAuth(w, r) {
 			log.Warn("auth fail", r.Form)
 			util.NotPermit(w, r)
-			w.Write([]byte("auth fail"))
+			ctx.JSON(http.StatusNotFound, "auth fail")
 			return
 		}
 	}
-	if r.Method == http.MethodPost {
-		md5sum = r.FormValue("md5")
-		fileName = r.FormValue("filename")
-		output = r.FormValue("output")
-		if config.CommonConfig.ReadOnly {
-			w.Write([]byte("(error) readonly"))
-			return
-		}
-		if config.CommonConfig.EnableCustomPath {
-			fileInfo.Path = r.FormValue("path")
-			fileInfo.Path = strings.Trim(fileInfo.Path, "/")
-		}
-		scene = r.FormValue("scene")
-		code = r.FormValue("code")
-		if scene == "" {
-			//Just for Compatibility
-			scene = r.FormValue("scenes")
-		}
-		//Read: default not enable google auth
-		if config.CommonConfig.EnableGoogleAuth && scene != "" {
-			if secret, ok = svr.sceneMap.GetValue(scene); ok {
-				if !svr.VerifyGoogleCode(secret.(string), code, int64(config.CommonConfig.DownloadTokenExpire/30)) {
-					util.NotPermit(w, r)
-					w.Write([]byte("invalid request,error google code"))
-					return
-				}
-			}
-		}
-		fileInfo.Md5 = md5sum
-		fileInfo.ReName = fileName
-		fileInfo.OffSet = -1
-		if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
-			log.Error(err)
-			w.Write([]byte(err.Error()))
-			return
-		}
-		fileInfo.Peers = []string{}
-		fileInfo.TimeStamp = time.Now().Unix()
-		if scene == "" {
-			scene = config.CommonConfig.DefaultScene // Read: scene="default"
-		}
-		if output == "" {
-			output = "text" //Read: default output = "json"
-		}
-		if !util.Contains(output, []string{"json", "text"}) {
-			w.Write([]byte("output just support json or text"))
-			return
-		}
-		fileInfo.Scene = scene
-		if _, err = svr.CheckScene(scene); err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-		if err != nil {
-			log.Error(err)
-			http.Redirect(w, r, "/", http.StatusMovedPermanently)
-			return
-		}
-		if _, err = svr.SaveUploadFile(uploadFile, uploadHeader, &fileInfo, r); err != nil {
-			w.Write([]byte(err.Error()))
-			return
-		}
-		if config.CommonConfig.EnableDistinctFile {
-			if v, _ := svr.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
-				fileResult = svr.BuildFileResult(v, r)
-				if config.CommonConfig.RenameFile {
-					os.Remove(config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
-				} else {
-					os.Remove(config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
-				}
-				if output == "json" {
-					if data, err = json.Marshal(fileResult); err != nil {
-						log.Error(err)
-						w.Write([]byte(err.Error()))
-					}
-					w.Write(data)
-				} else {
-					w.Write([]byte(fileResult.Url))
-				}
-				return
-			}
-		}
-		if fileInfo.Md5 == "" {
-			log.Warn(" fileInfo.Md5 is null")
-			return
-		}
-		if md5sum != "" && fileInfo.Md5 != md5sum {
-			log.Warn(" fileInfo.Md5 and md5sum !=")
-			return
-		}
-		if !config.CommonConfig.EnableDistinctFile {
-			// bugfix filecount stat
-			fileInfo.Md5 = util.MD5(svr.GetFilePathByInfo(&fileInfo, false))
-		}
-		if config.CommonConfig.EnableMergeSmallFile && fileInfo.Size < config.CONST_SMALL_FILE_SIZE {
-			if err = svr.SaveSmallFile(&fileInfo); err != nil {
-				log.Error(err)
-				return
-			}
-		}
-		svr.saveFileMd5Log(&fileInfo, config.CONST_FILE_Md5_FILE_NAME) //maybe slow
-		go svr.postFileToPeer(&fileInfo)
-		if fileInfo.Size <= 0 {
-			log.Error("file size is zero")
-			return
-		}
-		fileResult = svr.BuildFileResult(&fileInfo, r)
-		if output == "json" {
-			if data, err = json.Marshal(fileResult); err != nil {
-				log.Error(err)
-				w.Write([]byte(err.Error()))
-			}
-			w.Write(data)
-		} else {
-			w.Write([]byte(fileResult.Url))
-		}
+
+	md5sum = r.FormValue("md5")
+	fileName = r.FormValue("filename")
+	output = r.FormValue("output")
+	if config.CommonConfig.ReadOnly {
+		ctx.JSON(http.StatusNotFound, "(error) readonly")
 		return
-	} else {
-		md5sum = r.FormValue("md5")
-		output = r.FormValue("output")
-		if md5sum == "" {
-			w.Write([]byte("(error) if you want to upload fast md5 is require" +
-				",and if you want to upload file,you must use post method  "))
-			return
-		}
-		if v, _ := svr.GetFileInfoFromLevelDB(md5sum); v != nil && v.Md5 != "" {
-			fileResult = svr.BuildFileResult(v, r)
-		}
-		if output == "json" {
-			if data, err = json.Marshal(fileResult); err != nil {
-				log.Error(err)
-				w.Write([]byte(err.Error()))
+	}
+	if config.CommonConfig.EnableCustomPath {
+		fileInfo.Path = r.FormValue("path")
+		fileInfo.Path = strings.Trim(fileInfo.Path, "/")
+	}
+	scene = r.FormValue("scene")
+	code = r.FormValue("code")
+	if scene == "" {
+		//Just for Compatibility
+		scene = r.FormValue("scenes")
+	}
+	//Read: default not enable google auth
+	if config.CommonConfig.EnableGoogleAuth && scene != "" {
+		if secret, ok = svr.sceneMap.GetValue(scene); ok {
+			if !svr.VerifyGoogleCode(secret.(string), code, int64(config.CommonConfig.DownloadTokenExpire/30)) {
+				util.NotPermit(w, r)
+				ctx.JSON(http.StatusNotFound, "invalid request,error google code")
+				return
 			}
-			w.Write(data)
-		} else {
-			w.Write([]byte(fileResult.Url))
 		}
 	}
+	fileInfo.Md5 = md5sum
+	fileInfo.ReName = fileName
+	fileInfo.OffSet = -1
+	if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
+		log.Error(err)
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	fileInfo.Peers = []string{}
+	fileInfo.TimeStamp = time.Now().Unix()
+	if scene == "" {
+		scene = config.CommonConfig.DefaultScene // Read: scene="default"
+	}
+	if output == "" {
+		output = "text" //Read: default output = "json"
+	}
+	if !util.Contains(output, []string{"json", "text"}) {
+		ctx.JSON(http.StatusNotFound, "output just support json or text")
+		return
+	}
+	fileInfo.Scene = scene
+	if _, err = svr.CheckScene(scene); err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	if _, err = svr.SaveUploadFile(uploadFile, uploadHeader, &fileInfo, r); err != nil {
+		ctx.JSON(http.StatusNotFound, err.Error())
+		return
+	}
+	if config.CommonConfig.EnableDistinctFile {
+		if v, _ := svr.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
+			fileResult = svr.BuildFileResult(v, r)
+			if config.CommonConfig.RenameFile {
+				os.Remove(config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
+			} else {
+				os.Remove(config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
+			}
+
+			ctx.JSON(http.StatusOK, fileResult)
+			return
+		}
+	}
+	if fileInfo.Md5 == "" {
+		log.Warn(" fileInfo.Md5 is null")
+		ctx.JSON(http.StatusNotFound, "fileInfo.Md5 is null")
+		return
+	}
+	if md5sum != "" && fileInfo.Md5 != md5sum {
+		log.Warn(" fileInfo.Md5 and md5sum !=")
+		ctx.JSON(http.StatusNotFound, "fileInfo.Md5 and md5sum !=")
+		return
+	}
+	if !config.CommonConfig.EnableDistinctFile {
+		// bugfix filecount stat
+		fileInfo.Md5 = util.MD5(svr.GetFilePathByInfo(&fileInfo, false))
+	}
+	if config.CommonConfig.EnableMergeSmallFile && fileInfo.Size < config.CONST_SMALL_FILE_SIZE {
+		if err = svr.SaveSmallFile(&fileInfo); err != nil {
+			log.Error(err)
+			ctx.JSON(http.StatusNotFound, err.Error())
+			return
+		}
+	}
+	svr.saveFileMd5Log(&fileInfo, config.CONST_FILE_Md5_FILE_NAME) //maybe slow
+	go svr.postFileToPeer(&fileInfo)
+	if fileInfo.Size <= 0 {
+		log.Error("file size is zero")
+		ctx.JSON(http.StatusNotFound, "file size is zero")
+		return
+	}
+	fileResult = svr.BuildFileResult(&fileInfo, r)
+	ctx.JSON(http.StatusOK, fileResult)
 }
+
 func (svr *Server) SaveSmallFile(fileInfo *FileInfo) error {
 	var (
 		err      error
@@ -2218,6 +2193,7 @@ func (svr *Server) SaveSmallFile(fileInfo *FileInfo) error {
 	}
 	return nil
 }
+
 func (svr *Server) SendToMail(to, subject, body, mailtype string) error {
 	host := config.CommonConfig.Mail.Host
 	user := config.CommonConfig.Mail.User
@@ -2235,6 +2211,7 @@ func (svr *Server) SendToMail(to, subject, body, mailtype string) error {
 	err := smtp.SendMail(host, auth, user, sendTo, msg)
 	return err
 }
+
 func (svr *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 	t := time.Now()
 	batch := new(leveldb.Batch)
@@ -2262,6 +2239,7 @@ func (svr *Server) BenchMark(w http.ResponseWriter, r *http.Request) {
 	util.WriteFile("time.txt", time.Since(t).String())
 	fmt.Println(time.Since(t).String())
 }
+
 func (svr *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
@@ -2297,6 +2275,7 @@ func (svr *Server) RepairStatWeb(w http.ResponseWriter, r *http.Request) {
 	result.Status = "ok"
 	w.Write([]byte(util.JsonEncodePretty(result)))
 }
+
 func (svr *Server) Stat(w http.ResponseWriter, r *http.Request) {
 	var (
 		result   JsonResult
@@ -2336,6 +2315,7 @@ func (svr *Server) Stat(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(util.JsonEncodePretty(result)))
 	}
 }
+
 func (svr *Server) GetStat() []StatDateFileInfo {
 	var (
 		min   int64
@@ -2385,6 +2365,7 @@ func (svr *Server) GetStat() []StatDateFileInfo {
 	rows = append(rows, total)
 	return rows
 }
+
 func (svr *Server) RegisterExit() {
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -2408,12 +2389,14 @@ func (svr *Server) AppendToQueue(fileInfo *FileInfo) {
 	}
 	svr.queueToPeers <- *fileInfo
 }
+
 func (svr *Server) AppendToDownloadQueue(fileInfo *FileInfo) {
 	for (len(svr.queueFromPeers) + config.CONST_QUEUE_SIZE/10) > config.CONST_QUEUE_SIZE {
 		time.Sleep(time.Millisecond * 50)
 	}
 	svr.queueFromPeers <- *fileInfo
 }
+
 func (svr *Server) ConsumerDownLoad() {
 	ConsumerFunc := func() {
 		for {
@@ -2438,6 +2421,7 @@ func (svr *Server) ConsumerDownLoad() {
 		go ConsumerFunc()
 	}
 }
+
 func (svr *Server) RemoveDownloading() {
 	RemoveDownloadFunc := func() {
 		for {
@@ -2457,6 +2441,7 @@ func (svr *Server) RemoveDownloading() {
 	}
 	go RemoveDownloadFunc()
 }
+
 func (svr *Server) ConsumerLog() {
 	go func() {
 		var (
@@ -2468,6 +2453,7 @@ func (svr *Server) ConsumerLog() {
 		}
 	}()
 }
+
 func (svr *Server) LoadSearchDict() {
 	go func() {
 		log.Info("Load search dict ....")
@@ -2490,6 +2476,7 @@ func (svr *Server) LoadSearchDict() {
 		log.Info("finish load search dict")
 	}()
 }
+
 func (svr *Server) SaveSearchDict() {
 	var (
 		err        error
@@ -2511,6 +2498,7 @@ func (svr *Server) SaveSearchDict() {
 		fp.WriteString(fmt.Sprintf("%s\t%s", k, v.(string)))
 	}
 }
+
 func (svr *Server) ConsumerPostToPeer() {
 	ConsumerFunc := func() {
 		for {
@@ -2522,12 +2510,13 @@ func (svr *Server) ConsumerPostToPeer() {
 		go ConsumerFunc()
 	}
 }
+
 func (svr *Server) ConsumerUpload() {
 	ConsumerFunc := func() {
 		for {
 			wr := <-svr.queueUpload
-			svr.upload(*wr.w, wr.r)
-			svr.rtMap.AddCountInt64(config.CONST_UPLOAD_COUNTER_KEY, wr.r.ContentLength)
+			svr.upload(wr.ctx)
+			svr.rtMap.AddCountInt64(config.CONST_UPLOAD_COUNTER_KEY, wr.ctx.Request.ContentLength)
 			if v, ok := svr.rtMap.GetValue(config.CONST_UPLOAD_COUNTER_KEY); ok {
 				if v.(int64) > 1*1024*1024*1024 {
 					var _v int64
@@ -2637,6 +2626,7 @@ func (svr *Server) AutoRepair(forceRepair bool) {
 	}
 	AutoRepairFunc(forceRepair)
 }
+
 func (svr *Server) CleanLogLevelDBByDate(date string, filename string) {
 	defer func() {
 		if re := recover(); re != nil {
@@ -2666,6 +2656,7 @@ func (svr *Server) CleanLogLevelDBByDate(date string, filename string) {
 		}
 	}
 }
+
 func (svr *Server) CleanAndBackUp() {
 	Clean := func() {
 		var (
@@ -2689,6 +2680,7 @@ func (svr *Server) CleanAndBackUp() {
 		}
 	}()
 }
+
 func (svr *Server) LoadFileInfoByDate(date string, filename string) (mapset.Set, error) {
 	defer func() {
 		if re := recover(); re != nil {
@@ -2717,6 +2709,7 @@ func (svr *Server) LoadFileInfoByDate(date string, filename string) (mapset.Set,
 	iter.Release()
 	return fileInfos, nil
 }
+
 func (svr *Server) LoadQueueSendToPeer() {
 	if queue, err := svr.LoadFileInfoByDate(util.GetToDay(), config.CONST_Md5_QUEUE_FILE_NAME); err != nil {
 		log.Error(err)
@@ -2727,6 +2720,7 @@ func (svr *Server) LoadQueueSendToPeer() {
 		}
 	}
 }
+
 func (svr *Server) CheckClusterStatus() {
 	check := func() {
 		defer func() {
@@ -2779,6 +2773,7 @@ func (svr *Server) CheckClusterStatus() {
 		}
 	}()
 }
+
 func (svr *Server) RepairFileInfo(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
@@ -2796,6 +2791,7 @@ func (svr *Server) RepairFileInfo(w http.ResponseWriter, r *http.Request) {
 	go svr.RepairFileInfoFromFile()
 	w.Write([]byte(util.JsonEncodePretty(result)))
 }
+
 func (svr *Server) Reload(w http.ResponseWriter, r *http.Request) {
 	var (
 		err     error
@@ -2859,6 +2855,7 @@ func (svr *Server) Reload(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("(error)action support set(json) get reload"))
 	}
 }
+
 func (svr *Server) RemoveEmptyDir(ctx *gin.Context) {
 	var (
 		result JsonResult
@@ -2876,6 +2873,7 @@ func (svr *Server) RemoveEmptyDir(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, result)
 
 }
+
 func (svr *Server) BackUp(w http.ResponseWriter, r *http.Request) {
 	var (
 		err    error
@@ -2960,6 +2958,7 @@ func (svr *Server) Search(w http.ResponseWriter, r *http.Request) {
 	result.Data = fileInfos
 	w.Write([]byte(util.JsonEncodePretty(result)))
 }
+
 func (svr *Server) SearchDict(kw string) []FileInfo {
 	var (
 		fileInfos []FileInfo
@@ -2974,6 +2973,7 @@ func (svr *Server) SearchDict(kw string) []FileInfo {
 	}
 	return fileInfos
 }
+
 func (svr *Server) ListDir(w http.ResponseWriter, r *http.Request) {
 	var (
 		result      JsonResult
@@ -3034,6 +3034,7 @@ func (svr *Server) VerifyGoogleCode(secret string, code string, discrepancy int6
 		return ok
 	}
 }
+
 func (svr *Server) GenGoogleCode(w http.ResponseWriter, r *http.Request) {
 	var (
 		err    error
@@ -3058,6 +3059,7 @@ func (svr *Server) GenGoogleCode(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write([]byte(util.JsonEncodePretty(result)))
 }
+
 func (svr *Server) GenGoogleSecret(w http.ResponseWriter, r *http.Request) {
 	var (
 		result JsonResult
@@ -3080,6 +3082,7 @@ func (svr *Server) GenGoogleSecret(w http.ResponseWriter, r *http.Request) {
 	result.Data = GetSeed(16)
 	w.Write([]byte(util.JsonEncodePretty(result)))
 }
+
 func (svr *Server) Report(w http.ResponseWriter, r *http.Request) {
 	var (
 		reportFileName string
@@ -3113,6 +3116,7 @@ func (svr *Server) Report(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(svr.GetClusterNotPermitMessage(r)))
 	}
 }
+
 func (svr *Server) Repair(w http.ResponseWriter, r *http.Request) {
 	var (
 		force       string
@@ -3207,8 +3211,10 @@ func (svr *Server) Status(w http.ResponseWriter, r *http.Request) {
 	status.Data = sts
 	w.Write([]byte(util.JsonEncodePretty(status)))
 }
+
 func (svr *Server) HeartBeat(w http.ResponseWriter, r *http.Request) {
 }
+
 func (svr *Server) Index(ctx *gin.Context) {
 	var (
 		uploadUrl    string
@@ -3304,6 +3310,7 @@ func (svr *Server) test() {
 type hookDataStore struct {
 	tusd.DataStore
 }
+
 type httpError struct {
 	error
 	statusCode int
@@ -3312,9 +3319,11 @@ type httpError struct {
 func (err httpError) StatusCode() int {
 	return err.statusCode
 }
+
 func (err httpError) Body() []byte {
 	return []byte(err.Error())
 }
+
 func (store hookDataStore) NewUpload(info tusd.FileInfo) (id string, err error) {
 	var (
 		jsonResult JsonResult

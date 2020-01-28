@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -41,20 +40,18 @@ func init() {
 		os.Exit(1)
 	}
 
-	config.LoadDefaultConfig()
-	config.CommonConfig.AbsRunningDir = appDir
 	FOLDERS = []string{config.DATA_DIR, config.STORE_DIR, config.CONF_DIR, config.STATIC_DIR}
-
 	for _, folder := range FOLDERS {
 		os.MkdirAll(folder, 0775)
 	}
-	model.Svr = model.NewServer()
+	config.LoadDefaultConfig()
+	config.CommonConfig.AbsRunningDir = appDir
 
+	model.Svr = model.NewServer()
 	prefix := "/"
 	if config.CommonConfig.SupportGroupManage {
 		prefix = prefix + config.CommonConfig.Group + "/"
 	}
-	model.StaticHandler = http.StripPrefix(prefix, http.FileServer(http.Dir(config.STORE_DIR)))
 	model.Svr.InitComponent(false)
 }
 func main() {
