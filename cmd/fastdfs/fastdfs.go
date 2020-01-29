@@ -54,6 +54,7 @@ func init() {
 	}
 	model.Svr.InitComponent(false)
 }
+
 func main() {
 	svr := model.Svr
 	go func() {

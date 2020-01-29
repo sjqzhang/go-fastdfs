@@ -25,6 +25,7 @@ import (
 	"time"
 
 	mapSet "github.com/deckarep/golang-set"
+	"github.com/gin-gonic/gin"
 )
 
 type CommonMap struct {
@@ -579,11 +580,11 @@ func SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 }
 
 // CrossOrigin add cross info to header
-func CrossOrigin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, X-Requested-By, If-Modified-Since, X-File-Name, X-File-Type, Cache-Control, Origin")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-	w.Header().Set("Access-Control-Expose-Headers", "Authorization")
+func CrossOrigin(ctx *gin.Context) {
+	ctx.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	ctx.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Depth, User-Agent, X-File-Size, X-Requested-With, X-Requested-By, If-Modified-Since, X-File-Name, X-File-Type, Cache-Control, Origin")
+	ctx.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+	ctx.Writer.Header().Set("Access-Control-Expose-Headers", "Authorization")
 	//https://blog.csdn.net/yanzisu_congcong/article/details/80552155
 }
 

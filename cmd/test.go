@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
-	"github.com/luoyunpeng/go-fastdfs-fork/internal/util"
+	"github.com/luoyunpeng/go-fastdfs/internal/util"
 )
 
 func main() {
@@ -18,4 +19,19 @@ func main() {
 
 	fmt.Println("app dir: ", appDir)
 	fmt.Println("cur dir: ", curDir)
+	app()
+}
+
+func app() {
+	nameCH := make(chan string)
+	go func() {
+		for i := 0; i < 5; i++ {
+			nameCH <- "name"
+		}
+		close(nameCH)
+	}()
+	time.Sleep(time.Millisecond * 88)
+	for v := range nameCH {
+		fmt.Println("v: ", v)
+	}
 }
