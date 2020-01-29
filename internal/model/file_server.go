@@ -3210,7 +3210,7 @@ func (svr *Server) Index(ctx *gin.Context) {
 		}
 		page := fmt.Sprintf(uploadPage, uploadUrl, config.CommonConfig.DefaultScene, uploadBigUrl)
 		config.DefaultUploadPage = page
-		ctx.HTML(http.StatusOK, "index", page)
+		ctx.HTML(http.StatusOK, "upload.html", gin.H{"title": "Main website"})
 	}
 
 	ctx.JSON(http.StatusNotFound, "web upload deny")
