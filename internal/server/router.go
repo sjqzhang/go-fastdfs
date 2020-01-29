@@ -20,6 +20,7 @@ func registerRoutes(app *gin.Engine) {
 	// app.StaticFS("/file", http.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName))
 	// gin.Dir can set  if allows to list the files in the given dir
 	app.StaticFS("/file", gin.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName, false))
+	app.LoadHTMLGlob("static/*")
 	v1 := app.Group(groupRoute)
 	{
 		v1.GET("/index", model.Svr.Index)
@@ -54,7 +55,7 @@ func registerRoutes(app *gin.Engine) {
 
 	// Default HTML page (client-side routing implemented via Vue.js)
 	app.NoRoute(func(c *gin.Context) {
-		//c.HTML(http.StatusOK, "index.tmpl", gin.H{"clientConfig": config.PublicClientConfig()})
-		c.Redirect(http.StatusOK, "index")
+		c.HTML(http.StatusOK, "upload.tmpl", gin.H{"title": "Main website"})
+		//c.Redirect(http.StatusOK, "index")
 	})
 }

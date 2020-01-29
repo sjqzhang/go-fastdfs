@@ -14,23 +14,23 @@ import (
 var (
 	CommonConfig Config
 
-	Json                        = jsoniter.ConfigCompatibleWithStandardLibrary
-	FileName                    string
-	DOCKER_DIR                  = ""
-	STORE_DIR                   = StoreDirName
-	CONF_DIR                    = ConfDirName
-	LOG_DIR                     = LogDirName
-	DATA_DIR                    = DataDirName
-	STATIC_DIR                  = StaticDirName
-	LARGE_DIR_NAME              = "haystack"
-	LARGE_DIR                   = STORE_DIR + "/haystack"
-	CONST_LEVELDB_FILE_NAME     = DATA_DIR + "/fileserver.db"
-	CONST_LOG_LEVELDB_FILE_NAME = DATA_DIR + "/log.db"
-	CONST_STAT_FILE_NAME        = DATA_DIR + "/stat.json"
-	CONST_CONF_FILE_NAME        = CONF_DIR + "/cfg.json"
-	CONST_SEARCH_FILE_NAME      = DATA_DIR + "/search.txt"
-	CONST_UPLOAD_COUNTER_KEY    = "__CONST_UPLOAD_COUNTER_KEY__"
-	LogConfigStr                = `
+	Json               = jsoniter.ConfigCompatibleWithStandardLibrary
+	FileName           string
+	DockerDir          = ""
+	StoreDir           = StoreDirName
+	ConfDir            = ConfDirName
+	LogDir             = LogDirName
+	DataDir            = DataDirName
+	StaticDir          = StaticDirName
+	LargeDirName       = "haystack"
+	LargeDir           = StoreDir + "/haystack"
+	LeveldbFileName    = DataDir + "/fileserver.db"
+	LogLeveldbFileName = DataDir + "/log.db"
+	StatFileName       = DataDir + "/stat.json"
+	ConfFileName       = ConfDir + "/cfg.json"
+	SearchFileName     = DataDir + "/search.txt"
+	UploadCounterKey   = "__CONST_UPLOAD_COUNTER_KEY__"
+	LogConfigStr       = `
 <seelog type="asynctimer" asyncinterval="1000" minlevel="trace" maxlevel="error">  
 	<outputs formatid="common">  
 		<buffered formatid="common" size="1048576" flushperiod="1000">  
@@ -116,6 +116,7 @@ const (
 	ConfDirName            = "conf"
 	StaticDirName          = "static"
 	StatisticsFileCountKey = "fileCount"
+	UploadPrefix           = "/upload"
 	BigUploadPathSuffix    = "/big/upload/"
 	StatFileTotalSizeKey   = "totalSize"
 	Md5ErrorFileName       = "errors.md5"
@@ -280,44 +281,60 @@ func ParseConfig(filePath string) {
 }
 
 func LoadDefaultConfig() {
-	DOCKER_DIR = os.Getenv("GO_FASTDFS_DIR")
-	if DOCKER_DIR != "" {
-		if !strings.HasSuffix(DOCKER_DIR, "/") {
-			DOCKER_DIR = DOCKER_DIR + "/"
+	DockerDir = os.Getenv("GO_FASTDFS_DIR")
+	if DockerDir != "" {
+		if !strings.HasSuffix(DockerDir, "/") {
+			DockerDir = DockerDir + "/"
 		}
 	}
-	STORE_DIR = DOCKER_DIR + StoreDirName
-	CONF_DIR = DOCKER_DIR + ConfDirName
-	DATA_DIR = DOCKER_DIR + DataDirName
-	LOG_DIR = DOCKER_DIR + LogDirName
-	STATIC_DIR = DOCKER_DIR + StaticDirName
-	LARGE_DIR_NAME = "haystack"
-	LARGE_DIR = STORE_DIR + "/haystack"
-	CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
-	CONST_LOG_LEVELDB_FILE_NAME = DATA_DIR + "/log.db"
-	CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
-	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
-	CONST_SEARCH_FILE_NAME = DATA_DIR + "/search.txt"
-	LogAccessConfigStr = strings.Replace(LogAccessConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
-	LogConfigStr = strings.Replace(LogConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
+	StoreDir = DockerDir + StoreDirName
+	ConfDir = DockerDir + ConfDirName
+	DataDir = DockerDir + DataDirName
+	LogDir = DockerDir + LogDirName
+	StaticDir = DockerDir + StaticDirName
+	LargeDirName = "haystack"
+	LargeDir = StoreDir + "/haystack"
+	LeveldbFileName = DataDir + "/fileserver.db"
+	LogLeveldbFileName = DataDir + "/log.db"
+	StatFileName = DataDir + "/stat.json"
+	ConfFileName = ConfDir + "/cfg.json"
+	SearchFileName = DataDir + "/search.txt"
+	LogAccessConfigStr = strings.Replace(LogAccessConfigStr, "{DOCKER_DIR}", DockerDir, -1)
+	LogConfigStr = strings.Replace(LogConfigStr, "{DOCKER_DIR}", DockerDir, -1)
 
 	//Read: if configure file does not exist, create one and write the default to it
 	peerId := fmt.Sprintf("%d", util.RandInt(0, 9))
-	if !util.FileExists(CONST_CONF_FILE_NAME) {
+	if !util.FileExists(ConfFileName) {
 		var ip string
 		if ip = os.Getenv("GO_FASTDFS_IP"); ip == "" {
 			ip = util.GetPublicIP()
 		}
 		peer := "http://" + ip + defaultPort
 		cfg := fmt.Sprintf(CfgJson, defaultPort, peerId, peer, peer)
-		util.WriteFile(CONST_CONF_FILE_NAME, cfg)
+		util.WriteFile(ConfFileName, cfg)
 	}
 
-	ParseConfig(CONST_CONF_FILE_NAME)
+	ParseConfig(ConfFileName)
 	if CommonConfig.QueueSize == 0 {
 		CommonConfig.QueueSize = QueueSize
 	}
 	if CommonConfig.PeerId == "" {
 		CommonConfig.PeerId = peerId
+	}
+
+	LoadUploadPage()
+}
+
+func LoadUploadPage() {
+	uploadUrl := UploadPrefix
+	uploadBigUrl := BigUploadPathSuffix
+	if CommonConfig.SupportGroupManage {
+		uploadUrl = "/" + CommonConfig.Group + uploadUrl
+		uploadBigUrl = "/" + CommonConfig.Group + BigUploadPathSuffix
+	}
+	uploadPageName := StaticDir + "/upload.tmpl"
+	DefaultUploadPage = fmt.Sprintf(DefaultUploadPage, uploadUrl, CommonConfig.DefaultScene, uploadBigUrl)
+	if !util.Exist(uploadPageName) {
+		util.WriteFile(uploadPageName, DefaultUploadPage)
 	}
 }

@@ -119,15 +119,15 @@ func NewServer() *Server {
 		CompactionTableSize: 1024 * 1024 * 20,
 		WriteBuffer:         1024 * 1024 * 20,
 	}
-	server.ldb, err = leveldb.OpenFile(config.CONST_LEVELDB_FILE_NAME, opts)
+	server.ldb, err = leveldb.OpenFile(config.LeveldbFileName, opts)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", config.CONST_LEVELDB_FILE_NAME))
+		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", config.LeveldbFileName))
 		log.Error(err)
 		panic(err)
 	}
-	server.logDB, err = leveldb.OpenFile(config.CONST_LOG_LEVELDB_FILE_NAME, opts)
+	server.logDB, err = leveldb.OpenFile(config.LogLeveldbFileName, opts)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", config.CONST_LOG_LEVELDB_FILE_NAME))
+		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", config.LogLeveldbFileName))
 		log.Error(err)
 		panic(err)
 
@@ -157,11 +157,11 @@ func (svr *Server) BackUpMetaDataByDate(date string) {
 		metaFileName string
 		fi           os.FileInfo
 	)
-	logFileName = config.DATA_DIR + "/" + date + "/" + config.FileMd5Name
+	logFileName = config.DataDir + "/" + date + "/" + config.FileMd5Name
 	svr.lockMap.LockKey(logFileName)
 	defer svr.lockMap.UnLockKey(logFileName)
-	metaFileName = config.DATA_DIR + "/" + date + "/" + "meta.data"
-	os.MkdirAll(config.DATA_DIR+"/"+date, 0775)
+	metaFileName = config.DataDir + "/" + date + "/" + "meta.data"
+	os.MkdirAll(config.DataDir+"/"+date, 0775)
 	if util.Exist(logFileName) {
 		os.Remove(logFileName)
 	}
@@ -259,13 +259,13 @@ func (svr *Server) RepairFileInfoFromFile() {
 					continue
 				}
 				file_path = strings.Replace(file_path, "\\", "/", -1)
-				if config.DOCKER_DIR != "" {
-					file_path = strings.Replace(file_path, config.DOCKER_DIR, "", 1)
+				if config.DockerDir != "" {
+					file_path = strings.Replace(file_path, config.DockerDir, "", 1)
 				}
 				if pathPrefix != "" {
 					file_path = strings.Replace(file_path, pathPrefix, config.StoreDirName, 1)
 				}
-				if strings.HasPrefix(file_path, config.StoreDirName+"/"+config.LARGE_DIR_NAME) {
+				if strings.HasPrefix(file_path, config.StoreDirName+"/"+config.LargeDirName) {
 					log.Info(fmt.Sprintf("ignore small file file %s", file_path+"/"+fi.Name()))
 					continue
 				}
@@ -299,7 +299,7 @@ func (svr *Server) RepairFileInfoFromFile() {
 		}
 		return nil
 	}
-	pathname := config.STORE_DIR
+	pathname := config.StoreDir
 	pathPrefix, err = os.Readlink(pathname)
 	if err == nil {
 		//link
@@ -406,13 +406,13 @@ func (svr *Server) WatchFilesChange() {
 			log.Error(err)
 		}
 		w.Ignore(dir + "/_tmp/")
-		w.Ignore(dir + "/" + config.LARGE_DIR_NAME + "/")
+		w.Ignore(dir + "/" + config.LargeDirName + "/")
 	}
 	if err := w.AddRecursive("./" + config.StoreDirName); err != nil {
 		log.Error(err)
 	}
 	w.Ignore("./" + config.StoreDirName + "/_tmp/")
-	w.Ignore("./" + config.StoreDirName + "/" + config.LARGE_DIR_NAME + "/")
+	w.Ignore("./" + config.StoreDirName + "/" + config.LargeDirName + "/")
 	if err := w.Start(time.Millisecond * 100); err != nil {
 		log.Error(err)
 	}
@@ -464,7 +464,7 @@ func (svr *Server) GetFilePathByInfo(fileInfo *FileInfo, withDocker bool) string
 		fn = fileInfo.ReName
 	}
 	if withDocker {
-		return config.DOCKER_DIR + fileInfo.Path + "/" + fn
+		return config.DockerDir + fileInfo.Path + "/" + fn
 	}
 	return fileInfo.Path + "/" + fn
 }
@@ -571,15 +571,15 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		}
 	}
 	if _, err = os.Stat(fileInfo.Path); err != nil {
-		os.MkdirAll(config.DOCKER_DIR+fileInfo.Path, 0775)
+		os.MkdirAll(config.DockerDir+fileInfo.Path, 0775)
 	}
 	//fmt.Println("downloadFromPeer",fileInfo)
 	p := strings.Replace(fileInfo.Path, config.StoreDirName+"/", "", 1)
 	//filename=util.UrlEncode(filename)
 	downloadUrl = peer + "/" + config.CommonConfig.Group + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
-	fpath = config.DOCKER_DIR + fileInfo.Path + "/" + filename
-	fpathTmp = config.DOCKER_DIR + fileInfo.Path + "/" + fmt.Sprintf("%s_%s", "tmp_", filename)
+	fpath = config.DockerDir + fileInfo.Path + "/" + filename
+	fpathTmp = config.DockerDir + fileInfo.Path + "/" + fmt.Sprintf("%s_%s", "tmp_", filename)
 	timeout := fileInfo.Size/1024/1024/1 + 30
 	if config.CommonConfig.SyncTimeout > 0 {
 		timeout = config.CommonConfig.SyncTimeout
@@ -1105,7 +1105,7 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 				filename = strings.Split(fileInfo.ReName, ",")[0]
 			}
 		}
-		fpath = config.DOCKER_DIR + fileInfo.Path + "/" + filename
+		fpath = config.DockerDir + fileInfo.Path + "/" + filename
 		if !util.FileExists(fpath) {
 			log.Warn(fmt.Sprintf("file '%s' not found", fpath))
 			continue
@@ -1277,9 +1277,9 @@ func (svr *Server) CheckFileExist(ctx *gin.Context) {
 			ctx.JSON(http.StatusOK, fileInfo)
 			return
 		}
-		fpath = config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name
+		fpath = config.DockerDir + fileInfo.Path + "/" + fileInfo.Name
 		if fileInfo.ReName != "" {
-			fpath = config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName
+			fpath = config.DockerDir + fileInfo.Path + "/" + fileInfo.ReName
 		}
 		if util.Exist(fpath) {
 			ctx.JSON(http.StatusOK, fileInfo)
@@ -1335,9 +1335,9 @@ func (svr *Server) CheckFilesExist(ctx *gin.Context) {
 				fileInfos = append(fileInfos, fileInfo)
 				continue
 			}
-			filePath = config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name
+			filePath = config.DockerDir + fileInfo.Path + "/" + fileInfo.Name
 			if fileInfo.ReName != "" {
-				filePath = config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName
+				filePath = config.DockerDir + fileInfo.Path + "/" + fileInfo.ReName
 			}
 			if util.Exist(filePath) {
 				fileInfos = append(fileInfos, fileInfo)
@@ -1442,7 +1442,7 @@ func (svr *Server) SaveStat() {
 					if data, err := json.Marshal(stat); err != nil {
 						log.Error(err)
 					} else {
-						util.WriteBinFile(config.CONST_STAT_FILE_NAME, data)
+						util.WriteBinFile(config.StatFileName, data)
 					}
 				}
 			}
@@ -1560,7 +1560,7 @@ func (svr *Server) GetMd5File(ctx *gin.Context) {
 	if !IsPeer(r) {
 		return
 	}
-	filePath := config.DATA_DIR + "/" + date + "/" + config.FileMd5Name
+	filePath := config.DataDir + "/" + date + "/" + config.FileMd5Name
 	if !util.FileExists(filePath) {
 		ctx.JSON(http.StatusNotFound, filePath+"does not exist")
 		return
@@ -1583,9 +1583,9 @@ func (svr *Server) GetMd5sMapByDate(date string, filename string) (*util.CommonM
 	)
 	result = util.NewCommonMap(0)
 	if filename == "" {
-		fpath = config.DATA_DIR + "/" + date + "/" + config.FileMd5Name
+		fpath = config.DataDir + "/" + date + "/" + config.FileMd5Name
 	} else {
-		fpath = config.DATA_DIR + "/" + date + "/" + filename
+		fpath = config.DataDir + "/" + date + "/" + filename
 	}
 	if !util.FileExists(fpath) {
 		return result, fmt.Errorf("fpath %s not found", fpath)
@@ -1657,7 +1657,7 @@ func (svr *Server) SyncFileInfo(ctx *gin.Context) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	p := strings.Replace(fileInfo.Path, config.STORE_DIR+"/", "", 1)
+	p := strings.Replace(fileInfo.Path, config.StoreDir+"/", "", 1)
 	downloadUrl := fmt.Sprintf("http://%s/%s", r.Host, config.CommonConfig.Group+"/"+p+"/"+filename)
 	log.Info("SyncFileInfo: ", downloadUrl)
 
@@ -1777,9 +1777,9 @@ func (svr *Server) RemoveFile(ctx *gin.Context) {
 		name = fileInfo.ReName
 	}
 	fpath = fileInfo.Path + "/" + name
-	if fileInfo.Path != "" && util.FileExists(config.DOCKER_DIR+fpath) {
+	if fileInfo.Path != "" && util.FileExists(config.DockerDir+fpath) {
 		svr.SaveFileMd5Log(fileInfo, config.RemoveMd5FileName)
-		if err = os.Remove(config.DOCKER_DIR + fpath); err != nil {
+		if err = os.Remove(config.DockerDir + fpath); err != nil {
 			result.Message = err.Error()
 			ctx.JSON(http.StatusNotFound, result)
 			return
@@ -1873,15 +1873,15 @@ func (svr *Server) SaveUploadFile(file multipart.File, header *multipart.FileHea
 		folder = fmt.Sprintf(folder+"/%s", config.CommonConfig.PeerId)
 	}
 	if fileInfo.Scene != "" {
-		folder = fmt.Sprintf(config.STORE_DIR+"/%s/%s", fileInfo.Scene, folder)
+		folder = fmt.Sprintf(config.StoreDir+"/%s/%s", fileInfo.Scene, folder)
 	} else {
-		folder = fmt.Sprintf(config.STORE_DIR+"/%s", folder)
+		folder = fmt.Sprintf(config.StoreDir+"/%s", folder)
 	}
 	if fileInfo.Path != "" {
-		if strings.HasPrefix(fileInfo.Path, config.STORE_DIR) {
+		if strings.HasPrefix(fileInfo.Path, config.StoreDir) {
 			folder = fileInfo.Path
 		} else {
-			folder = config.STORE_DIR + "/" + fileInfo.Path
+			folder = config.StoreDir + "/" + fileInfo.Path
 		}
 	}
 	if !util.FileExists(folder) {
@@ -1931,7 +1931,7 @@ func (svr *Server) SaveUploadFile(file multipart.File, header *multipart.FileHea
 	}
 	fileInfo.Md5 = v
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
-	fileInfo.Path = strings.Replace(folder, config.DOCKER_DIR, "", 1)
+	fileInfo.Path = strings.Replace(folder, config.DockerDir, "", 1)
 	fileInfo.Peers = append(fileInfo.Peers, svr.host)
 	//fmt.Println("upload",fileInfo)
 	return fileInfo, nil
@@ -1943,7 +1943,7 @@ func (svr *Server) Upload(ctx *gin.Context) {
 		folder string
 		fpBody *os.File
 	)
-	folder = config.STORE_DIR + "/_tmp/" + util.GetToDay()
+	folder = config.StoreDir + "/_tmp/" + util.GetToDay()
 	if !util.FileExists(folder) {
 		os.MkdirAll(folder, 0777)
 
@@ -2061,9 +2061,9 @@ func (svr *Server) upload(ctx *gin.Context) {
 		if v, _ := svr.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
 			fileResult = BuildFileResult(v, r)
 			if config.CommonConfig.RenameFile {
-				os.Remove(config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
+				os.Remove(config.DockerDir + fileInfo.Path + "/" + fileInfo.ReName)
 			} else {
-				os.Remove(config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
+				os.Remove(config.DockerDir + fileInfo.Path + "/" + fileInfo.Name)
 			}
 
 			ctx.JSON(http.StatusOK, fileResult)
@@ -2119,8 +2119,8 @@ func (svr *Server) SaveSmallFile(fileInfo *FileInfo) error {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	fpath = config.DOCKER_DIR + fileInfo.Path + "/" + filename
-	largeDir = config.LARGE_DIR + "/" + config.CommonConfig.PeerId
+	fpath = config.DockerDir + fileInfo.Path + "/" + filename
+	largeDir = config.LargeDir + "/" + config.CommonConfig.PeerId
 	if !util.FileExists(largeDir) {
 		os.MkdirAll(largeDir, 0775)
 	}
@@ -2156,7 +2156,7 @@ func (svr *Server) SaveSmallFile(fileInfo *FileInfo) error {
 		}
 		srcFile.Close()
 		os.Remove(fpath)
-		fileInfo.Path = strings.Replace(largeDir, config.DOCKER_DIR, "", 1)
+		fileInfo.Path = strings.Replace(largeDir, config.DockerDir, "", 1)
 	}
 	return nil
 }
@@ -2402,7 +2402,7 @@ func (svr *Server) RemoveDownloading() {
 				keys := strings.Split(string(key), "_")
 				if len(keys) == 3 {
 					if t, err := strconv.ParseInt(keys[1], 10, 64); err == nil && time.Now().Unix()-t > 60*10 {
-						os.Remove(config.DOCKER_DIR + keys[2])
+						os.Remove(config.DockerDir + keys[2])
 					}
 				}
 			}
@@ -2423,7 +2423,7 @@ func (svr *Server) ConsumerLog() {
 func (svr *Server) LoadSearchDict() {
 	go func() {
 		log.Info("Load search dict ....")
-		f, err := os.Open(config.CONST_SEARCH_FILE_NAME)
+		f, err := os.Open(config.SearchFileName)
 		if err != nil {
 			log.Error(err)
 			return
@@ -2444,11 +2444,11 @@ func (svr *Server) LoadSearchDict() {
 }
 
 func (svr *Server) SaveSearchDict() {
-	svr.lockMap.LockKey(config.CONST_SEARCH_FILE_NAME)
-	defer svr.lockMap.UnLockKey(config.CONST_SEARCH_FILE_NAME)
+	svr.lockMap.LockKey(config.SearchFileName)
+	defer svr.lockMap.UnLockKey(config.SearchFileName)
 
 	searchDict := svr.searchMap.Get()
-	searchFile, err := os.OpenFile(config.CONST_SEARCH_FILE_NAME, os.O_RDWR, 0755)
+	searchFile, err := os.OpenFile(config.SearchFileName, os.O_RDWR, 0755)
 	if err != nil {
 		log.Error(err)
 		return
@@ -2475,11 +2475,11 @@ func (svr *Server) ConsumerUpload() {
 	ConsumerFunc := func() {
 		for wr := range svr.queueUpload {
 			svr.upload(wr.ctx)
-			svr.rtMap.AddCountInt64(config.CONST_UPLOAD_COUNTER_KEY, wr.ctx.Request.ContentLength)
-			if v, ok := svr.rtMap.GetValue(config.CONST_UPLOAD_COUNTER_KEY); ok {
+			svr.rtMap.AddCountInt64(config.UploadCounterKey, wr.ctx.Request.ContentLength)
+			if v, ok := svr.rtMap.GetValue(config.UploadCounterKey); ok {
 				if v.(int64) > 1*1024*1024*1024 {
 					var _v int64
-					svr.rtMap.Put(config.CONST_UPLOAD_COUNTER_KEY, _v)
+					svr.rtMap.Put(config.UploadCounterKey, _v)
 					debug.FreeOSMemory()
 				}
 			}
@@ -2790,12 +2790,12 @@ func (svr *Server) Reload(ctx *gin.Context) {
 		}
 		result.Status = "ok"
 		cfgJson = util.JsonEncodePretty(cfg)
-		util.WriteFile(config.CONST_CONF_FILE_NAME, cfgJson)
+		util.WriteFile(config.ConfFileName, cfgJson)
 		ctx.JSON(http.StatusOK, result)
 		return
 	}
 	if action == "reload" {
-		if data, err = ioutil.ReadFile(config.CONST_CONF_FILE_NAME); err != nil {
+		if data, err = ioutil.ReadFile(config.ConfFileName); err != nil {
 			result.Message = err.Error()
 			ctx.JSON(http.StatusNotFound, result)
 			return
@@ -2805,7 +2805,7 @@ func (svr *Server) Reload(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, result)
 			return
 		}
-		config.ParseConfig(config.CONST_CONF_FILE_NAME)
+		config.ParseConfig(config.ConfFileName)
 		svr.InitComponent(true)
 		result.Status = "ok"
 		ctx.JSON(http.StatusOK, result)
@@ -2823,8 +2823,8 @@ func (svr *Server) RemoveEmptyDir(ctx *gin.Context) {
 	r := ctx.Request
 	result.Status = "ok"
 	if IsPeer(r) {
-		go util.RemoveEmptyDir(config.DATA_DIR)
-		go util.RemoveEmptyDir(config.STORE_DIR)
+		go util.RemoveEmptyDir(config.DataDir)
+		go util.RemoveEmptyDir(config.StoreDir)
 		result.Message = "clean job start ..,don't try again!!!"
 		ctx.JSON(http.StatusOK, result)
 		return
@@ -2962,7 +2962,7 @@ func (svr *Server) ListDir(ctx *gin.Context) {
 	if tmpDir, err = os.Readlink(dir); err == nil {
 		dir = tmpDir
 	}
-	filesInfo, err = ioutil.ReadDir(config.DOCKER_DIR + config.StoreDirName + "/" + dir)
+	filesInfo, err = ioutil.ReadDir(config.DockerDir + config.StoreDirName + "/" + dir)
 	if err != nil {
 		log.Error(err)
 		result.Message = err.Error()
@@ -3062,7 +3062,7 @@ func (svr *Server) Report(ctx *gin.Context) {
 	result.Status = "ok"
 	r.ParseForm()
 	if IsPeer(r) {
-		reportFileName = config.STATIC_DIR + "/report.html"
+		reportFileName = config.StaticDir + "/report.html"
 		if util.Exist(reportFileName) {
 			if data, err = util.ReadFile(reportFileName); err != nil {
 				log.Error(err)
@@ -3186,31 +3186,10 @@ func (svr *Server) HeartBeat(ctx *gin.Context) {
 }
 
 func (svr *Server) Index(ctx *gin.Context) {
-	var (
-		uploadUrl    string
-		uploadBigUrl string
-	)
-	uploadPage := config.DefaultUploadPage
-	uploadUrl = "/upload"
-	uploadBigUrl = config.BigUploadPathSuffix
 	if config.CommonConfig.EnableWebUpload {
-		if config.CommonConfig.SupportGroupManage {
-			uploadUrl = "/" + config.CommonConfig.Group + uploadUrl
-			uploadBigUrl = "/" + config.CommonConfig.Group + config.BigUploadPathSuffix
-		}
-		uploadPageName := config.STATIC_DIR + "/upload.html"
-		if util.Exist(uploadPageName) {
-			if data, err := util.ReadFile(uploadPageName); err != nil {
-				log.Error(err)
-			} else {
-				uploadPage = string(data)
-			}
-		} else {
-			util.WriteFile(uploadPageName, uploadPage)
-		}
-		uploadPage = fmt.Sprintf(uploadPage, uploadUrl, config.CommonConfig.DefaultScene, uploadBigUrl)
-		//ctx.HTML(http.StatusOK, "upload.html", gin.H{"title": "Main website"})
-		ctx.Data(http.StatusOK, "text/html", []byte(uploadPage))
+
+		ctx.HTML(http.StatusOK, "upload.tmpl", gin.H{"title": "Main website"})
+		//ctx.Data(http.StatusOK, "text/html", []byte(config.DefaultUploadPage))
 	}
 
 	ctx.JSON(http.StatusNotFound, "web upload deny")
@@ -3338,13 +3317,13 @@ func (svr *Server) initTus() {
 		fileLog *os.File
 		bigDir  string
 	)
-	BIG_DIR := config.STORE_DIR + "/_big/" + config.CommonConfig.PeerId
+	BIG_DIR := config.StoreDir + "/_big/" + config.CommonConfig.PeerId
 	os.MkdirAll(BIG_DIR, 0775)
-	os.MkdirAll(config.LOG_DIR, 0775)
+	os.MkdirAll(config.LogDir, 0775)
 	store := filestore.FileStore{
 		Path: BIG_DIR,
 	}
-	if fileLog, err = os.OpenFile(config.LOG_DIR+"/tusd.log", os.O_CREATE|os.O_RDWR, 0666); err != nil {
+	if fileLog, err = os.OpenFile(config.LogDir+"/tusd.log", os.O_CREATE|os.O_RDWR, 0666); err != nil {
 		log.Error(err)
 		panic("initTus")
 	}
@@ -3355,7 +3334,7 @@ func (svr *Server) initTus() {
 			} else {
 				if fi.Size() > 1024*1024*500 {
 					//500M
-					util.CopyFile(config.LOG_DIR+"/tusd.log", config.LOG_DIR+"/tusd.log.2")
+					util.CopyFile(config.LogDir+"/tusd.log", config.LogDir+"/tusd.log.2")
 					fileLog.Seek(0, 0)
 					fileLog.Truncate(0)
 					fileLog.Seek(0, 2)
@@ -3393,7 +3372,7 @@ func (svr *Server) initTus() {
 			if fi.ReName != "" {
 				fn = fi.ReName
 			}
-			fp := config.DOCKER_DIR + fi.Path + "/" + fn
+			fp := config.DockerDir + fi.Path + "/" + fn
 			if util.FileExists(fp) {
 				log.Info(fmt.Sprintf("download:%s", fp))
 				return os.Open(fp)
@@ -3473,9 +3452,9 @@ func (svr *Server) initTus() {
 				if pathCustom != "" {
 					fpath = "/" + strings.Replace(pathCustom, ".", "", -1) + "/"
 				}
-				newFullPath := config.STORE_DIR + "/" + scene + fpath + config.CommonConfig.PeerId + "/" + filename
+				newFullPath := config.StoreDir + "/" + scene + fpath + config.CommonConfig.PeerId + "/" + filename
 				if pathCustom != "" {
-					newFullPath = config.STORE_DIR + "/" + scene + fpath + filename
+					newFullPath = config.StoreDir + "/" + scene + fpath + filename
 				}
 				if fi, err := svr.GetFileInfoFromLevelDB(md5sum); err != nil {
 					log.Error(err)
@@ -3500,7 +3479,7 @@ func (svr *Server) initTus() {
 					fpath2 = strings.TrimRight(fpath2, "/")
 				}
 
-				os.MkdirAll(config.DOCKER_DIR+fpath2, 0775)
+				os.MkdirAll(config.DockerDir+fpath2, 0775)
 				fileInfo := &FileInfo{
 					Name:      name,
 					Path:      fpath2,
@@ -3552,8 +3531,8 @@ func (svr *Server) FormatStatInfo() {
 		count int64
 		stat  map[string]interface{}
 	)
-	if util.FileExists(config.CONST_STAT_FILE_NAME) {
-		if data, err = util.ReadFile(config.CONST_STAT_FILE_NAME); err != nil {
+	if util.FileExists(config.StatFileName) {
+		if data, err = util.ReadFile(config.StatFileName); err != nil {
 			log.Error(err)
 		} else {
 			if err = json.Unmarshal(data, &stat); err != nil {
@@ -3703,10 +3682,10 @@ func GetFilePathFromRequest(ctx *gin.Context) (string, string) {
 		fullPath = r.RequestURI[len(config.CommonConfig.Group)+2 : len(r.RequestURI)]
 	}
 	fullPath = strings.Split(fullPath, "?")[0] // just path
-	fullPath = config.DOCKER_DIR + config.StoreDirName + "/" + fullPath
-	prefix = "/" + config.LARGE_DIR_NAME + "/"
+	fullPath = config.DockerDir + config.StoreDirName + "/" + fullPath
+	prefix = "/" + config.LargeDirName + "/"
 	if config.CommonConfig.SupportGroupManage {
-		prefix = "/" + config.CommonConfig.Group + "/" + config.LARGE_DIR_NAME + "/"
+		prefix = "/" + config.CommonConfig.Group + "/" + config.LargeDirName + "/"
 	}
 	if strings.HasPrefix(r.RequestURI, prefix) {
 		smallPath = fullPath //notice order

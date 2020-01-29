@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	FOLDERS     = []string{config.DATA_DIR, config.STORE_DIR, config.CONF_DIR, config.STATIC_DIR}
+	FOLDERS     = []string{config.DataDir, config.StoreDir, config.ConfDir, config.StaticDir}
 	VERSION     string
 	BuildTime   string
 	GoVersion   string
@@ -40,7 +40,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	FOLDERS = []string{config.DATA_DIR, config.STORE_DIR, config.CONF_DIR, config.STATIC_DIR}
+	FOLDERS = []string{config.DataDir, config.StoreDir, config.ConfDir, config.StaticDir}
 	for _, folder := range FOLDERS {
 		os.MkdirAll(folder, 0775)
 	}
