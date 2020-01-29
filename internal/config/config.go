@@ -11,20 +11,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const CONST_QUEUE_SIZE = 10000
-
 var (
 	CommonConfig Config
 
 	Json                        = jsoniter.ConfigCompatibleWithStandardLibrary
 	FileName                    string
-	defaultPort                 = ":8080"
 	DOCKER_DIR                  = ""
-	STORE_DIR                   = STORE_DIR_NAME
-	CONF_DIR                    = CONF_DIR_NAME
-	LOG_DIR                     = LOG_DIR_NAME
-	DATA_DIR                    = DATA_DIR_NAME
-	STATIC_DIR                  = STATIC_DIR_NAME
+	STORE_DIR                   = StoreDirName
+	CONF_DIR                    = ConfDirName
+	LOG_DIR                     = LogDirName
+	DATA_DIR                    = DataDirName
+	STATIC_DIR                  = StaticDirName
 	LARGE_DIR_NAME              = "haystack"
 	LARGE_DIR                   = STORE_DIR + "/haystack"
 	CONST_LEVELDB_FILE_NAME     = DATA_DIR + "/fileserver.db"
@@ -110,21 +107,24 @@ var (
 )
 
 const (
-	STORE_DIR_NAME                 = "files"
-	LOG_DIR_NAME                   = "log"
-	DATA_DIR_NAME                  = "data"
-	CONF_DIR_NAME                  = "conf"
-	STATIC_DIR_NAME                = "static"
-	CONST_STAT_FILE_COUNT_KEY      = "fileCount"
-	CONST_BIG_UPLOAD_PATH_SUFFIX   = "/big/upload/"
-	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
-	CONST_Md5_ERROR_FILE_NAME      = "errors.md5"
-	CONST_Md5_QUEUE_FILE_NAME      = "queue.md5"
-	CONST_FILE_Md5_FILE_NAME       = "files.md5"
-	CONST_REMOME_Md5_FILE_NAME     = "removes.md5"
-	CONST_SMALL_FILE_SIZE          = 1024 * 1024
-	CONST_MESSAGE_CLUSTER_IP       = "Can only be called by the cluster ip or 127.0.0.1 or admin_ips(cfg.json),current ip:%s"
-	CfgJson                        = `{
+	defaultPort            = ":8080"
+	QueueSize              = 10000
+	StoreDirName           = "files"
+	FileDownloadPathPrefix = "file/"
+	LogDirName             = "log"
+	DataDirName            = "data"
+	ConfDirName            = "conf"
+	StaticDirName          = "static"
+	StatisticsFileCountKey = "fileCount"
+	BigUploadPathSuffix    = "/big/upload/"
+	StatFileTotalSizeKey   = "totalSize"
+	Md5ErrorFileName       = "errors.md5"
+	Md5QueueFileName       = "queue.md5"
+	FileMd5Name            = "files.md5"
+	RemoveMd5FileName      = "removes.md5"
+	SmallFileSize          = 1024 * 1024
+	MessageClusterIp       = "Can only be called by the cluster ip or 127.0.0.1 or admin_ips(cfg.json),current ip:%s"
+	CfgJson                = `{
 	"绑定端号": "端口",
 	"addr": "%s",
 	"PeerID": "集群内唯一,请使用0-9的单字符，默认自动生成",
@@ -286,11 +286,11 @@ func LoadDefaultConfig() {
 			DOCKER_DIR = DOCKER_DIR + "/"
 		}
 	}
-	STORE_DIR = DOCKER_DIR + STORE_DIR_NAME
-	CONF_DIR = DOCKER_DIR + CONF_DIR_NAME
-	DATA_DIR = DOCKER_DIR + DATA_DIR_NAME
-	LOG_DIR = DOCKER_DIR + LOG_DIR_NAME
-	STATIC_DIR = DOCKER_DIR + STATIC_DIR_NAME
+	STORE_DIR = DOCKER_DIR + StoreDirName
+	CONF_DIR = DOCKER_DIR + ConfDirName
+	DATA_DIR = DOCKER_DIR + DataDirName
+	LOG_DIR = DOCKER_DIR + LogDirName
+	STATIC_DIR = DOCKER_DIR + StaticDirName
 	LARGE_DIR_NAME = "haystack"
 	LARGE_DIR = STORE_DIR + "/haystack"
 	CONST_LEVELDB_FILE_NAME = DATA_DIR + "/fileserver.db"
@@ -315,7 +315,7 @@ func LoadDefaultConfig() {
 
 	ParseConfig(CONST_CONF_FILE_NAME)
 	if CommonConfig.QueueSize == 0 {
-		CommonConfig.QueueSize = CONST_QUEUE_SIZE
+		CommonConfig.QueueSize = QueueSize
 	}
 	if CommonConfig.PeerId == "" {
 		CommonConfig.PeerId = peerId

@@ -88,9 +88,9 @@ func NewServer() *Server {
 		rtMap:          util.NewCommonMap(0),
 		sceneMap:       util.NewCommonMap(0),
 		searchMap:      util.NewCommonMap(0),
-		queueToPeers:   make(chan FileInfo, config.CONST_QUEUE_SIZE),
-		queueFromPeers: make(chan FileInfo, config.CONST_QUEUE_SIZE),
-		queueFileLog:   make(chan *FileLog, config.CONST_QUEUE_SIZE),
+		queueToPeers:   make(chan FileInfo, config.QueueSize),
+		queueFromPeers: make(chan FileInfo, config.QueueSize),
+		queueFileLog:   make(chan *FileLog, config.QueueSize),
 		queueUpload:    make(chan WrapReqResp, 100),
 		sumMap:         util.NewCommonMap(365 * 3),
 	}
@@ -110,10 +110,10 @@ func NewServer() *Server {
 		Transport:        defaultTransport,
 	}
 	httplib.SetDefaultSetting(settins)
-	server.statMap.Put(config.CONST_STAT_FILE_COUNT_KEY, int64(0))
-	server.statMap.Put(config.CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
-	server.statMap.Put(util.GetToDay()+"_"+config.CONST_STAT_FILE_COUNT_KEY, int64(0))
-	server.statMap.Put(util.GetToDay()+"_"+config.CONST_STAT_FILE_TOTAL_SIZE_KEY, int64(0))
+	server.statMap.Put(config.StatisticsFileCountKey, int64(0))
+	server.statMap.Put(config.StatFileTotalSizeKey, int64(0))
+	server.statMap.Put(util.GetToDay()+"_"+config.StatisticsFileCountKey, int64(0))
+	server.statMap.Put(util.GetToDay()+"_"+config.StatFileTotalSizeKey, int64(0))
 	server.curDate = util.GetToDay()
 	opts := &opt.Options{
 		CompactionTableSize: 1024 * 1024 * 20,
@@ -157,7 +157,7 @@ func (svr *Server) BackUpMetaDataByDate(date string) {
 		metaFileName string
 		fi           os.FileInfo
 	)
-	logFileName = config.DATA_DIR + "/" + date + "/" + config.CONST_FILE_Md5_FILE_NAME
+	logFileName = config.DATA_DIR + "/" + date + "/" + config.FileMd5Name
 	svr.lockMap.LockKey(logFileName)
 	defer svr.lockMap.UnLockKey(logFileName)
 	metaFileName = config.DATA_DIR + "/" + date + "/" + "meta.data"
@@ -181,7 +181,7 @@ func (svr *Server) BackUpMetaDataByDate(date string) {
 	}
 	defer fileMeta.Close()
 	keyPrefix = "%s_%s_"
-	keyPrefix = fmt.Sprintf(keyPrefix, date, config.CONST_FILE_Md5_FILE_NAME)
+	keyPrefix = fmt.Sprintf(keyPrefix, date, config.FileMd5Name)
 	iter := svr.logDB.NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
 	defer iter.Release()
 	for iter.Next() {
@@ -263,9 +263,9 @@ func (svr *Server) RepairFileInfoFromFile() {
 					file_path = strings.Replace(file_path, config.DOCKER_DIR, "", 1)
 				}
 				if pathPrefix != "" {
-					file_path = strings.Replace(file_path, pathPrefix, config.STORE_DIR_NAME, 1)
+					file_path = strings.Replace(file_path, pathPrefix, config.StoreDirName, 1)
 				}
-				if strings.HasPrefix(file_path, config.STORE_DIR_NAME+"/"+config.LARGE_DIR_NAME) {
+				if strings.HasPrefix(file_path, config.StoreDirName+"/"+config.LARGE_DIR_NAME) {
 					log.Info(fmt.Sprintf("ignore small file file %s", file_path+"/"+fi.Name()))
 					continue
 				}
@@ -294,7 +294,7 @@ func (svr *Server) RepairFileInfoFromFile() {
 				svr.AppendToQueue(&fileInfo)
 				//svr.postFileToPeer(&fileInfo)
 				svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.ldb)
-				//svr.SaveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME)
+				//svr.SaveFileMd5Log(&fileInfo, FileMd5Name)
 			}
 		}
 		return nil
@@ -334,7 +334,7 @@ func (svr *Server) WatchFilesChange() {
 	w = watcher.New()
 	w.FilterOps(watcher.Create)
 	//w.FilterOps(watcher.Create, watcher.Remove)
-	curDir, err = filepath.Abs(filepath.Dir(config.STORE_DIR_NAME))
+	curDir, err = filepath.Abs(filepath.Dir(config.StoreDirName))
 	if err != nil {
 		log.Error(err)
 	}
@@ -348,7 +348,7 @@ func (svr *Server) WatchFilesChange() {
 
 				fpath := strings.Replace(event.Path, curDir+string(os.PathSeparator), "", 1)
 				if isLink {
-					fpath = strings.Replace(event.Path, curDir, config.STORE_DIR_NAME, 1)
+					fpath = strings.Replace(event.Path, curDir, config.StoreDirName, 1)
 				}
 				fpath = strings.Replace(fpath, string(os.PathSeparator), "/", -1)
 				sum := util.MD5(fpath)
@@ -395,7 +395,7 @@ func (svr *Server) WatchFilesChange() {
 			}
 		}
 	}()
-	if dir, err := os.Readlink(config.STORE_DIR_NAME); err == nil {
+	if dir, err := os.Readlink(config.StoreDirName); err == nil {
 
 		if strings.HasSuffix(dir, string(os.PathSeparator)) {
 			dir = strings.TrimSuffix(dir, string(os.PathSeparator))
@@ -408,11 +408,11 @@ func (svr *Server) WatchFilesChange() {
 		w.Ignore(dir + "/_tmp/")
 		w.Ignore(dir + "/" + config.LARGE_DIR_NAME + "/")
 	}
-	if err := w.AddRecursive("./" + config.STORE_DIR_NAME); err != nil {
+	if err := w.AddRecursive("./" + config.StoreDirName); err != nil {
 		log.Error(err)
 	}
-	w.Ignore("./" + config.STORE_DIR_NAME + "/_tmp/")
-	w.Ignore("./" + config.STORE_DIR_NAME + "/" + config.LARGE_DIR_NAME + "/")
+	w.Ignore("./" + config.StoreDirName + "/_tmp/")
+	w.Ignore("./" + config.StoreDirName + "/" + config.LARGE_DIR_NAME + "/")
 	if err := w.Start(time.Millisecond * 100); err != nil {
 		log.Error(err)
 	}
@@ -436,7 +436,7 @@ func (svr *Server) RepairStatByDate(date string) StatDateFileInfo {
 		stat      StatDateFileInfo
 	)
 	keyPrefix = "%s_%s_"
-	keyPrefix = fmt.Sprintf(keyPrefix, date, config.CONST_FILE_Md5_FILE_NAME)
+	keyPrefix = fmt.Sprintf(keyPrefix, date, config.FileMd5Name)
 	iter := Svr.logDB.NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
 	defer iter.Release()
 	for iter.Next() {
@@ -446,8 +446,8 @@ func (svr *Server) RepairStatByDate(date string) StatDateFileInfo {
 		fileCount = fileCount + 1
 		fileSize = fileSize + fileInfo.Size
 	}
-	svr.statMap.Put(date+"_"+config.CONST_STAT_FILE_COUNT_KEY, fileCount)
-	svr.statMap.Put(date+"_"+config.CONST_STAT_FILE_TOTAL_SIZE_KEY, fileSize)
+	svr.statMap.Put(date+"_"+config.StatisticsFileCountKey, fileCount)
+	svr.statMap.Put(date+"_"+config.StatFileTotalSizeKey, fileSize)
 	svr.SaveStat()
 	stat.Date = date
 	stat.FileCount = fileCount
@@ -522,7 +522,7 @@ func (svr *Server) ParseSmallFile(filename string) (string, int64, int, error) {
 	if length, err = strconv.Atoi(pos[2]); err != nil {
 		return filename, offset, -1, err
 	}
-	if length > config.CONST_SMALL_FILE_SIZE || offset < 0 {
+	if length > config.SmallFileSize || offset < 0 {
 		err = errors.New("invalid filesize or offset")
 		return filename, -1, -1, err
 	}
@@ -574,7 +574,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		os.MkdirAll(config.DOCKER_DIR+fileInfo.Path, 0775)
 	}
 	//fmt.Println("downloadFromPeer",fileInfo)
-	p := strings.Replace(fileInfo.Path, config.STORE_DIR_NAME+"/", "", 1)
+	p := strings.Replace(fileInfo.Path, config.StoreDirName+"/", "", 1)
 	//filename=util.UrlEncode(filename)
 	downloadUrl = peer + "/" + config.CommonConfig.Group + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
@@ -608,7 +608,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 			return
 		}
 		if os.Rename(fpathTmp, fpath) == nil {
-			//svr.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
+			//svr.SaveFileMd5Log(fileInfo, FileMd5Name)
 			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.ldb)
 		}
 		return
@@ -639,7 +639,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 			log.Warn(err)
 			return
 		}
-		svr.SaveFileMd5Log(fileInfo, config.CONST_FILE_Md5_FILE_NAME)
+		svr.SaveFileMd5Log(fileInfo, config.FileMd5Name)
 		return
 	}
 	if err = req.ToFile(fpathTmp); err != nil {
@@ -669,7 +669,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		return
 	}
 	if os.Rename(fpathTmp, fpath) == nil {
-		svr.SaveFileMd5Log(fileInfo, config.CONST_FILE_Md5_FILE_NAME)
+		svr.SaveFileMd5Log(fileInfo, config.FileMd5Name)
 	}
 }
 
@@ -1059,7 +1059,7 @@ func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceU
 			if !util.Contains(svr.host, fileInfo.Peers) {
 				fileInfo.Peers = append(fileInfo.Peers, svr.host) // peer is null
 			}
-			if filename == config.CONST_Md5_QUEUE_FILE_NAME {
+			if filename == config.Md5QueueFileName {
 				svr.AppendToDownloadQueue(fileInfo)
 				continue
 			}
@@ -1147,7 +1147,7 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 		if !strings.HasPrefix(result, "http://") || err != nil {
 			log.Error(err)
-			svr.SaveFileMd5Log(fileInfo, config.CONST_Md5_ERROR_FILE_NAME)
+			svr.SaveFileMd5Log(fileInfo, config.Md5ErrorFileName)
 		}
 		if strings.HasPrefix(result, "http://") {
 			log.Info(result)
@@ -1165,7 +1165,7 @@ func (svr *Server) SaveFileMd5Log(fileInfo *FileInfo, filename string) {
 	var (
 		info FileInfo
 	)
-	for len(svr.queueFileLog)+len(svr.queueFileLog)/10 > config.CONST_QUEUE_SIZE {
+	for len(svr.queueFileLog)+len(svr.queueFileLog)/10 > config.QueueSize {
 		time.Sleep(time.Second * 1)
 	}
 	info = *fileInfo
@@ -1201,11 +1201,11 @@ func (svr *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 	}
 	fullpath = fileInfo.Path + "/" + outname
 	logKey = fmt.Sprintf("%s_%s_%s", logDate, filename, fileInfo.Md5)
-	if filename == config.CONST_FILE_Md5_FILE_NAME {
+	if filename == config.FileMd5Name {
 		//svr.searchMap.Put(fileInfo.Md5, fileInfo.Name)
 		if ok, err = svr.IsExistFromLevelDB(fileInfo.Md5, svr.ldb); !ok {
-			svr.statMap.AddCountInt64(logDate+"_"+config.CONST_STAT_FILE_COUNT_KEY, 1)
-			svr.statMap.AddCountInt64(logDate+"_"+config.CONST_STAT_FILE_TOTAL_SIZE_KEY, fileInfo.Size)
+			svr.statMap.AddCountInt64(logDate+"_"+config.StatisticsFileCountKey, 1)
+			svr.statMap.AddCountInt64(logDate+"_"+config.StatFileTotalSizeKey, fileInfo.Size)
 			svr.SaveStat()
 		}
 		if _, err = svr.SaveFileInfoToLevelDB(logKey, fileInfo, svr.logDB); err != nil {
@@ -1219,11 +1219,11 @@ func (svr *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 		}
 		return
 	}
-	if filename == config.CONST_REMOME_Md5_FILE_NAME {
+	if filename == config.RemoveMd5FileName {
 		//svr.searchMap.Remove(fileInfo.Md5)
 		if ok, err = svr.IsExistFromLevelDB(fileInfo.Md5, svr.ldb); ok {
-			svr.statMap.AddCountInt64(logDate+"_"+config.CONST_STAT_FILE_COUNT_KEY, -1)
-			svr.statMap.AddCountInt64(logDate+"_"+config.CONST_STAT_FILE_TOTAL_SIZE_KEY, -fileInfo.Size)
+			svr.statMap.AddCountInt64(logDate+"_"+config.StatisticsFileCountKey, -1)
+			svr.statMap.AddCountInt64(logDate+"_"+config.StatFileTotalSizeKey, -fileInfo.Size)
 			svr.SaveStat()
 		}
 		svr.RemoveKeyFromLevelDB(logKey, svr.logDB)
@@ -1235,7 +1235,7 @@ func (svr *Server) saveFileMd5Log(fileInfo *FileInfo, filename string) {
 			log.Error("RemoveKeyFromLevelDB", err, fileInfo)
 		}
 		// remove files.md5 for stat info(repair from logDB)
-		logKey = fmt.Sprintf("%s_%s_%s", logDate, config.CONST_FILE_Md5_FILE_NAME, fileInfo.Md5)
+		logKey = fmt.Sprintf("%s_%s_%s", logDate, config.FileMd5Name, fileInfo.Md5)
 		svr.RemoveKeyFromLevelDB(logKey, svr.logDB)
 		return
 	}
@@ -1394,9 +1394,9 @@ func (svr *Server) Sync(ctx *gin.Context) {
 	}
 	date = strings.Replace(date, ".", "", -1)
 	if isForceUpload {
-		go svr.CheckFileAndSendToPeer(date, config.CONST_FILE_Md5_FILE_NAME, isForceUpload)
+		go svr.CheckFileAndSendToPeer(date, config.FileMd5Name, isForceUpload)
 	} else {
-		go svr.CheckFileAndSendToPeer(date, config.CONST_Md5_ERROR_FILE_NAME, isForceUpload)
+		go svr.CheckFileAndSendToPeer(date, config.Md5ErrorFileName, isForceUpload)
 	}
 	result.Status = "ok"
 	result.Message = "job is running"
@@ -1423,7 +1423,7 @@ func (svr *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
 }
 
 // Read: SaveStat read data from statMap(which is concurrent safe map), check if the
-// "CONST_STAT_FILE_COUNT_KEY" key exists, if exists, then load all statMap data to file "stat.json"
+// "StatisticsFileCountKey" key exists, if exists, then load all statMap data to file "stat.json"
 func (svr *Server) SaveStat() {
 	SaveStatFunc := func() {
 		defer func() {
@@ -1435,7 +1435,7 @@ func (svr *Server) SaveStat() {
 			}
 		}()
 		stat := svr.statMap.Get()
-		if v, ok := stat[config.CONST_STAT_FILE_COUNT_KEY]; ok {
+		if v, ok := stat[config.StatisticsFileCountKey]; ok {
 			switch v.(type) {
 			case int64, int32, int, float64, float32:
 				if v.(int64) >= 0 {
@@ -1476,7 +1476,7 @@ func (svr *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *lev
 	}
 	if db == svr.ldb { //search slow ,write fast, double write logDB
 		logDate := util.GetDayFromTimeStamp(fileInfo.TimeStamp)
-		logKey := fmt.Sprintf("%s_%s_%s", logDate, config.CONST_FILE_Md5_FILE_NAME, fileInfo.Md5)
+		logKey := fmt.Sprintf("%s_%s_%s", logDate, config.FileMd5Name, fileInfo.Md5)
 		svr.logDB.Put([]byte(logKey), data, nil)
 	}
 	return fileInfo, nil
@@ -1518,7 +1518,7 @@ func (svr *Server) GetClusterNotPermitMessage(r *http.Request) string {
 	var (
 		message string
 	)
-	message = fmt.Sprintf(config.CONST_MESSAGE_CLUSTER_IP, util.GetClientIp(r))
+	message = fmt.Sprintf(config.MessageClusterIp, util.GetClientIp(r))
 	return message
 }
 
@@ -1537,7 +1537,7 @@ func (svr *Server) GetMd5sForWeb(ctx *gin.Context) {
 		return
 	}
 	date = r.FormValue("date")
-	if result, err = svr.GetMd5sByDate(date, config.CONST_FILE_Md5_FILE_NAME); err != nil {
+	if result, err = svr.GetMd5sByDate(date, config.FileMd5Name); err != nil {
 		log.Error(err)
 		ctx.JSON(http.StatusNotFound, err.Error())
 		return
@@ -1560,7 +1560,7 @@ func (svr *Server) GetMd5File(ctx *gin.Context) {
 	if !IsPeer(r) {
 		return
 	}
-	filePath := config.DATA_DIR + "/" + date + "/" + config.CONST_FILE_Md5_FILE_NAME
+	filePath := config.DATA_DIR + "/" + date + "/" + config.FileMd5Name
 	if !util.FileExists(filePath) {
 		ctx.JSON(http.StatusNotFound, filePath+"does not exist")
 		return
@@ -1583,7 +1583,7 @@ func (svr *Server) GetMd5sMapByDate(date string, filename string) (*util.CommonM
 	)
 	result = util.NewCommonMap(0)
 	if filename == "" {
-		fpath = config.DATA_DIR + "/" + date + "/" + config.CONST_FILE_Md5_FILE_NAME
+		fpath = config.DATA_DIR + "/" + date + "/" + config.FileMd5Name
 	} else {
 		fpath = config.DATA_DIR + "/" + date + "/" + filename
 	}
@@ -1650,7 +1650,7 @@ func (svr *Server) SyncFileInfo(ctx *gin.Context) {
 		// optimize migrate
 		svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.ldb)
 	} else {
-		svr.SaveFileMd5Log(&fileInfo, config.CONST_Md5_QUEUE_FILE_NAME)
+		svr.SaveFileMd5Log(&fileInfo, config.Md5QueueFileName)
 	}
 	svr.AppendToDownloadQueue(&fileInfo)
 	filename = fileInfo.Name
@@ -1697,7 +1697,7 @@ func (svr *Server) GetFileInfo(ctx *gin.Context) {
 	}
 	md5sum = r.FormValue("md5")
 	if filePath != "" {
-		filePath = strings.Replace(filePath, "/"+config.CommonConfig.Group+"/", config.STORE_DIR_NAME+"/", 1)
+		filePath = strings.Replace(filePath, "/"+config.CommonConfig.Group+"/", config.StoreDirName+"/", 1)
 		md5sum = util.MD5(filePath)
 	}
 	if fileInfo, err = svr.GetFileInfoFromLevelDB(md5sum); err != nil {
@@ -1739,7 +1739,7 @@ func (svr *Server) RemoveFile(ctx *gin.Context) {
 		return
 	}
 	if fpath != "" && md5sum == "" {
-		fpath = strings.Replace(fpath, "/"+config.CommonConfig.Group+"/", config.STORE_DIR_NAME+"/", 1)
+		fpath = strings.Replace(fpath, "/"+config.CommonConfig.Group+"/", config.StoreDirName+"/", 1)
 		md5sum = util.MD5(fpath)
 	}
 	if inner != "1" {
@@ -1778,7 +1778,7 @@ func (svr *Server) RemoveFile(ctx *gin.Context) {
 	}
 	fpath = fileInfo.Path + "/" + name
 	if fileInfo.Path != "" && util.FileExists(config.DOCKER_DIR+fpath) {
-		svr.SaveFileMd5Log(fileInfo, config.CONST_REMOME_Md5_FILE_NAME)
+		svr.SaveFileMd5Log(fileInfo, config.RemoveMd5FileName)
 		if err = os.Remove(config.DOCKER_DIR + fpath); err != nil {
 			result.Message = err.Error()
 			ctx.JSON(http.StatusNotFound, result)
@@ -1831,8 +1831,8 @@ func BuildFileResult(fileInfo *FileInfo, r *http.Request) FileResult {
 	if fileInfo.ReName != "" {
 		outname = fileInfo.ReName
 	}
-	p = strings.Replace(fileInfo.Path, config.STORE_DIR_NAME+"/", "", 1)
-	p = p + "/" + outname
+	p = strings.Replace(fileInfo.Path, config.StoreDirName+"/", "", 1)
+	p = config.FileDownloadPathPrefix + p + "/" + outname
 
 	downloadUrl = fmt.Sprintf("http://%s/%s", host, p)
 	if config.CommonConfig.DownloadDomain != "" {
@@ -2023,7 +2023,7 @@ func (svr *Server) upload(ctx *gin.Context) {
 		if secret, ok = svr.sceneMap.GetValue(scene); ok {
 			if !svr.VerifyGoogleCode(secret.(string), code, int64(config.CommonConfig.DownloadTokenExpire/30)) {
 				util.NotPermit(w, r)
-				ctx.JSON(http.StatusNotFound, "invalid request,error google code")
+				ctx.JSON(http.StatusUnauthorized, "invalid request,error google code")
 				return
 			}
 		}
@@ -2084,14 +2084,14 @@ func (svr *Server) upload(ctx *gin.Context) {
 		// bugfix filecount stat
 		fileInfo.Md5 = util.MD5(svr.GetFilePathByInfo(&fileInfo, false))
 	}
-	if config.CommonConfig.EnableMergeSmallFile && fileInfo.Size < config.CONST_SMALL_FILE_SIZE {
+	if config.CommonConfig.EnableMergeSmallFile && fileInfo.Size < config.SmallFileSize {
 		if err = svr.SaveSmallFile(&fileInfo); err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusNotFound, err.Error())
 			return
 		}
 	}
-	svr.saveFileMd5Log(&fileInfo, config.CONST_FILE_Md5_FILE_NAME) //maybe slow
+	svr.saveFileMd5Log(&fileInfo, config.FileMd5Name) //maybe slow
 	go svr.postFileToPeer(&fileInfo)
 	if fileInfo.Size <= 0 {
 		log.Error("file size is zero")
@@ -2314,7 +2314,7 @@ func (svr *Server) GetStat() []StatDateFileInfo {
 	}
 	for i := min; i <= max; i++ {
 		s := fmt.Sprintf("%d", i)
-		if v, ok := svr.statMap.GetValue(s + "_" + config.CONST_STAT_FILE_TOTAL_SIZE_KEY); ok {
+		if v, ok := svr.statMap.GetValue(s + "_" + config.StatFileTotalSizeKey); ok {
 			var info StatDateFileInfo
 			info.Date = s
 			switch v.(type) {
@@ -2322,7 +2322,7 @@ func (svr *Server) GetStat() []StatDateFileInfo {
 				info.TotalSize = v.(int64)
 				total.TotalSize = total.TotalSize + v.(int64)
 			}
-			if v, ok := svr.statMap.GetValue(s + "_" + config.CONST_STAT_FILE_COUNT_KEY); ok {
+			if v, ok := svr.statMap.GetValue(s + "_" + config.StatisticsFileCountKey); ok {
 				switch v.(type) {
 				case int64:
 					info.FileCount = v.(int64)
@@ -2355,14 +2355,14 @@ func (svr *Server) RegisterExit() {
 // Read: append the file info to queen channel, the file info will send to all peers
 func (svr *Server) AppendToQueue(fileInfo *FileInfo) {
 
-	for (len(svr.queueToPeers) + config.CONST_QUEUE_SIZE/10) > config.CONST_QUEUE_SIZE {
+	for (len(svr.queueToPeers) + config.QueueSize/10) > config.QueueSize {
 		time.Sleep(time.Millisecond * 50)
 	}
 	svr.queueToPeers <- *fileInfo
 }
 
 func (svr *Server) AppendToDownloadQueue(fileInfo *FileInfo) {
-	for (len(svr.queueFromPeers) + config.CONST_QUEUE_SIZE/10) > config.CONST_QUEUE_SIZE {
+	for (len(svr.queueFromPeers) + config.QueueSize/10) > config.QueueSize {
 		time.Sleep(time.Millisecond * 50)
 	}
 	svr.queueFromPeers <- *fileInfo
@@ -2541,7 +2541,7 @@ func (svr *Server) AutoRepair(forceRepair bool) {
 				if dateStat.Date == "all" {
 					continue
 				}
-				countKey = dateStat.Date + "_" + config.CONST_STAT_FILE_COUNT_KEY
+				countKey = dateStat.Date + "_" + config.StatisticsFileCountKey
 				if v, ok := svr.statMap.GetValue(countKey); ok {
 					switch v.(type) {
 					case int64:
@@ -2554,7 +2554,7 @@ func (svr *Server) AutoRepair(forceRepair bool) {
 							if md5s, err = req.String(); err != nil {
 								continue
 							}
-							if localSet, err = svr.GetMd5sByDate(dateStat.Date, config.CONST_FILE_Md5_FILE_NAME); err != nil {
+							if localSet, err = svr.GetMd5sByDate(dateStat.Date, config.FileMd5Name); err != nil {
 								log.Error(err)
 								continue
 							}
@@ -2620,7 +2620,7 @@ func (svr *Server) CleanLogLevelDBByDate(date string, filename string) {
 func (svr *Server) CleanAndBackUp() {
 	Clean := func() {
 		if svr.curDate != util.GetToDay() {
-			filenames := []string{config.CONST_Md5_QUEUE_FILE_NAME, config.CONST_Md5_ERROR_FILE_NAME, config.CONST_REMOME_Md5_FILE_NAME}
+			filenames := []string{config.Md5QueueFileName, config.Md5ErrorFileName, config.RemoveMd5FileName}
 			yesterday := util.GetDayFromTimeStamp(time.Now().AddDate(0, 0, -1).Unix())
 			for _, filename := range filenames {
 				svr.CleanLogLevelDBByDate(yesterday, filename)
@@ -2667,7 +2667,7 @@ func (svr *Server) LoadFileInfoByDate(date string, filename string) (mapset.Set,
 }
 
 func (svr *Server) LoadQueueSendToPeer() {
-	if queue, err := svr.LoadFileInfoByDate(util.GetToDay(), config.CONST_Md5_QUEUE_FILE_NAME); err != nil {
+	if queue, err := svr.LoadFileInfoByDate(util.GetToDay(), config.Md5QueueFileName); err != nil {
 		log.Error(err)
 	} else {
 		for fileInfo := range queue.Iter() {
@@ -2962,7 +2962,7 @@ func (svr *Server) ListDir(ctx *gin.Context) {
 	if tmpDir, err = os.Readlink(dir); err == nil {
 		dir = tmpDir
 	}
-	filesInfo, err = ioutil.ReadDir(config.DOCKER_DIR + config.STORE_DIR_NAME + "/" + dir)
+	filesInfo, err = ioutil.ReadDir(config.DOCKER_DIR + config.StoreDirName + "/" + dir)
 	if err != nil {
 		log.Error(err)
 		result.Message = err.Error()
@@ -2976,7 +2976,7 @@ func (svr *Server) ListDir(ctx *gin.Context) {
 			IsDir:   f.IsDir(),
 			ModTime: f.ModTime().Unix(),
 			Path:    dir,
-			Md5:     util.MD5(strings.Replace(config.STORE_DIR_NAME+"/"+dir+"/"+f.Name(), "//", "/", -1)),
+			Md5:     util.MD5(strings.Replace(config.StoreDirName+"/"+dir+"/"+f.Name(), "//", "/", -1)),
 		}
 		filesResult = append(filesResult, fi)
 	}
@@ -3129,17 +3129,17 @@ func (svr *Server) Status(ctx *gin.Context) {
 	sts["Fs.QueueFromPeers"] = len(svr.queueFromPeers)
 	sts["Fs.QueueToPeers"] = len(svr.queueToPeers)
 	sts["Fs.QueueFileLog"] = len(svr.queueFileLog)
-	for _, k := range []string{config.CONST_FILE_Md5_FILE_NAME, config.CONST_Md5_ERROR_FILE_NAME, config.CONST_Md5_QUEUE_FILE_NAME} {
+	for _, k := range []string{config.FileMd5Name, config.Md5ErrorFileName, config.Md5QueueFileName} {
 		k2 := fmt.Sprintf("%s_%s", today, k)
 		if v, ok = svr.sumMap.GetValue(k2); ok {
 			sumset = v.(mapset.Set)
-			if k == config.CONST_Md5_QUEUE_FILE_NAME {
+			if k == config.Md5QueueFileName {
 				sts["Fs.QueueSetSize"] = sumset.Cardinality()
 			}
-			if k == config.CONST_Md5_ERROR_FILE_NAME {
+			if k == config.Md5ErrorFileName {
 				sts["Fs.ErrorSetSize"] = sumset.Cardinality()
 			}
-			if k == config.CONST_FILE_Md5_FILE_NAME {
+			if k == config.FileMd5Name {
 				sts["Fs.FileSetSize"] = sumset.Cardinality()
 			}
 		}
@@ -3192,11 +3192,11 @@ func (svr *Server) Index(ctx *gin.Context) {
 	)
 	uploadPage := config.DefaultUploadPage
 	uploadUrl = "/upload"
-	uploadBigUrl = config.CONST_BIG_UPLOAD_PATH_SUFFIX
+	uploadBigUrl = config.BigUploadPathSuffix
 	if config.CommonConfig.EnableWebUpload {
 		if config.CommonConfig.SupportGroupManage {
 			uploadUrl = "/" + config.CommonConfig.Group + uploadUrl
-			uploadBigUrl = "/" + config.CommonConfig.Group + config.CONST_BIG_UPLOAD_PATH_SUFFIX
+			uploadBigUrl = "/" + config.CommonConfig.Group + config.BigUploadPathSuffix
 		}
 		uploadPageName := config.STATIC_DIR + "/upload.html"
 		if util.IsExist(uploadPageName) {
@@ -3365,9 +3365,9 @@ func (svr *Server) initTus() {
 		}
 	}()
 	l := slog.New(fileLog, "[tusd] ", slog.LstdFlags)
-	bigDir = config.CONST_BIG_UPLOAD_PATH_SUFFIX
+	bigDir = config.BigUploadPathSuffix
 	if config.CommonConfig.SupportGroupManage {
-		bigDir = fmt.Sprintf("/%s%s", config.CommonConfig.Group, config.CONST_BIG_UPLOAD_PATH_SUFFIX)
+		bigDir = fmt.Sprintf("/%s%s", config.CommonConfig.Group, config.BigUploadPathSuffix)
 	}
 	composer := tusd.NewStoreComposer()
 	// support raw tus upload and download
@@ -3494,9 +3494,9 @@ func (svr *Server) initTus() {
 					}
 				}
 				fpath2 := ""
-				fpath2 = config.STORE_DIR_NAME + "/" + config.CommonConfig.DefaultScene + fpath + config.CommonConfig.PeerId
+				fpath2 = config.StoreDirName + "/" + config.CommonConfig.DefaultScene + fpath + config.CommonConfig.PeerId
 				if pathCustom != "" {
-					fpath2 = config.STORE_DIR_NAME + "/" + config.CommonConfig.DefaultScene + fpath
+					fpath2 = config.StoreDirName + "/" + config.CommonConfig.DefaultScene + fpath
 					fpath2 = strings.TrimRight(fpath2, "/")
 				}
 
@@ -3521,7 +3521,7 @@ func (svr *Server) initTus() {
 					//assosiate file id
 					log.Error(err)
 				}
-				svr.SaveFileMd5Log(fileInfo, config.CONST_FILE_Md5_FILE_NAME)
+				svr.SaveFileMd5Log(fileInfo, config.FileMd5Name)
 				go svr.postFileToPeer(fileInfo)
 				callBack := func(info tusd.FileInfo, fileInfo *FileInfo) {
 					if callback_url, ok := info.MetaData["callback_url"]; ok {
@@ -3703,7 +3703,7 @@ func GetFilePathFromRequest(ctx *gin.Context) (string, string) {
 		fullPath = r.RequestURI[len(config.CommonConfig.Group)+2 : len(r.RequestURI)]
 	}
 	fullPath = strings.Split(fullPath, "?")[0] // just path
-	fullPath = config.DOCKER_DIR + config.STORE_DIR_NAME + "/" + fullPath
+	fullPath = config.DOCKER_DIR + config.StoreDirName + "/" + fullPath
 	prefix = "/" + config.LARGE_DIR_NAME + "/"
 	if config.CommonConfig.SupportGroupManage {
 		prefix = "/" + config.CommonConfig.Group + "/" + config.LARGE_DIR_NAME + "/"

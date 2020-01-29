@@ -59,7 +59,7 @@ func main() {
 	svr := model.Svr
 	go func() {
 		for {
-			svr.CheckFileAndSendToPeer(util.GetToDay(), config.CONST_Md5_ERROR_FILE_NAME, false)
+			svr.CheckFileAndSendToPeer(util.GetToDay(), config.Md5ErrorFileName, false)
 			//fmt.Println("CheckFileAndSendToPeer")
 			time.Sleep(time.Second * time.Duration(config.CommonConfig.RefreshInterval))
 			//svr.util.RemoveEmptyDir(STORE_DIR)

@@ -14,12 +14,12 @@ func registerRoutes(app *gin.Engine) {
 	if config.CommonConfig.SupportGroupManage {
 		groupRoute = "/" + config.CommonConfig.Group
 	}
-	app.Static("/"+config.STORE_DIR_NAME, config.CommonConfig.AbsRunningDir)
+	app.Static("/"+config.StoreDirName, config.CommonConfig.AbsRunningDir)
 	// http.Dir allows to list the files in the given dir, and can not set
 	// groupRoute path is not allowed, conflict with normal api
-	// app.StaticFS("/file", http.Dir(config.CommonConfig.AbsRunningDir+"/"+config.STORE_DIR_NAME))
+	app.StaticFS("/file", http.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName))
 	// gin.Dir can set  if allows to list the files in the given dir
-	app.StaticFS("/file", gin.Dir(config.CommonConfig.AbsRunningDir+"/"+config.STORE_DIR_NAME, false))
+	app.StaticFS("/file", gin.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName, false))
 
 	v1 := app.Group(groupRoute)
 	{
@@ -48,7 +48,7 @@ func registerRoutes(app *gin.Engine) {
 		v1.PUT("/reload", model.Svr.Reload)
 		v1.PUT("/repair_fileinfo", model.Svr.RepairFileInfo)
 		v1.PUT("/syncfile_info", model.Svr.SyncFileInfo)
-		
+
 		v1.DELETE("/delete", model.Svr.RemoveFile)
 		v1.DELETE("/remove_empty_dir", model.Svr.RemoveEmptyDir)
 	}
