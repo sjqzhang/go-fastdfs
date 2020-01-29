@@ -20,7 +20,6 @@ func registerRoutes(app *gin.Engine) {
 	// app.StaticFS("/file", http.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName))
 	// gin.Dir can set  if allows to list the files in the given dir
 	app.StaticFS("/file", gin.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName, false))
-	app.LoadHTMLGlob("static/*")
 	v1 := app.Group(groupRoute)
 	{
 		v1.GET("/index", model.Svr.Index)

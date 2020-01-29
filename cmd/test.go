@@ -19,7 +19,14 @@ func main() {
 
 	fmt.Println("app dir: ", appDir)
 	fmt.Println("cur dir: ", curDir)
-	app()
+
+	for i := 0; i <= 5; i++ {
+		if i == 3 {
+			goto Three
+		}
+	}
+Three:
+	fmt.Println("3")
 }
 
 func app() {

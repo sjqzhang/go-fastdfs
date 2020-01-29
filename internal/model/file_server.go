@@ -162,10 +162,10 @@ func (svr *Server) BackUpMetaDataByDate(date string) {
 	defer svr.lockMap.UnLockKey(logFileName)
 	metaFileName = config.DATA_DIR + "/" + date + "/" + "meta.data"
 	os.MkdirAll(config.DATA_DIR+"/"+date, 0775)
-	if util.IsExist(logFileName) {
+	if util.Exist(logFileName) {
 		os.Remove(logFileName)
 	}
-	if util.IsExist(metaFileName) {
+	if util.Exist(metaFileName) {
 		os.Remove(metaFileName)
 	}
 	fileLog, err = os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
@@ -1281,7 +1281,7 @@ func (svr *Server) CheckFileExist(ctx *gin.Context) {
 		if fileInfo.ReName != "" {
 			fpath = config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName
 		}
-		if util.IsExist(fpath) {
+		if util.Exist(fpath) {
 			ctx.JSON(http.StatusOK, fileInfo)
 			return
 		}
@@ -1339,7 +1339,7 @@ func (svr *Server) CheckFilesExist(ctx *gin.Context) {
 			if fileInfo.ReName != "" {
 				filePath = config.DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName
 			}
-			if util.IsExist(filePath) {
+			if util.Exist(filePath) {
 				fileInfos = append(fileInfos, fileInfo)
 				continue
 			} else {
@@ -3063,8 +3063,8 @@ func (svr *Server) Report(ctx *gin.Context) {
 	r.ParseForm()
 	if IsPeer(r) {
 		reportFileName = config.STATIC_DIR + "/report.html"
-		if util.IsExist(reportFileName) {
-			if data, err = util.ReadBinFile(reportFileName); err != nil {
+		if util.Exist(reportFileName) {
+			if data, err = util.ReadFile(reportFileName); err != nil {
 				log.Error(err)
 				result.Message = err.Error()
 				ctx.JSON(http.StatusNotFound, result)
@@ -3199,8 +3199,8 @@ func (svr *Server) Index(ctx *gin.Context) {
 			uploadBigUrl = "/" + config.CommonConfig.Group + config.BigUploadPathSuffix
 		}
 		uploadPageName := config.STATIC_DIR + "/upload.html"
-		if util.IsExist(uploadPageName) {
-			if data, err := util.ReadBinFile(uploadPageName); err != nil {
+		if util.Exist(uploadPageName) {
+			if data, err := util.ReadFile(uploadPageName); err != nil {
 				log.Error(err)
 			} else {
 				uploadPage = string(data)
@@ -3208,9 +3208,9 @@ func (svr *Server) Index(ctx *gin.Context) {
 		} else {
 			util.WriteFile(uploadPageName, uploadPage)
 		}
-		page := fmt.Sprintf(uploadPage, uploadUrl, config.CommonConfig.DefaultScene, uploadBigUrl)
-		config.DefaultUploadPage = page
-		ctx.HTML(http.StatusOK, "upload.html", gin.H{"title": "Main website"})
+		uploadPage = fmt.Sprintf(uploadPage, uploadUrl, config.CommonConfig.DefaultScene, uploadBigUrl)
+		//ctx.HTML(http.StatusOK, "upload.html", gin.H{"title": "Main website"})
+		ctx.Data(http.StatusOK, "text/html", []byte(uploadPage))
 	}
 
 	ctx.JSON(http.StatusNotFound, "web upload deny")
@@ -3553,7 +3553,7 @@ func (svr *Server) FormatStatInfo() {
 		stat  map[string]interface{}
 	)
 	if util.FileExists(config.CONST_STAT_FILE_NAME) {
-		if data, err = util.ReadBinFile(config.CONST_STAT_FILE_NAME); err != nil {
+		if data, err = util.ReadFile(config.CONST_STAT_FILE_NAME); err != nil {
 			log.Error(err)
 		} else {
 			if err = json.Unmarshal(data, &stat); err != nil {

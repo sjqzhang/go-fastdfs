@@ -450,7 +450,7 @@ func WriteBinFile(path string, data []byte) bool {
 	}
 }
 
-func IsExist(filename string) bool {
+func Exist(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil || os.IsExist(err)
 }
@@ -463,17 +463,17 @@ func Match(matcher string, content string) []string {
 	return result
 }
 
-func ReadBinFile(path string) ([]byte, error) {
-	if IsExist(path) {
+func ReadFile(path string) ([]byte, error) {
+	if Exist(path) {
 		fi, err := os.Open(path)
 		if err != nil {
 			return nil, err
 		}
 		defer fi.Close()
 		return ioutil.ReadAll(fi)
-	} else {
-		return nil, errors.New("not found")
 	}
+
+	return nil, errors.New("not found")
 }
 
 func RemoveEmptyDir(pathname string) {
