@@ -134,10 +134,6 @@ const (
 	"host": "%s",
 	"集群": "集群列表,注意为了高可用，IP必须不能是同一个,同一不会自动备份，且不能为127.0.0.1,且必须为内网IP，默认自动生成",
 	"peers": ["%s"],
-	"组号": "用于区别不同的集群(上传或下载)与support_group_manage配合使用,带在下载路径中",
-	"group": "group1",
-	"是否支持按组（集群）管理,主要用途是Nginx支持多集群": "默认支持,不支持时路径为http://10.1.5.4:8080/action,支持时为http://10.1.5.4:8080/group(配置中的group参数)/action,action为动作名，如status,delete,sync等",
-	"support_group_manage": true,
 	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
 	"enable_merge_small_file": false,
     "允许后缀名": "允许可以上传的文件后缀名，如jpg,jpeg,png等。留空允许所有。",
@@ -331,11 +327,8 @@ func LoadDefaultConfig() {
 }
 
 func LoadUploadPage() {
-	uploadUrl := "/" + UploadPrefix
-	uploadBigUrl := "/" + BigUploadPathSuffix
-
 	uploadPageName := StaticDir + "/upload.tmpl"
-	DefaultUploadPage = fmt.Sprintf(DefaultUploadPage, uploadUrl, CommonConfig.DefaultScene, uploadBigUrl)
+	DefaultUploadPage = fmt.Sprintf(DefaultUploadPage, UploadPrefix, CommonConfig.DefaultScene, BigUploadPathSuffix)
 	if !pkg.Exist(uploadPageName) {
 		pkg.WriteFile(uploadPageName, DefaultUploadPage)
 	}

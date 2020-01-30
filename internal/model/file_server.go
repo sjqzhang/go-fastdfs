@@ -644,9 +644,6 @@ func (svr *Server) upload(ctx *gin.Context) {
 	r := ctx.Request
 	w := ctx.Writer
 	output = r.FormValue("output")
-	if config.CommonConfig.EnableCrossOrigin {
-		pkg.CrossOrigin(ctx)
-	}
 
 	if config.CommonConfig.AuthUrl != "" {
 		if !CheckAuth(r) {

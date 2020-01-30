@@ -11,8 +11,6 @@ import (
 )
 
 func registerRoutes(app *gin.Engine) {
-	// JSON-REST API Version 1
-	groupRoute := "/"
 	if config.CommonConfig.EnableCrossOrigin {
 		app.Use(pkg.CrossOrigin)
 	}
@@ -23,7 +21,9 @@ func registerRoutes(app *gin.Engine) {
 	// gin.Dir can set  if allows to list the files in the given dir
 	app.StaticFS("/file", gin.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName, false))
 	app.LoadHTMLGlob("static/*")
-	v1 := app.Group(groupRoute)
+	// JSON-REST API Version 1
+	v1 := app.Group("/")
+
 	{
 		v1.GET("/index", api.Index)
 		v1.GET("/download", api.Download)
