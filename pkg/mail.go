@@ -1,4 +1,4 @@
-package util
+package pkg
 
 type Mail struct {
 	User     string `json:"user"`

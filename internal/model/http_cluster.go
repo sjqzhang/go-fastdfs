@@ -1,0 +1,468 @@
+package model
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"runtime/debug"
+	"strings"
+	"time"
+
+	"github.com/astaxie/beego/httplib"
+	mapSet "github.com/deckarep/golang-set"
+	"github.com/gin-gonic/gin"
+	"github.com/luoyunpeng/go-fastdfs/internal/config"
+	"github.com/luoyunpeng/go-fastdfs/pkg"
+	log "github.com/sirupsen/logrus"
+)
+
+// IsPeer check the host that create the request is in the peers
+func IsPeer(r *http.Request) bool {
+	var (
+		ip    string
+		peer  string
+		bflag bool
+	)
+	//return true
+	ip = pkg.GetClientIp(r)
+	realIp := os.Getenv("GO_FASTDFS_IP")
+	if realIp == "" {
+		realIp = pkg.GetPublicIP()
+	}
+	if ip == "127.0.0.1" || ip == realIp {
+		return true
+	}
+	if pkg.Contains(ip, config.CommonConfig.AdminIps) {
+		return true
+	}
+	ip = "http://" + ip
+	bflag = false
+	for _, peer = range config.CommonConfig.Peers {
+		if strings.HasPrefix(peer, ip) {
+			bflag = true
+			break
+		}
+	}
+
+	return bflag
+}
+
+// CheckClusterStatus
+func CheckClusterStatus() {
+	check := func() {
+		defer func() {
+			if re := recover(); re != nil {
+				buffer := debug.Stack()
+				log.Error("CheckClusterStatus")
+				log.Error(re)
+				log.Error(string(buffer))
+			}
+		}()
+		var (
+			status  JsonResult
+			err     error
+			subject string
+			body    string
+			req     *httplib.BeegoHTTPRequest
+		)
+		for _, peer := range config.CommonConfig.Peers {
+			req = httplib.Get(peer + GetRequestURI("status"))
+			req.SetTimeout(time.Second*5, time.Second*5)
+			err = req.ToJSON(&status)
+			if err != nil || status.Status != "ok" {
+				for _, to := range config.CommonConfig.AlarmReceivers {
+					subject = "fastdfs server error"
+					if err != nil {
+						body = fmt.Sprintf("%s\nserver:%s\nerror:\n%s", subject, peer, err.Error())
+					} else {
+						body = fmt.Sprintf("%s\nserver:%s\n", subject, peer)
+					}
+					if err = SendMail(to, subject, body, "text"); err != nil {
+						log.Error(err)
+					}
+				}
+				if config.CommonConfig.AlarmUrl != "" {
+					req = httplib.Post(config.CommonConfig.AlarmUrl)
+					req.SetTimeout(time.Second*10, time.Second*10)
+					req.Param("message", body)
+					req.Param("subject", subject)
+					if _, err = req.String(); err != nil {
+						log.Error(err)
+					}
+				}
+			}
+		}
+	}
+	go func() {
+		for {
+			time.Sleep(time.Minute * 10)
+			check()
+		}
+	}()
+}
+
+// GetClusterNotPermitMessage
+func GetClusterNotPermitMessage(r *http.Request) string {
+	return fmt.Sprintf(config.MessageClusterIp, pkg.GetClientIp(r))
+}
+
+// checkPeerFileExist
+func checkPeerFileExist(peer string, md5sum string, fpath string) (*FileInfo, error) {
+	var (
+		err      error
+		fileInfo FileInfo
+	)
+	req := httplib.Post(fmt.Sprintf("%s%s?md5=%s", peer, GetRequestURI("check_file_exist"), md5sum))
+	req.Param("path", fpath)
+	req.Param("md5", md5sum)
+	req.SetTimeout(time.Second*5, time.Second*10)
+	if err = req.ToJSON(&fileInfo); err != nil {
+		return &FileInfo{}, err
+	}
+	if fileInfo.Md5 == "" {
+		return &fileInfo, errors.New("not found")
+	}
+	return &fileInfo, nil
+}
+
+func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
+	var (
+		err         error
+		filename    string
+		fpath       string
+		fpathTmp    string
+		fi          os.FileInfo
+		sum         string
+		data        []byte
+		downloadUrl string
+	)
+	if config.CommonConfig.ReadOnly {
+		log.Warn("ReadOnly", fileInfo)
+		return
+	}
+	if config.CommonConfig.RetryCount > 0 && fileInfo.retry >= config.CommonConfig.RetryCount {
+		log.Error("DownloadFromPeer Error ", fileInfo)
+		return
+	} else {
+		fileInfo.retry = fileInfo.retry + 1
+	}
+	filename = fileInfo.Name
+	if fileInfo.ReName != "" {
+		filename = fileInfo.ReName
+	}
+	if fileInfo.OffSet != -2 && config.CommonConfig.EnableDistinctFile && svr.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
+		// ignore migrate file
+		log.Info(fmt.Sprintf("DownloadFromPeer file Exist, path:%s", fileInfo.Path+"/"+fileInfo.Name))
+		return
+	}
+	if (!config.CommonConfig.EnableDistinctFile || fileInfo.OffSet == -2) && pkg.FileExists(GetFilePathByInfo(fileInfo, true)) {
+		// ignore migrate file
+		if fi, err = os.Stat(GetFilePathByInfo(fileInfo, true)); err == nil {
+			if fi.ModTime().Unix() > fileInfo.TimeStamp {
+				log.Info(fmt.Sprintf("ignore file sync path:%s", GetFilePathByInfo(fileInfo, false)))
+				fileInfo.TimeStamp = fi.ModTime().Unix()
+				svr.postFileToPeer(fileInfo) // keep newer
+				return
+			}
+			os.Remove(GetFilePathByInfo(fileInfo, true))
+		}
+	}
+	if _, err = os.Stat(fileInfo.Path); err != nil {
+		os.MkdirAll(config.DockerDir+fileInfo.Path, 0775)
+	}
+	//fmt.Println("downloadFromPeer",fileInfo)
+	p := strings.Replace(fileInfo.Path, config.StoreDirName+"/", "", 1)
+	//filename=util.UrlEncode(filename)
+	downloadUrl = peer + "/" + p + "/" + filename
+	log.Info("DownloadFromPeer: ", downloadUrl)
+	fpath = config.DockerDir + fileInfo.Path + "/" + filename
+	fpathTmp = config.DockerDir + fileInfo.Path + "/" + fmt.Sprintf("%s_%s", "tmp_", filename)
+	timeout := fileInfo.Size/1024/1024/1 + 30
+	if config.CommonConfig.SyncTimeout > 0 {
+		timeout = config.CommonConfig.SyncTimeout
+	}
+	svr.lockMap.LockKey(fpath)
+	defer svr.lockMap.UnLockKey(fpath)
+	download_key := fmt.Sprintf("downloading_%d_%s", time.Now().Unix(), fpath)
+	svr.LevelDB.Put([]byte(download_key), []byte(""), nil)
+	defer func() {
+		svr.LevelDB.Delete([]byte(download_key), nil)
+	}()
+	if fileInfo.OffSet == -2 {
+		//migrate file
+		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size {
+			//prevent double download
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB)
+			//log.Info(fmt.Sprintf("file '%s' has download", fpath))
+			return
+		}
+		req := httplib.Get(downloadUrl)
+		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
+		if err = req.ToFile(fpathTmp); err != nil {
+			svr.AppendToDownloadQueue(fileInfo) //retry
+			os.Remove(fpathTmp)
+			log.Error(err, fpathTmp)
+			return
+		}
+		if os.Rename(fpathTmp, fpath) == nil {
+			//svr.SaveFileMd5Log(fileInfo, FileMd5Name)
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB)
+		}
+		return
+	}
+	req := httplib.Get(downloadUrl)
+	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
+	if fileInfo.OffSet >= 0 {
+		//small file download
+		data, err = req.Bytes()
+		if err != nil {
+			svr.AppendToDownloadQueue(fileInfo) //retry
+			log.Error(err)
+			return
+		}
+		data2 := make([]byte, len(data)+1)
+		data2[0] = '1'
+		for i, v := range data {
+			data2[i+1] = v
+		}
+		data = data2
+		if int64(len(data)) != fileInfo.Size {
+			log.Warn("file size is error")
+			return
+		}
+		fpath = strings.Split(fpath, ",")[0]
+		err = pkg.WriteFileByOffSet(fpath, fileInfo.OffSet, data)
+		if err != nil {
+			log.Warn(err)
+			return
+		}
+		svr.SaveFileMd5Log(fileInfo, config.FileMd5Name)
+		return
+	}
+	if err = req.ToFile(fpathTmp); err != nil {
+		svr.AppendToDownloadQueue(fileInfo) //retry
+		os.Remove(fpathTmp)
+		log.Error(err)
+		return
+	}
+	if fi, err = os.Stat(fpathTmp); err != nil {
+		os.Remove(fpathTmp)
+		return
+	}
+	_ = sum
+	//if config.CommonConfig.EnableDistinctFile {
+	//	//DistinctFile
+	//	if sum, err = util.GetFileSumByName(fpathTmp, config.CommonConfig.FileSumArithmetic); err != nil {
+	//		log.Error(err)
+	//		return
+	//	}
+	//} else {
+	//	//DistinctFile By path
+	//	sum = util.MD5(svr.GetFilePathByInfo(fileInfo, false))
+	//}
+	if fi.Size() != fileInfo.Size { //  maybe has bug remove || sum != fileInfo.Md5
+		log.Error("file sum check error")
+		os.Remove(fpathTmp)
+		return
+	}
+	if os.Rename(fpathTmp, fpath) == nil {
+		svr.SaveFileMd5Log(fileInfo, config.FileMd5Name)
+	}
+}
+
+func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceUpload bool) {
+	var (
+		md5set mapSet.Set
+		err    error
+		md5s   []interface{}
+	)
+	defer func() {
+		if re := recover(); re != nil {
+			buffer := debug.Stack()
+			log.Error("CheckFileAndSendToPeer")
+			log.Error(re)
+			log.Error(string(buffer))
+		}
+	}()
+	if md5set, err = GetMd5sByDate(date, filename); err != nil {
+		log.Error(err)
+		return
+	}
+	md5s = md5set.ToSlice()
+	for _, md := range md5s {
+		if md == nil {
+			continue
+		}
+		if fileInfo, _ := svr.GetFileInfoFromLevelDB(md.(string)); fileInfo != nil && fileInfo.Md5 != "" {
+			if isForceUpload {
+				fileInfo.Peers = []string{}
+			}
+			if len(fileInfo.Peers) > len(config.CommonConfig.Peers) {
+				continue
+			}
+			if !pkg.Contains(svr.host, fileInfo.Peers) {
+				fileInfo.Peers = append(fileInfo.Peers, svr.host) // peer is null
+			}
+			if filename == config.Md5QueueFileName {
+				svr.AppendToDownloadQueue(fileInfo)
+				continue
+			}
+			svr.AppendToQueue(fileInfo)
+		}
+	}
+}
+
+func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
+	var (
+		err      error
+		peer     string
+		filename string
+		info     *FileInfo
+		postURL  string
+		result   string
+		fi       os.FileInfo
+		i        int
+		data     []byte
+		fpath    string
+	)
+	defer func() {
+		if re := recover(); re != nil {
+			buffer := debug.Stack()
+			log.Error("postFileToPeer")
+			log.Error(re)
+			log.Error(string(buffer))
+		}
+	}()
+	//fmt.Println("postFile",fileInfo)
+	for i, peer = range config.CommonConfig.Peers {
+		_ = i
+		if fileInfo.Peers == nil {
+			fileInfo.Peers = []string{}
+		}
+		if pkg.Contains(peer, fileInfo.Peers) {
+			continue
+		}
+		filename = fileInfo.Name
+		if fileInfo.ReName != "" {
+			filename = fileInfo.ReName
+			if fileInfo.OffSet != -1 {
+				filename = strings.Split(fileInfo.ReName, ",")[0]
+			}
+		}
+		fpath = config.DockerDir + fileInfo.Path + "/" + filename
+		if !pkg.FileExists(fpath) {
+			log.Warn(fmt.Sprintf("file '%s' not found", fpath))
+			continue
+		}
+		if fileInfo.Size == 0 {
+			if fi, err = os.Stat(fpath); err != nil {
+				log.Error(err)
+			} else {
+				fileInfo.Size = fi.Size()
+			}
+		}
+
+		if fileInfo.OffSet != -2 && config.CommonConfig.EnableDistinctFile {
+			//not migrate file should check or update file
+			// where not EnableDistinctFile should check
+			if info, err = checkPeerFileExist(peer, fileInfo.Md5, ""); info.Md5 != "" {
+				fileInfo.Peers = append(fileInfo.Peers, peer)
+				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB); err != nil {
+					log.Error(err)
+				}
+				continue
+			}
+		}
+		postURL = peer + GetRequestURI("syncfile_info")
+		b := httplib.Post(postURL)
+		b.SetTimeout(time.Second*30, time.Second*30)
+		if data, err = json.Marshal(fileInfo); err != nil {
+			log.Error(err)
+			return
+		}
+		b.Param("fileInfo", string(data))
+		result, err = b.String()
+		if err != nil {
+			if fileInfo.retry <= config.CommonConfig.RetryCount {
+				fileInfo.retry = fileInfo.retry + 1
+				svr.AppendToQueue(fileInfo)
+			}
+			log.Error(err, fmt.Sprintf(" path:%s", fileInfo.Path+"/"+fileInfo.Name))
+		}
+		if !strings.HasPrefix(result, "http://") || err != nil {
+			log.Error(err)
+			svr.SaveFileMd5Log(fileInfo, config.Md5ErrorFileName)
+		}
+		if strings.HasPrefix(result, "http://") {
+			log.Info(result)
+			if !pkg.Contains(peer, fileInfo.Peers) {
+				fileInfo.Peers = append(fileInfo.Peers, peer)
+				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB); err != nil {
+					log.Error(err)
+				}
+			}
+		}
+	}
+}
+
+func (svr *Server) Sync(ctx *gin.Context) {
+	var (
+		result JsonResult
+	)
+	r := ctx.Request
+	r.ParseForm()
+	result.Status = "fail"
+	if !IsPeer(r) {
+		result.Message = "client must be in cluster"
+		ctx.JSON(http.StatusNotFound, result)
+		return
+	}
+	date := ""
+	force := ""
+	inner := ""
+	isForceUpload := false
+	force = r.FormValue("force")
+	date = r.FormValue("date")
+	inner = r.FormValue("inner")
+	if force == "1" {
+		isForceUpload = true
+	}
+	if inner != "1" {
+		for _, peer := range config.CommonConfig.Peers {
+			req := httplib.Post(peer + GetRequestURI("sync"))
+			req.Param("force", force)
+			req.Param("inner", "1")
+			req.Param("date", date)
+			if _, err := req.String(); err != nil {
+				log.Error(err)
+			}
+		}
+	}
+	if date == "" {
+		result.Message = "require paramete date &force , ?date=20181230"
+		ctx.JSON(http.StatusNotFound, result)
+		return
+	}
+	date = strings.Replace(date, ".", "", -1)
+	if isForceUpload {
+		go svr.CheckFileAndSendToPeer(date, config.FileMd5Name, isForceUpload)
+	} else {
+		go svr.CheckFileAndSendToPeer(date, config.Md5ErrorFileName, isForceUpload)
+	}
+	result.Status = "ok"
+	result.Message = "job is running"
+	ctx.JSON(http.StatusOK, result)
+}
+
+func (svr *Server) ConsumerPostToPeer() {
+	ConsumerFunc := func() {
+		for fileInfo := range svr.queueToPeers {
+			svr.postFileToPeer(&fileInfo)
+		}
+	}
+	for i := 0; i < config.CommonConfig.SyncWorker; i++ {
+		go ConsumerFunc()
+	}
+}

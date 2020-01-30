@@ -39,11 +39,7 @@ func Start(port string) {
 
 func cors(c *gin.Context) {
 	whiteList := map[string]int{
-		"http://192.168.100.173":      1,
-		"http://www.repchain.net.cn":  2,
-		"http://localhost:8080":       3,
-		"http://test.repchain.net.cn": 4,
-		"http://baas.repchain.net.cn": 5,
+		// TODO
 	}
 
 	// request header

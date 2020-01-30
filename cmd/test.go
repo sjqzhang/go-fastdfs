@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/luoyunpeng/go-fastdfs/internal/util"
+	"github.com/luoyunpeng/go-fastdfs/pkg"
 )
 
 func main() {
 
-	fmt.Println("today: ", util.GetToDay())
+	fmt.Println("today: ", pkg.GetToDay())
 	name := os.Args[0]
 	fmt.Println("name:", name)
 	appDir, _ := filepath.Abs(filepath.Dir(name))

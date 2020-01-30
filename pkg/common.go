@@ -1,6 +1,7 @@
-package util
+package pkg
 
 import (
+	"bufio"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha1"
@@ -10,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	random "math/rand"
 	"net"
 	"net/http"
@@ -24,6 +24,9 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
+	"github.com/astaxie/beego/httplib"
 	mapSet "github.com/deckarep/golang-set"
 	"github.com/gin-gonic/gin"
 )
@@ -569,8 +572,8 @@ func GetFileServerRunningAbsDir(appName string) (path string, err error) {
 }
 
 //
-func CheckUploadURIInvalid(uri, groupURI string) bool {
-	return uri == "/" || uri == "" || uri == "/"+groupURI || uri == "/"+groupURI+"/"
+func CheckUploadURIInvalid(uri string) bool {
+	return uri == "/" || uri == ""
 }
 
 // SetDownloadHeader add dowoload info to header
@@ -591,4 +594,74 @@ func CrossOrigin(ctx *gin.Context) {
 //NotPermit adds 401 code to header
 func NotPermit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(401)
+}
+
+// InsideContainer check if running inside container
+func InsideContainer() (bool, error) {
+	lines, err := ReadLinesOffsetN("/proc/1/cgroup", 0, -1)
+	if err != nil {
+		return false, err
+	}
+
+	for _, line := range lines {
+		if !strings.HasSuffix(line, "/") {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// ReadLinesOffsetN reads contents from file and splits them by new line.
+// The offset tells at which line number to start.
+// The count determines the number of lines to read (starting from offset):
+//   n >= 0: at most n lines
+//   n < 0: whole file
+func ReadLinesOffsetN(filename string, offset uint, n int) ([]string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return []string{""}, err
+	}
+	defer f.Close()
+
+	var ret []string
+
+	r := bufio.NewReader(f)
+	for i := 0; i < n+int(offset) || n < 0; i++ {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			break
+		}
+		if i < int(offset) {
+			continue
+		}
+		ret = append(ret, strings.Trim(line, "\n"))
+	}
+
+	return ret, nil
+}
+
+// DownloadFileToResponse
+func DownloadFileToResponse(url string, ctx *gin.Context) {
+	var (
+		err  error
+		req  *httplib.BeegoHTTPRequest
+		resp *http.Response
+	)
+	req = httplib.Get(url)
+	req.SetTimeout(time.Second*20, time.Second*600)
+	resp, err = req.DoRequest()
+	if err != nil {
+		log.Error(err)
+	}
+	defer resp.Body.Close()
+	_, err = io.Copy(ctx.Writer, resp.Body)
+	if err != nil {
+		log.Error(err)
+	}
+}
+
+// GetServerURI
+func GetServerURI(r *http.Request) string {
+	return fmt.Sprintf("http://%s/", r.Host)
 }

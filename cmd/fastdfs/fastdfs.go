@@ -11,8 +11,7 @@ import (
 	"github.com/luoyunpeng/go-fastdfs/internal/config"
 	"github.com/luoyunpeng/go-fastdfs/internal/model"
 	"github.com/luoyunpeng/go-fastdfs/internal/server"
-	"github.com/luoyunpeng/go-fastdfs/internal/util"
-	log "github.com/sirupsen/logrus"
+	"github.com/luoyunpeng/go-fastdfs/pkg"
 )
 
 var (
@@ -30,28 +29,21 @@ func init() {
 		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BuildTime, GoVersion, GitVersion)
 		os.Exit(0)
 	}
-	appDir, e1 := util.GetFileServerRunningAbsDir(os.Args[0])
+	appDir, e1 := pkg.GetFileServerRunningAbsDir(os.Args[0])
 	curDir, e2 := filepath.Abs(".")
 	if e1 == nil && e2 == nil && appDir != curDir {
-		msg := fmt.Sprintf("please change directory to '%s' start fileserver\n", appDir)
-		msg = msg + fmt.Sprintf("请切换到 '%s' 目录启动 fileserver ", appDir)
-		log.Warn(msg)
-		fmt.Println(msg)
-		os.Exit(1)
+		msg := fmt.Sprintf("please switch directory to '%s' start fileserver\n", appDir)
+		panic(msg)
 	}
 
 	FOLDERS = []string{config.DataDir, config.StoreDir, config.ConfDir, config.StaticDir}
 	for _, folder := range FOLDERS {
-		os.MkdirAll(folder, 0775)
+		_ = os.MkdirAll(folder, 0775)
 	}
 	config.LoadDefaultConfig()
 	config.CommonConfig.AbsRunningDir = appDir
 
 	model.Svr = model.NewServer()
-	prefix := "/"
-	if config.CommonConfig.SupportGroupManage {
-		prefix = prefix + config.CommonConfig.Group + "/"
-	}
 	model.Svr.InitComponent(false)
 }
 
@@ -59,14 +51,14 @@ func main() {
 	svr := model.Svr
 	go func() {
 		for {
-			svr.CheckFileAndSendToPeer(util.GetToDay(), config.Md5ErrorFileName, false)
+			svr.CheckFileAndSendToPeer(pkg.GetToDay(), config.Md5ErrorFileName, false)
 			//fmt.Println("CheckFileAndSendToPeer")
 			time.Sleep(time.Second * time.Duration(config.CommonConfig.RefreshInterval))
-			//svr.util.RemoveEmptyDir(STORE_DIR)
+			//svr.pkg.RemoveEmptyDir(STORE_DIR)
 		}
 	}()
 	go svr.CleanAndBackUp()
-	go svr.CheckClusterStatus()
+	go model.CheckClusterStatus()
 	go svr.LoadQueueSendToPeer()
 	go svr.ConsumerPostToPeer()
 	go svr.ConsumerLog()
