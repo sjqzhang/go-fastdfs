@@ -39,6 +39,7 @@ func NewConfig() *Config {
 	}
 	conf.levelDB = levelDB
 
+	conf.createFileServerDirectory()
 	conf.initPeer()
 	conf.initUploadPage()
 
@@ -102,7 +103,7 @@ func (c *Config) CheckRunningDir() {
 }
 
 func (c *Config) createFileServerDirectory() {
-	dirs := []string{c.params.DataDir, c.params.StoreDir, c.params.ConfigDir, c.params.StaticDir}
+	dirs := []string{c.params.OriginPath, c.DataDir(), c.StoreDir(), c.ConfigDir(), c.StaticDir()}
 
 	for _, dir := range dirs {
 		if err := pkg.CreateDirectories(dir, 0775); err != nil {
@@ -412,4 +413,8 @@ func (c *Config) SetDownloadDomain(domain string) {
 
 func (c *Config) StatisticsFile() string {
 	return c.params.StatisticsFile
+}
+
+func (c *Config) ConfigDir() string {
+	return c.params.ConfigDir
 }
