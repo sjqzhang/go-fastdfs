@@ -13,7 +13,7 @@ import (
 )
 
 // Read: BackUpMetaDataByDate back up the file 'files.md5' and 'meta.data' in the directory name with 'date'
-func (svr *Server) BackUpMetaDataByDate(date string) {
+func (svr *Server) BackUpMetaDataByDate(date string, conf *config.Config) {
 	defer func() {
 		if re := recover(); re != nil {
 			buffer := debug.Stack()
@@ -34,11 +34,11 @@ func (svr *Server) BackUpMetaDataByDate(date string) {
 		metaFileName string
 		fi           os.FileInfo
 	)
-	logFileName = config.DataDir + "/" + date + "/" + config.FileMd5Name
+	logFileName = conf.DataDir() + "/" + date + "/" + conf.FileMd5()
 	svr.lockMap.LockKey(logFileName)
 	defer svr.lockMap.UnLockKey(logFileName)
-	metaFileName = config.DataDir + "/" + date + "/" + "meta.data"
-	os.MkdirAll(config.DataDir+"/"+date, 0775)
+	metaFileName = "/" + date + "/" + "meta.data"
+	os.MkdirAll(conf.DataDir()+"/"+date, 0775)
 	if pkg.Exist(logFileName) {
 		os.Remove(logFileName)
 	}
@@ -58,7 +58,7 @@ func (svr *Server) BackUpMetaDataByDate(date string) {
 	}
 	defer fileMeta.Close()
 	keyPrefix = "%s_%s_"
-	keyPrefix = fmt.Sprintf(keyPrefix, date, config.FileMd5Name)
+	keyPrefix = fmt.Sprintf(keyPrefix, date, conf.FileMd5())
 	iter := svr.logDB.NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
 	defer iter.Release()
 	for iter.Next() {

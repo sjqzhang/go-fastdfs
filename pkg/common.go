@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -437,6 +436,12 @@ func FileExists(fileName string) bool {
 	return err == nil
 }
 
+// FileAndExists check is the file exists, not dir
+func FileAndExists(fileName string) bool {
+	fileInfo, err := os.Stat(fileName)
+	return err == nil && !fileInfo.IsDir()
+}
+
 func WriteFile(path string, data string) bool {
 	if err := ioutil.WriteFile(path, []byte(data), 0775); err == nil {
 		return true
@@ -479,25 +484,23 @@ func ReadFile(path string) ([]byte, error) {
 	return nil, errors.New("not found")
 }
 
-func RemoveEmptyDir(pathname string) {
-	defer func() {
-		if re := recover(); re != nil {
-			buffer := debug.Stack()
-			log.Print(string(buffer))
-		}
-	}()
-	handlefunc := func(file_path string, f os.FileInfo, err error) error {
+func RemoveEmptyDir(pathName string) {
+	handleFunc := func(filePath string, f os.FileInfo, err error) error {
 		if f.IsDir() {
-			files, _ := ioutil.ReadDir(file_path)
-			if len(files) == 0 && file_path != pathname {
-				os.Remove(file_path)
+			files, _ := ioutil.ReadDir(filePath)
+			if len(files) == 0 && filePath != pathName {
+				os.Remove(filePath)
 			}
 		}
 		return nil
 	}
-	fi, _ := os.Stat(pathname)
-	if fi.IsDir() {
-		filepath.Walk(pathname, handlefunc)
+
+	fileInfo, err := os.Stat(pathName)
+	if err != nil {
+		log.Warnf("delete dir-%s  error: %v", pathName, err)
+	}
+	if fileInfo.IsDir() {
+		filepath.Walk(pathName, handleFunc)
 	}
 }
 
@@ -557,12 +560,9 @@ func GetClientIp(r *http.Request) string {
 
 // GetRequestURI returns the request url, if group-manage is enable, add the group info to req url
 func GetRequestURI(action string) string {
-	// TODO: check if group-manage is enable, and add group info
-	isGroupEnable := true
-	if isGroupEnable {
-		return "/" + "group" + "/" + action
+	if strings.HasPrefix(action, "/") {
+		return action
 	}
-
 	return "/" + action
 }
 
@@ -664,4 +664,16 @@ func DownloadFileToResponse(url string, ctx *gin.Context) {
 // GetServerURI
 func GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
+}
+
+// CreateDirectories creates directories for storing photos, metadata and cache files.
+func CreateDirectories(dir string, perm os.FileMode) error {
+	if FileAndExists(dir) {
+		return fmt.Errorf("%s is file and already exists, please checj", dir)
+	}
+
+	if err := os.MkdirAll(dir, perm); err != nil {
+		return err
+	}
+	return nil
 }

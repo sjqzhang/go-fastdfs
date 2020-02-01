@@ -38,41 +38,41 @@ type FileInfoResult struct {
 	IsDir   bool   `json:"is_dir"`
 }
 
-func BuildFileResult(fileInfo *FileInfo, r *http.Request) FileResult {
+func BuildFileResult(fileInfo *FileInfo, r *http.Request, conf *config.Config) FileResult {
 	var (
-		outname     string
+		outName     string
 		fileResult  FileResult
 		p           string
 		downloadUrl string
 		host        string
 	)
-	host = strings.Replace(config.CommonConfig.Host, "http://", "", -1)
+	host = strings.Replace(conf.Host(), "http://", "", -1)
 	if r != nil {
 		host = r.Host
 	}
-	if !strings.HasPrefix(config.CommonConfig.DownloadDomain, "http") {
-		if config.CommonConfig.DownloadDomain == "" {
-			config.CommonConfig.DownloadDomain = fmt.Sprintf("http://%s", host)
+	if !strings.HasPrefix(conf.DownloadDomain(), "http") {
+		if conf.DownloadDomain() == "" {
+			conf.SetDownloadDomain(fmt.Sprintf("http://%s", host))
 		} else {
-			config.CommonConfig.DownloadDomain = fmt.Sprintf("http://%s", config.CommonConfig.DownloadDomain)
+			conf.SetDownloadDomain(fmt.Sprintf("http://%s", conf.DownloadDomain()))
 		}
 	}
 
-	domain := config.CommonConfig.DownloadDomain
+	domain := conf.DownloadDomain()
 	if domain == "" {
 		domain = fmt.Sprintf("http://%s", host)
 	}
 
-	outname = fileInfo.Name
+	outName = fileInfo.Name
 	if fileInfo.ReName != "" {
-		outname = fileInfo.ReName
+		outName = fileInfo.ReName
 	}
-	p = strings.Replace(fileInfo.Path, config.StoreDirName+"/", "", 1)
-	p = config.FileDownloadPathPrefix + p + "/" + outname
+	p = strings.Replace(fileInfo.Path, conf.StoreDir()+"/", "", 1)
+	p = conf.FileDownloadPathPrefix() + p + "/" + outName
 
 	downloadUrl = fmt.Sprintf("http://%s/%s", host, p)
-	if config.CommonConfig.DownloadDomain != "" {
-		downloadUrl = fmt.Sprintf("%s/%s", config.CommonConfig.DownloadDomain, p)
+	if conf.DownloadDomain() != "" {
+		downloadUrl = fmt.Sprintf("%s/%s", conf.DownloadDomain(), p)
 	}
 	fileResult.Url = downloadUrl
 	fileResult.Md5 = fileInfo.Md5

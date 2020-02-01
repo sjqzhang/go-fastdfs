@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 	"time"
 
@@ -15,8 +14,7 @@ import (
 )
 
 var (
-	FOLDERS     = []string{config.DataDir, config.StoreDir, config.ConfDir, config.StaticDir}
-	VERSION     string
+	Version     string
 	BuildTime   string
 	GoVersion   string
 	GitVersion  string
@@ -26,53 +24,41 @@ var (
 func init() {
 	flag.Parse()
 	if *versionInfo {
-		fmt.Printf("%s\n%s\n%s\n%s\n", VERSION, BuildTime, GoVersion, GitVersion)
+		fmt.Printf("%s\n%s\n%s\n%s\n", Version, BuildTime, GoVersion, GitVersion)
 		os.Exit(0)
 	}
-	appDir, e1 := pkg.GetFileServerRunningAbsDir(os.Args[0])
-	curDir, e2 := filepath.Abs(".")
-	if e1 == nil && e2 == nil && appDir != curDir {
-		msg := fmt.Sprintf("please switch directory to '%s' start fileserver\n", appDir)
-		panic(msg)
-	}
 
-	FOLDERS = []string{config.DataDir, config.StoreDir, config.ConfDir, config.StaticDir}
-	for _, folder := range FOLDERS {
-		_ = os.MkdirAll(folder, 0775)
-	}
-	config.LoadDefaultConfig()
-	config.CommonConfig.AbsRunningDir = appDir
-
-	model.Svr = model.NewServer()
-	model.Svr.InitComponent(false)
 }
 
 func main() {
+	conf := config.NewConfig()
+	model.Svr = model.NewServer(conf)
+	model.Svr.InitComponent(false)
 	svr := model.Svr
 	go func() {
 		for {
-			svr.CheckFileAndSendToPeer(pkg.GetToDay(), config.Md5ErrorFileName, false)
+			svr.CheckFileAndSendToPeer(pkg.GetToDay(), conf.Md5ErrorFile(), false, conf)
 			//fmt.Println("CheckFileAndSendToPeer")
-			time.Sleep(time.Second * time.Duration(config.CommonConfig.RefreshInterval))
+			time.Sleep(time.Second * time.Duration(conf.RefreshInterval()))
 			//svr.pkg.RemoveEmptyDir(STORE_DIR)
 		}
 	}()
 	go svr.CleanAndBackUp()
-	go model.CheckClusterStatus()
+	go model.CheckClusterStatus(conf)
 	go svr.LoadQueueSendToPeer()
-	go svr.ConsumerPostToPeer()
+	go svr.ConsumerPostToPeer(conf)
 	go svr.ConsumerLog()
 	go svr.ConsumerDownLoad()
 	go svr.ConsumerUpload()
 	go svr.RemoveDownloading()
-	if config.CommonConfig.EnableFsnotify {
+	if conf.EnableFsNotify() {
 		go svr.WatchFilesChange()
 	}
 	//go svr.LoadSearchDict()
-	if config.CommonConfig.EnableMigrate {
-		go svr.RepairFileInfoFromFile()
+	if conf.EnableMigrate() {
+		go svr.RepairFileInfoFromFile(conf)
 	}
-	if config.CommonConfig.AutoRepair {
+	if conf.AutoRepair() {
 		go func() {
 			for {
 				time.Sleep(time.Minute * 3)
@@ -88,5 +74,6 @@ func main() {
 		}
 	}()
 
-	server.Start("")
+	model.Conf = conf
+	server.Start(conf)
 }

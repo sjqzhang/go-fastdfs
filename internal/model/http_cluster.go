@@ -19,7 +19,7 @@ import (
 )
 
 // IsPeer check the host that create the request is in the peers
-func IsPeer(r *http.Request) bool {
+func IsPeer(r *http.Request, conf *config.Config) bool {
 	var (
 		ip    string
 		peer  string
@@ -34,12 +34,12 @@ func IsPeer(r *http.Request) bool {
 	if ip == "127.0.0.1" || ip == realIp {
 		return true
 	}
-	if pkg.Contains(ip, config.CommonConfig.AdminIps) {
+	if pkg.Contains(ip, conf.AdminIps()) {
 		return true
 	}
 	ip = "http://" + ip
 	bflag = false
-	for _, peer = range config.CommonConfig.Peers {
+	for _, peer = range conf.Peers() {
 		if strings.HasPrefix(peer, ip) {
 			bflag = true
 			break
@@ -50,7 +50,7 @@ func IsPeer(r *http.Request) bool {
 }
 
 // CheckClusterStatus
-func CheckClusterStatus() {
+func CheckClusterStatus(conf *config.Config) {
 	check := func() {
 		defer func() {
 			if re := recover(); re != nil {
@@ -67,24 +67,24 @@ func CheckClusterStatus() {
 			body    string
 			req     *httplib.BeegoHTTPRequest
 		)
-		for _, peer := range config.CommonConfig.Peers {
+		for _, peer := range conf.Peers() {
 			req = httplib.Get(peer + GetRequestURI("status"))
 			req.SetTimeout(time.Second*5, time.Second*5)
 			err = req.ToJSON(&status)
 			if err != nil || status.Status != "ok" {
-				for _, to := range config.CommonConfig.AlarmReceivers {
+				for _, to := range conf.AlarmReceivers() {
 					subject = "fastdfs server error"
 					if err != nil {
 						body = fmt.Sprintf("%s\nserver:%s\nerror:\n%s", subject, peer, err.Error())
 					} else {
 						body = fmt.Sprintf("%s\nserver:%s\n", subject, peer)
 					}
-					if err = SendMail(to, subject, body, "text"); err != nil {
+					if err = SendMail(to, subject, body, "text", conf); err != nil {
 						log.Error(err)
 					}
 				}
-				if config.CommonConfig.AlarmUrl != "" {
-					req = httplib.Post(config.CommonConfig.AlarmUrl)
+				if conf.AlarmUrl() != "" {
+					req = httplib.Post(conf.AlarmUrl())
 					req.SetTimeout(time.Second*10, time.Second*10)
 					req.Param("message", body)
 					req.Param("subject", subject)
@@ -127,7 +127,7 @@ func checkPeerFileExist(peer string, md5sum string, fpath string) (*FileInfo, er
 	return &fileInfo, nil
 }
 
-func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
+func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo, conf *config.Config) {
 	var (
 		err         error
 		filename    string
@@ -138,11 +138,11 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		data        []byte
 		downloadUrl string
 	)
-	if config.CommonConfig.ReadOnly {
+	if conf.ReadOnly() {
 		log.Warn("ReadOnly", fileInfo)
 		return
 	}
-	if config.CommonConfig.RetryCount > 0 && fileInfo.retry >= config.CommonConfig.RetryCount {
+	if conf.RetryCount() > 0 && fileInfo.retry >= conf.RetryCount() {
 		log.Error("DownloadFromPeer Error ", fileInfo)
 		return
 	} else {
@@ -152,36 +152,36 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	if fileInfo.OffSet != -2 && config.CommonConfig.EnableDistinctFile && svr.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
+	if fileInfo.OffSet != -2 && conf.EnableDistinctFile() && svr.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
 		// ignore migrate file
 		log.Info(fmt.Sprintf("DownloadFromPeer file Exist, path:%s", fileInfo.Path+"/"+fileInfo.Name))
 		return
 	}
-	if (!config.CommonConfig.EnableDistinctFile || fileInfo.OffSet == -2) && pkg.FileExists(GetFilePathByInfo(fileInfo, true)) {
+	if (!conf.EnableDistinctFile() || fileInfo.OffSet == -2) && pkg.FileExists(GetFilePathByInfo(fileInfo, true)) {
 		// ignore migrate file
 		if fi, err = os.Stat(GetFilePathByInfo(fileInfo, true)); err == nil {
 			if fi.ModTime().Unix() > fileInfo.TimeStamp {
 				log.Info(fmt.Sprintf("ignore file sync path:%s", GetFilePathByInfo(fileInfo, false)))
 				fileInfo.TimeStamp = fi.ModTime().Unix()
-				svr.postFileToPeer(fileInfo) // keep newer
+				svr.postFileToPeer(fileInfo, conf) // keep newer
 				return
 			}
 			os.Remove(GetFilePathByInfo(fileInfo, true))
 		}
 	}
 	if _, err = os.Stat(fileInfo.Path); err != nil {
-		os.MkdirAll(config.DockerDir+fileInfo.Path, 0775)
+		os.MkdirAll(fileInfo.Path, 0775)
 	}
 	//fmt.Println("downloadFromPeer",fileInfo)
-	p := strings.Replace(fileInfo.Path, config.StoreDirName+"/", "", 1)
+	p := strings.Replace(fileInfo.Path, conf.StoreDir()+"/", "", 1)
 	//filename=util.UrlEncode(filename)
 	downloadUrl = peer + "/" + p + "/" + filename
 	log.Info("DownloadFromPeer: ", downloadUrl)
-	fpath = config.DockerDir + fileInfo.Path + "/" + filename
-	fpathTmp = config.DockerDir + fileInfo.Path + "/" + fmt.Sprintf("%s_%s", "tmp_", filename)
+	fpath = fileInfo.Path + "/" + filename
+	fpathTmp = fileInfo.Path + "/" + fmt.Sprintf("%s_%s", "tmp_", filename)
 	timeout := fileInfo.Size/1024/1024/1 + 30
-	if config.CommonConfig.SyncTimeout > 0 {
-		timeout = config.CommonConfig.SyncTimeout
+	if conf.SyncTimeout() > 0 {
+		timeout = conf.SyncTimeout()
 	}
 	svr.lockMap.LockKey(fpath)
 	defer svr.lockMap.UnLockKey(fpath)
@@ -194,7 +194,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		//migrate file
 		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size {
 			//prevent double download
-			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB)
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf)
 			//log.Info(fmt.Sprintf("file '%s' has download", fpath))
 			return
 		}
@@ -208,7 +208,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		}
 		if os.Rename(fpathTmp, fpath) == nil {
 			//svr.SaveFileMd5Log(fileInfo, FileMd5Name)
-			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB)
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf)
 		}
 		return
 	}
@@ -238,7 +238,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 			log.Warn(err)
 			return
 		}
-		svr.SaveFileMd5Log(fileInfo, config.FileMd5Name)
+		svr.SaveFileMd5Log(fileInfo, conf.FileMd5())
 		return
 	}
 	if err = req.ToFile(fpathTmp); err != nil {
@@ -268,11 +268,11 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		return
 	}
 	if os.Rename(fpathTmp, fpath) == nil {
-		svr.SaveFileMd5Log(fileInfo, config.FileMd5Name)
+		svr.SaveFileMd5Log(fileInfo, conf.FileMd5())
 	}
 }
 
-func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceUpload bool) {
+func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceUpload bool, conf *config.Config) {
 	var (
 		md5set mapSet.Set
 		err    error
@@ -299,13 +299,13 @@ func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceU
 			if isForceUpload {
 				fileInfo.Peers = []string{}
 			}
-			if len(fileInfo.Peers) > len(config.CommonConfig.Peers) {
+			if len(fileInfo.Peers) > len(conf.Peers()) {
 				continue
 			}
 			if !pkg.Contains(svr.host, fileInfo.Peers) {
 				fileInfo.Peers = append(fileInfo.Peers, svr.host) // peer is null
 			}
-			if filename == config.Md5QueueFileName {
+			if filename == conf.Md5QueueFile() {
 				svr.AppendToDownloadQueue(fileInfo)
 				continue
 			}
@@ -314,7 +314,7 @@ func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceU
 	}
 }
 
-func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
+func (svr *Server) postFileToPeer(fileInfo *FileInfo, conf *config.Config) {
 	var (
 		err      error
 		peer     string
@@ -336,7 +336,7 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 	}()
 	//fmt.Println("postFile",fileInfo)
-	for i, peer = range config.CommonConfig.Peers {
+	for i, peer = range conf.Peers() {
 		_ = i
 		if fileInfo.Peers == nil {
 			fileInfo.Peers = []string{}
@@ -351,7 +351,7 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 				filename = strings.Split(fileInfo.ReName, ",")[0]
 			}
 		}
-		fpath = config.DockerDir + fileInfo.Path + "/" + filename
+		fpath = fileInfo.Path + "/" + filename
 		if !pkg.FileExists(fpath) {
 			log.Warn(fmt.Sprintf("file '%s' not found", fpath))
 			continue
@@ -364,12 +364,12 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 			}
 		}
 
-		if fileInfo.OffSet != -2 && config.CommonConfig.EnableDistinctFile {
+		if fileInfo.OffSet != -2 && conf.EnableDistinctFile() {
 			//not migrate file should check or update file
 			// where not EnableDistinctFile should check
 			if info, err = checkPeerFileExist(peer, fileInfo.Md5, ""); info.Md5 != "" {
 				fileInfo.Peers = append(fileInfo.Peers, peer)
-				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB); err != nil {
+				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf); err != nil {
 					log.Error(err)
 				}
 				continue
@@ -385,7 +385,7 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 		b.Param("fileInfo", string(data))
 		result, err = b.String()
 		if err != nil {
-			if fileInfo.retry <= config.CommonConfig.RetryCount {
+			if fileInfo.retry <= conf.RetryCount() {
 				fileInfo.retry = fileInfo.retry + 1
 				svr.AppendToQueue(fileInfo)
 			}
@@ -393,13 +393,13 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 		}
 		if !strings.HasPrefix(result, "http://") || err != nil {
 			log.Error(err)
-			svr.SaveFileMd5Log(fileInfo, config.Md5ErrorFileName)
+			svr.SaveFileMd5Log(fileInfo, conf.Md5ErrorFile())
 		}
 		if strings.HasPrefix(result, "http://") {
 			log.Info(result)
 			if !pkg.Contains(peer, fileInfo.Peers) {
 				fileInfo.Peers = append(fileInfo.Peers, peer)
-				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB); err != nil {
+				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf); err != nil {
 					log.Error(err)
 				}
 			}
@@ -407,62 +407,63 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo) {
 	}
 }
 
-func (svr *Server) Sync(ctx *gin.Context) {
-	var (
-		result JsonResult
-	)
-	r := ctx.Request
-	r.ParseForm()
-	result.Status = "fail"
-	if !IsPeer(r) {
-		result.Message = "client must be in cluster"
-		ctx.JSON(http.StatusNotFound, result)
-		return
-	}
-	date := ""
-	force := ""
-	inner := ""
-	isForceUpload := false
-	force = r.FormValue("force")
-	date = r.FormValue("date")
-	inner = r.FormValue("inner")
-	if force == "1" {
-		isForceUpload = true
-	}
-	if inner != "1" {
-		for _, peer := range config.CommonConfig.Peers {
-			req := httplib.Post(peer + GetRequestURI("sync"))
-			req.Param("force", force)
-			req.Param("inner", "1")
-			req.Param("date", date)
-			if _, err := req.String(); err != nil {
-				log.Error(err)
+func (svr *Server) Sync(path string, router *gin.RouterGroup, conf *config.Config) {
+	router.GET(path, func(ctx *gin.Context) {
+		var result JsonResult
+
+		r := ctx.Request
+		r.ParseForm()
+		result.Status = "fail"
+		if !IsPeer(r, conf) {
+			result.Message = "client must be in cluster"
+			ctx.JSON(http.StatusNotFound, result)
+			return
+		}
+		date := ""
+		force := ""
+		inner := ""
+		isForceUpload := false
+		force = r.FormValue("force")
+		date = r.FormValue("date")
+		inner = r.FormValue("inner")
+		if force == "1" {
+			isForceUpload = true
+		}
+		if inner != "1" {
+			for _, peer := range conf.Peers() {
+				req := httplib.Post(peer + GetRequestURI("sync"))
+				req.Param("force", force)
+				req.Param("inner", "1")
+				req.Param("date", date)
+				if _, err := req.String(); err != nil {
+					log.Error(err)
+				}
 			}
 		}
-	}
-	if date == "" {
-		result.Message = "require paramete date &force , ?date=20181230"
-		ctx.JSON(http.StatusNotFound, result)
-		return
-	}
-	date = strings.Replace(date, ".", "", -1)
-	if isForceUpload {
-		go svr.CheckFileAndSendToPeer(date, config.FileMd5Name, isForceUpload)
-	} else {
-		go svr.CheckFileAndSendToPeer(date, config.Md5ErrorFileName, isForceUpload)
-	}
-	result.Status = "ok"
-	result.Message = "job is running"
-	ctx.JSON(http.StatusOK, result)
+		if date == "" {
+			result.Message = "require paramete date &force , ?date=20181230"
+			ctx.JSON(http.StatusNotFound, result)
+			return
+		}
+		date = strings.Replace(date, ".", "", -1)
+		if isForceUpload {
+			go svr.CheckFileAndSendToPeer(date, conf.FileMd5Name(), isForceUpload, conf)
+		} else {
+			go svr.CheckFileAndSendToPeer(date, conf.Md5ErrorFile(), isForceUpload, conf)
+		}
+		result.Status = "ok"
+		result.Message = "job is running"
+		ctx.JSON(http.StatusOK, result)
+	})
 }
 
-func (svr *Server) ConsumerPostToPeer() {
+func (svr *Server) ConsumerPostToPeer(conf *config.Config) {
 	ConsumerFunc := func() {
 		for fileInfo := range svr.queueToPeers {
-			svr.postFileToPeer(&fileInfo)
+			svr.postFileToPeer(&fileInfo, conf)
 		}
 	}
-	for i := 0; i < config.CommonConfig.SyncWorker; i++ {
+	for i := 0; i < conf.SyncWorker(); i++ {
 		go ConsumerFunc()
 	}
 }

@@ -17,7 +17,7 @@ import (
 )
 
 // CheckAuth
-func CheckAuth(r *http.Request) bool {
+func CheckAuth(r *http.Request, conf *config.Config) bool {
 	var (
 		err        error
 		req        *httplib.BeegoHTTPRequest
@@ -28,7 +28,7 @@ func CheckAuth(r *http.Request) bool {
 		log.Error(err)
 		return false
 	}
-	req = httplib.Post(config.CommonConfig.AuthUrl)
+	req = httplib.Post(conf.AuthUrl())
 	req.SetTimeout(time.Second*10, time.Second*10)
 	req.Param("__path__", r.URL.Path)
 	req.Param("__query__", r.URL.RawQuery)
@@ -72,7 +72,7 @@ func VerifyGoogleCode(secret string, code string, discrepancy int64) bool {
 	}
 }
 
-func (svr *Server) CheckDownloadAuth(ctx *gin.Context) (bool, error) {
+func (svr *Server) CheckDownloadAuth(ctx *gin.Context, conf *config.Config) (bool, error) {
 	var (
 		err          error
 		maxTimestamp int64
@@ -90,19 +90,19 @@ func (svr *Server) CheckDownloadAuth(ctx *gin.Context) (bool, error) {
 		ok           bool
 	)
 	r := ctx.Request
-	if config.CommonConfig.EnableDownloadAuth && config.CommonConfig.AuthUrl != "" && !IsPeer(r) && !CheckAuth(r) {
+	if conf.EnableDownloadAuth() && conf.AuthUrl() != "" && !IsPeer(r, conf) && !CheckAuth(r, conf) {
 		return false, errors.New("auth fail")
 	}
-	if config.CommonConfig.DownloadUseToken && !IsPeer(r) {
+	if conf.DownloadUseToken() && !IsPeer(r, conf) {
 		token = r.FormValue("token")
 		timestamp = r.FormValue("timestamp")
 		if token == "" || timestamp == "" {
 			return false, errors.New("invalid request")
 		}
 		maxTimestamp = time.Now().Add(time.Second *
-			time.Duration(config.CommonConfig.DownloadTokenExpire)).Unix()
+			time.Duration(conf.DownloadTokenExpire())).Unix()
 		minTimestamp = time.Now().Add(-time.Second *
-			time.Duration(config.CommonConfig.DownloadTokenExpire)).Unix()
+			time.Duration(conf.DownloadTokenExpire())).Unix()
 		if ts, err = strconv.ParseInt(timestamp, 10, 64); err != nil {
 			return false, errors.New("invalid timestamp")
 		}
@@ -124,13 +124,13 @@ func (svr *Server) CheckDownloadAuth(ctx *gin.Context) (bool, error) {
 			return ok, nil
 		}
 	}
-	if config.CommonConfig.EnableGoogleAuth && !IsPeer(r) {
+	if conf.EnableGoogleAuth() && !IsPeer(r, conf) {
 		fullPath = r.RequestURI[2:len(r.RequestURI)]
 		fullPath = strings.Split(fullPath, "?")[0] // just path
 		scene = strings.Split(fullPath, "/")[0]
 		code = r.FormValue("code")
 		if secret, ok = svr.sceneMap.GetValue(scene); ok {
-			if !VerifyGoogleCode(secret.(string), code, int64(config.CommonConfig.DownloadTokenExpire/30)) {
+			if !VerifyGoogleCode(secret.(string), code, int64(conf.DownloadTokenExpire()/30)) {
 				return false, errors.New("invalid google code")
 			}
 		}

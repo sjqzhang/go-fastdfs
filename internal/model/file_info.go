@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 
 	mapSet "github.com/deckarep/golang-set"
@@ -35,53 +34,37 @@ type FileInfo struct {
 }
 
 func LoadFileInfoByDate(date string, filename string) (mapSet.Set, error) {
-	defer func() {
-		if re := recover(); re != nil {
-			buffer := debug.Stack()
-			log.Error("LoadFileInfoByDate")
-			log.Error(re)
-			log.Error(string(buffer))
-		}
-	}()
-	var (
-		err       error
-		keyPrefix string
-		fileInfos mapSet.Set
-	)
+	var fileInfos mapSet.Set
 	fileInfos = mapSet.NewSet()
-	keyPrefix = "%s_%s_"
+	keyPrefix := "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, filename)
+
 	iter := Svr.logDB.NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
 	for iter.Next() {
 		var fileInfo FileInfo
-		if err = json.Unmarshal(iter.Value(), &fileInfo); err != nil {
+		if err := json.Unmarshal(iter.Value(), &fileInfo); err != nil {
 			continue
 		}
 		fileInfos.Add(&fileInfo)
 	}
 	iter.Release()
+
 	return fileInfos, nil
 }
 
 // Read:
-func (svr *Server) RepairFileInfoFromFile() {
+func (svr *Server) RepairFileInfoFromFile(conf *config.Config) {
 	var (
 		pathPrefix string
 		err        error
 		fi         os.FileInfo
 	)
-	defer func() {
-		if re := recover(); re != nil {
-			buffer := debug.Stack()
-			log.Error("RepairFileInfoFromFile")
-			log.Error(re)
-			log.Error(string(buffer))
-		}
-	}()
+
 	if svr.lockMap.IsLock("RepairFileInfoFromFile") {
 		log.Warn("Lock RepairFileInfoFromFile")
 		return
 	}
+
 	svr.lockMap.LockKey("RepairFileInfoFromFile")
 	defer svr.lockMap.UnLockKey("RepairFileInfoFromFile")
 
@@ -90,7 +73,6 @@ func (svr *Server) RepairFileInfoFromFile() {
 			files    []os.FileInfo
 			fi       os.FileInfo
 			fileInfo FileInfo
-			sum      string
 			pathMd5  string
 		)
 		if f.IsDir() {
@@ -103,14 +85,13 @@ func (svr *Server) RepairFileInfoFromFile() {
 				if fi.IsDir() || fi.Size() == 0 {
 					continue
 				}
+
 				filePath = strings.Replace(filePath, "\\", "/", -1)
-				if config.DockerDir != "" {
-					filePath = strings.Replace(filePath, config.DockerDir, "", 1)
-				}
+
 				if pathPrefix != "" {
-					filePath = strings.Replace(filePath, pathPrefix, config.StoreDirName, 1)
+					filePath = strings.Replace(filePath, pathPrefix, conf.StoreDir(), 1)
 				}
-				if strings.HasPrefix(filePath, config.StoreDirName+"/"+config.LargeDirName) {
+				if strings.HasPrefix(filePath, conf.StoreDir()+"/"+conf.LargeDir()) {
 					log.Info(fmt.Sprintf("ignore small file file %s", filePath+"/"+fi.Name()))
 					continue
 				}
@@ -120,25 +101,25 @@ func (svr *Server) RepairFileInfoFromFile() {
 				//	continue
 				//}
 				//sum, err = util.GetFileSumByName(file_path+"/"+fi.Name(), config.CommonConfig.FileSumArithmetic)
-				sum = pathMd5
 				if err != nil {
 					log.Error(err)
 					continue
 				}
+
 				fileInfo = FileInfo{
 					Size:      fi.Size(),
 					Name:      fi.Name(),
 					Path:      filePath,
-					Md5:       sum,
+					Md5:       pathMd5,
 					TimeStamp: fi.ModTime().Unix(),
 					Peers:     []string{svr.host},
 					OffSet:    -2,
 				}
-				//log.Info(fileInfo)
+
 				log.Info(filePath, "/", fi.Name())
 				svr.AppendToQueue(&fileInfo)
 				//svr.postFileToPeer(&fileInfo)
-				svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.LevelDB)
+				svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.LevelDB, conf)
 				//svr.SaveFileMd5Log(&fileInfo, FileMd5Name)
 			}
 		}
@@ -146,7 +127,7 @@ func (svr *Server) RepairFileInfoFromFile() {
 		return nil
 	}
 
-	pathname := config.StoreDir
+	pathname := conf.StoreDir()
 	pathPrefix, err = os.Readlink(pathname)
 	if err == nil {
 		//link
@@ -172,9 +153,7 @@ func GetFilePathByInfo(fileInfo *FileInfo, withDocker bool) string {
 	if fileInfo.ReName != "" {
 		fileName = fileInfo.ReName
 	}
-	if withDocker {
-		return config.DockerDir + fileInfo.Path + "/" + fileName
-	}
+
 	return fileInfo.Path + "/" + fileName
 }
 
@@ -207,7 +186,7 @@ func (svr *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo) bool {
 	}
 }
 
-func (svr *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *leveldb.DB) (*FileInfo, error) {
+func (svr *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *leveldb.DB, conf *config.Config) (*FileInfo, error) {
 	var (
 		err  error
 		data []byte
@@ -223,77 +202,81 @@ func (svr *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *lev
 	}
 	if db == svr.LevelDB { //search slow ,write fast, double write logDB
 		logDate := pkg.GetDayFromTimeStamp(fileInfo.TimeStamp)
-		logKey := fmt.Sprintf("%s_%s_%s", logDate, config.FileMd5Name, fileInfo.Md5)
+		logKey := fmt.Sprintf("%s_%s_%s", logDate, conf.FileMd5Name(), fileInfo.Md5)
 		svr.logDB.Put([]byte(logKey), data, nil)
 	}
 	return fileInfo, nil
 }
 
-func (svr *Server) SyncFileInfo(ctx *gin.Context) {
-	var (
-		err         error
-		fileInfo    FileInfo
-		fileInfoStr string
-		filename    string
-	)
-	r := ctx.Request
-	r.ParseForm()
-	if !IsPeer(r) {
-		return
-	}
-	fileInfoStr = r.FormValue("fileInfo")
-	if err = json.Unmarshal([]byte(fileInfoStr), &fileInfo); err != nil {
-		ctx.JSON(http.StatusNotFound, GetClusterNotPermitMessage(r))
-		log.Error(err)
-		return
-	}
-	if fileInfo.OffSet == -2 {
-		// optimize migrate
-		svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.LevelDB)
-	} else {
-		svr.SaveFileMd5Log(&fileInfo, config.Md5QueueFileName)
-	}
-	svr.AppendToDownloadQueue(&fileInfo)
-	filename = fileInfo.Name
-	if fileInfo.ReName != "" {
-		filename = fileInfo.ReName
-	}
-	p := strings.Replace(fileInfo.Path, config.StoreDir+"/", "", 1)
-	downloadUrl := fmt.Sprintf("http://%s/%s", r.Host, p+"/"+filename)
-	log.Info("SyncFileInfo: ", downloadUrl)
+func (svr *Server) SyncFileInfo(path string, router *gin.RouterGroup, conf *config.Config) {
+	router.PUT(path, func(ctx *gin.Context) {
+		var (
+			err         error
+			fileInfo    FileInfo
+			fileInfoStr string
+			filename    string
+		)
+		r := ctx.Request
+		r.ParseForm()
+		if !IsPeer(r, conf) {
+			return
+		}
+		fileInfoStr = r.FormValue("fileInfo")
+		if err = json.Unmarshal([]byte(fileInfoStr), &fileInfo); err != nil {
+			ctx.JSON(http.StatusNotFound, GetClusterNotPermitMessage(r))
+			log.Error(err)
+			return
+		}
+		if fileInfo.OffSet == -2 {
+			// optimize migrate
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.LevelDB, conf)
+		} else {
+			svr.SaveFileMd5Log(&fileInfo, conf.Md5QueueFile())
+		}
+		svr.AppendToDownloadQueue(&fileInfo)
+		filename = fileInfo.Name
+		if fileInfo.ReName != "" {
+			filename = fileInfo.ReName
+		}
+		p := strings.Replace(fileInfo.Path, conf.StoreDir()+"/", "", 1)
+		downloadUrl := fmt.Sprintf("http://%s/%s", r.Host, p+"/"+filename)
+		log.Info("SyncFileInfo: ", downloadUrl)
 
-	ctx.JSON(http.StatusOK, downloadUrl)
+		ctx.JSON(http.StatusOK, downloadUrl)
+	})
 }
 
-func (svr *Server) GetFileInfo(ctx *gin.Context) {
-	var (
-		filePath string
-		md5sum   string
-		fileInfo *FileInfo
-		err      error
-		result   JsonResult
-	)
-	r := ctx.Request
-	md5sum = r.FormValue("md5")
-	filePath = r.FormValue("path")
-	result.Status = "fail"
-	if !IsPeer(r) {
-		ctx.JSON(http.StatusNotFound, GetClusterNotPermitMessage(r))
-		return
-	}
-	md5sum = r.FormValue("md5")
-	if filePath != "" {
-		filePath = strings.Replace(filePath, "/"+config.FileDownloadPathPrefix, config.StoreDirName+"/", 1)
-		md5sum = pkg.MD5(filePath)
-	}
-	if fileInfo, err = svr.GetFileInfoFromLevelDB(md5sum); err != nil {
-		log.Error(err)
-		result.Message = err.Error()
-		ctx.JSON(http.StatusNotFound, result)
-		return
-	}
-	result.Status = "ok"
-	result.Data = fileInfo
+func (svr *Server) GetFileInfo(path string, router *gin.RouterGroup, conf *config.Config) {
+	router.GET(path, func(ctx *gin.Context) {
+		var (
+			filePath string
+			md5sum   string
+			fileInfo *FileInfo
+			err      error
+			result   JsonResult
+		)
+		r := ctx.Request
+		md5sum = r.FormValue("md5")
+		filePath = r.FormValue("path")
+		result.Status = "fail"
+		if !IsPeer(r, conf) {
+			ctx.JSON(http.StatusNotFound, GetClusterNotPermitMessage(r))
+			return
+		}
+		md5sum = r.FormValue("md5")
+		if filePath != "" {
+			filePath = strings.Replace(filePath, "/"+conf.FileDownloadPathPrefix(), conf.StoreDirName()+"/", 1)
+			md5sum = pkg.MD5(filePath)
+		}
+		if fileInfo, err = svr.GetFileInfoFromLevelDB(md5sum); err != nil {
+			log.Error(err)
+			result.Message = err.Error()
+			ctx.JSON(http.StatusNotFound, result)
+			return
+		}
+		result.Status = "ok"
+		result.Data = fileInfo
 
-	ctx.JSON(http.StatusOK, result)
+		ctx.JSON(http.StatusOK, result)
+	})
 }

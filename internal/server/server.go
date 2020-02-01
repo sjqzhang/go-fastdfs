@@ -14,18 +14,18 @@ import (
 )
 
 // Start start the monitor api server
-func Start(port string) {
+func Start(conf *config.Config) {
 	app := gin.Default()
 	//app.Use(cors)
 
-	registerRoutes(app)
+	registerRoutes(app, conf)
 	srv := &http.Server{
-		Addr:              config.CommonConfig.Addr,
+		Addr:              conf.Port(),
 		Handler:           app,
-		ReadTimeout:       time.Duration(config.CommonConfig.ReadTimeout) * time.Second,
-		ReadHeaderTimeout: time.Duration(config.CommonConfig.ReadHeaderTimeout) * time.Second,
-		WriteTimeout:      time.Duration(config.CommonConfig.WriteTimeout) * time.Second,
-		IdleTimeout:       time.Duration(config.CommonConfig.IdleTimeout) * time.Second,
+		ReadTimeout:       time.Duration(conf.ReadTimeout()) * time.Second,
+		ReadHeaderTimeout: time.Duration(conf.ReadHeaderTimeout()) * time.Second,
+		WriteTimeout:      time.Duration(conf.WriteTimeout()) * time.Second,
+		IdleTimeout:       time.Duration(conf.IdleTimeout()) * time.Second,
 	}
 
 	go func() {

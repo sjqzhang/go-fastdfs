@@ -1,54 +1,146 @@
 package config
 
-import "github.com/luoyunpeng/go-fastdfs/pkg"
+import (
+	"errors"
+	"fmt"
+	"io/ioutil"
+
+	"github.com/luoyunpeng/go-fastdfs/pkg"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
+)
 
 type Params struct {
-	Addr                 string   `json:"addr"`
-	Peers                []string `json:"peers"`
-	RenameFile           bool     `json:"rename_file"`
-	ShowDir              bool     `json:"show_dir"`
-	Extensions           []string `json:"extensions"`
-	RefreshInterval      int      `json:"refresh_interval"`
-	EnableWebUpload      bool     `json:"enable_web_upload"`
-	DownloadDomain       string   `json:"download_domain"`
-	EnableCustomPath     bool     `json:"enable_custom_path"`
-	Scenes               []string `json:"scenes"`
-	AlarmReceivers       []string `json:"alarm_receivers"`
-	DefaultScene         string   `json:"default_scene"`
-	Mail                 pkg.Mail `json:"mail"`
-	AlarmUrl             string   `json:"alarm_url"`
-	DownloadUseToken     bool     `json:"download_use_token"`
-	DownloadTokenExpire  int      `json:"download_token_expire"`
-	QueueSize            int      `json:"queue_size"`
-	AutoRepair           bool     `json:"auto_repair"`
-	Host                 string   `json:"host"`
-	FileSumArithmetic    string   `json:"file_sum_arithmetic"`
-	PeerId               string   `json:"peer_id"`
-	SupportGroupManage   bool     `json:"support_group_manage"`
-	AdminIps             []string `json:"admin_ips"`
-	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
-	EnableMigrate        bool     `json:"enable_migrate"`
-	EnableDistinctFile   bool     `json:"enable_distinct_file"`
-	EeadOnly             bool     `json:"read_only"`
-	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
-	EnableGoogleAuth     bool     `json:"enable_google_auth"`
-	AuthUrl              string   `json:"auth_url"`
-	EnableDownloadAuth   bool     `json:"enable_download_auth"`
-	DefaultDownload      bool     `json:"default_download"`
-	EnableTus            bool     `json:"enable_tus"`
-	SyncTimeout          int64    `json:"sync_timeout"`
-	EnableFsnotify       bool     `json:"enable_fsnotify"`
-	EnableDiskCache      bool     `json:"enable_disk_cache"`
-	ConnectTimeout       bool     `json:"connect_timeout"`
-	ReadTimeout          int      `json:"read_timeout"`
-	WriteTimeout         int      `json:"write_timeout"`
-	IdleTimeout          int      `json:"idle_timeout"`
-	ReadHeaderTimeout    int      `json:"read_header_timeout"`
-	SyncWorker           int      `json:"sync_worker"`
-	UploadWorker         int      `json:"upload_worker"`
-	UploadQueueSize      int      `json:"upload_queue_size"`
-	RetryCount           int      `json:"retry_count"`
-	SyncDelay            int64    `json:"sync_delay"`
-	WatchChanSize        int      `json:"watch_chan_size"`
-	AbsRunningDir        string
+	Port                 string   `yaml:"port"`
+	Peers                []string `yaml:"peers"`
+	RenameFile           bool     `yaml:"rename_file"`
+	ShowDir              bool     `yaml:"show_dir"`
+	Extensions           []string `yaml:"extensions"`
+	RefreshInterval      int      `yaml:"refresh_interval"`
+	EnableWebUpload      bool     `yaml:"enable_web_upload"`
+	DownloadDomain       string   `yaml:"download_domain"`
+	EnableCustomPath     bool     `yaml:"enable_custom_path"`
+	Scenes               []string `yaml:"scenes"`
+	AlarmReceivers       []string `yaml:"alarm_receivers"`
+	DefaultScene         string   `yaml:"default_scene"`
+	MailUser             string   `yaml:"mailUser"`
+	MailPassword         string   `yaml:"mailPassword"`
+	MailHost             string   `yaml:"mailHost"`
+	AlarmUrl             string   `yaml:"alarm_url"`
+	DownloadUseToken     bool     `yaml:"download_use_token"`
+	DownloadTokenExpire  int      `yaml:"download_token_expire"`
+	QueueSize            int      `yaml:"queue_size"`
+	AutoRepair           bool     `yaml:"auto_repair"`
+	Host                 string   `yaml:"host"`
+	FileSumArithmetic    string   `yaml:"file_sum_arithmetic"`
+	PeerId               string   `yaml:"peer_id"`
+	SupportGroupManage   bool     `yaml:"support_group_manage"`
+	AdminIps             []string `yaml:"admin_ips"`
+	EnableMergeSmallFile bool     `yaml:"enable_merge_small_file"`
+	EnableMigrate        bool     `yaml:"enable_migrate"`
+	EnableDistinctFile   bool     `yaml:"enable_distinct_file"`
+	ReadOnly             bool     `yaml:"read_only"`
+	EnableCrossOrigin    bool     `yaml:"enable_cross_origin"`
+	EnableGoogleAuth     bool     `yaml:"enable_google_auth"`
+	AuthUrl              string   `yaml:"auth_url"`
+	EnableDownloadAuth   bool     `yaml:"enable_download_auth"`
+	DefaultDownload      bool     `yaml:"default_download"`
+	EnableTus            bool     `yaml:"enable_tus"`
+	SyncTimeout          int64    `yaml:"sync_timeout"`
+	EnableFsNotify       bool     `yaml:"enable_pgknotify"`
+	EnableDiskCache      bool     `yaml:"enable_disk_cache"`
+	ConnectTimeout       bool     `yaml:"connect_timeout"`
+	ReadTimeout          int      `yaml:"read_timeout"`
+	WriteTimeout         int      `yaml:"write_timeout"`
+	IdleTimeout          int      `yaml:"idle_timeout"`
+	ReadHeaderTimeout    int      `yaml:"read_header_timeout"`
+	SyncWorker           int      `yaml:"sync_worker"`
+	UploadWorker         int      `yaml:"upload_worker"`
+	UploadQueueSize      int      `yaml:"upload_queue_size"`
+	RetryCount           int      `yaml:"retry_count"`
+	SyncDelay            int64    `yaml:"sync_delay"`
+	WatchChanSize        int      `yaml:"watch_chan_size"`
+
+	OriginPath        string `yaml:"originPath"`
+	DataDir           string `yaml:"dataDir"`
+	StoreDir          string `yaml:"storeDir"`
+	ConfigDir         string `yaml:"configDir"`
+	LogDir            string `yaml:"logDir"`
+	StaticDir         string `yaml:"staticDir"`
+	LargeFileStoreDir string `yaml:"largeFileStorePath"`
+	// LeveldbFile store levelDB data, eg: fileServer.db
+	LeveldbFile string `yaml:"leveldbFile"`
+	// LogLeveldbFile store log levelDB data, eg: log.db
+	LogLeveldbFile string `yaml:"logLeveldbFile"`
+	// LogLeveldbFile store statistics data, eg: stat.json
+	StatisticsFile string `yaml:"statisticsFile"`
+	// fileServer.yml
+	ConfigFile string `yaml:"configFile"`
+
+	// data/search.txt
+	SearchFile             string `yaml:"searchFile"`
+	BigUploadPathSuffix    string `yaml:"bigUploadPathSuffix"`
+	UploadCounterKey       string `yaml:"uploadCounterKey"`
+	StatisticsFileCountKey string `yaml:"statisticsFileCountKey"`
+	StatFileTotalSizeKey   string `yaml:"statFileTotalSizeKey"`
+	// errors.md5
+	Md5ErrorFile string `yaml:"md5ErrorFile"`
+	// queue.md5
+	Md5QueueFile string `yaml:"md5QueueFile"`
+	// files.md5
+	FilesMd5Name string `yaml:"filesMd5Name"`
+	// removes.md5
+	RemovesMd5File         string `yaml:"removesMd5File"`
+	SmallFileSize          int64  `yaml:"smallFileSize"`
+	FileDownloadPathPrefix string `yaml:"fileDownloadPathPrefix"`
+	IsInsideContainer      bool
+}
+
+func NewParams() *Params {
+	p := &Params{}
+
+	if err := p.SetValuesFromFile(DefaultConfigFile); err != nil {
+		log.Debug(err)
+		err = p.SetValuesFromFile(DefaultConfigFile2)
+		if err != nil {
+			panic(err)
+		}
+	}
+	var err error
+	p.IsInsideContainer, err = pkg.InsideContainer()
+	if err != nil {
+		panic(err)
+	}
+
+	return p
+}
+
+// SetValuesFromFile uses a yaml config file to initiate the configuration entity.
+func (p *Params) SetValuesFromFile(fileName string) error {
+	if !pkg.FileExists(fileName) {
+		return errors.New(fmt.Sprintf("config file not found: \"%s\"", fileName))
+	}
+
+	yamlConfig, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+
+	return yaml.Unmarshal(yamlConfig, p)
+}
+
+func (p *Params) expandFilenames() {
+	p.OriginPath = pkg.ExpandFilename(p.OriginPath)
+
+	p.DataDir = p.OriginPath + p.DataDir
+	p.StoreDir = p.OriginPath + p.StoreDir
+	p.ConfigDir = p.OriginPath + p.ConfigDir
+	p.LogDir = p.OriginPath + p.LogDir
+	p.StaticDir = p.OriginPath + p.StaticDir
+	p.LargeFileStoreDir = p.StoreDir + "/" + p.LargeFileStoreDir
+	p.LeveldbFile = p.DataDir + "/" + p.LeveldbFile
+	p.LogLeveldbFile = p.DataDir + "/" + p.LogLeveldbFile
+	p.StatisticsFile = p.DataDir + "/" + p.StatisticsFile
+	p.ConfigFile = p.ConfigDir + "/" + p.ConfigFile
+	p.SearchFile = p.DataDir + "/" + p.SearchFile
 }

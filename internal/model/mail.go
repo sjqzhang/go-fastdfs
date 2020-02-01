@@ -7,10 +7,10 @@ import (
 	"github.com/luoyunpeng/go-fastdfs/internal/config"
 )
 
-func SendMail(to, subject, body, mailType string) error {
-	host := config.CommonConfig.Mail.Host
-	user := config.CommonConfig.Mail.User
-	password := config.CommonConfig.Mail.Password
+func SendMail(to, subject, body, mailType string, conf *config.Config) error {
+	host := conf.MailHost()
+	user := conf.MailUser()
+	password := conf.MailPassword()
 	hp := strings.Split(host, ":")
 	auth := smtp.PlainAuth("", user, password, hp[0])
 	var contentType string
