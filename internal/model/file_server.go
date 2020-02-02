@@ -691,7 +691,7 @@ func (svr *Server) upload(ctx *gin.Context, conf *config.Config) {
 	}
 	if conf.EnableDistinctFile() {
 		if v, _ := GetFileInfoFromLevelDB(fileInfo.Md5, conf); v != nil && v.Md5 != "" {
-			fileResult = BuildFileResult(v, r, conf)
+			fileResult = BuildFileResult(v, r.Host, conf)
 			if conf.RenameFile() {
 				os.Remove(fileInfo.Path + "/" + fileInfo.ReName)
 			} else {
@@ -730,7 +730,7 @@ func (svr *Server) upload(ctx *gin.Context, conf *config.Config) {
 		ctx.JSON(http.StatusNotFound, "file size is zero")
 		return
 	}
-	fileResult = BuildFileResult(&fileInfo, r, conf)
+	fileResult = BuildFileResult(&fileInfo, r.Host, conf)
 	ctx.JSON(http.StatusOK, fileResult)
 }
 
@@ -1460,7 +1460,7 @@ func (svr *Server) initTus(conf *config.Config) {
 			return nil, err
 		} else {
 			if conf.AuthUrl() != "" {
-				fileResult := pkg.JsonEncodePretty(BuildFileResult(fi, nil, conf))
+				fileResult := pkg.JsonEncodePretty(BuildFileResult(fi, "", conf))
 				bufferReader := bytes.NewBuffer([]byte(fileResult))
 				return bufferReader, nil
 			}
@@ -1633,6 +1633,7 @@ func (svr *Server) InitComponent(isReload bool, conf *config.Config) {
 		if len(strings.Split(conf.Port(), ":")) == 2 {
 			Svr.host = fmt.Sprintf("http://%s:%s", ip, strings.Split(conf.Port(), ":")[1])
 			conf.SetHost(Svr.host)
+			conf.SetDownloadDomain()
 		}
 	} else {
 		if strings.HasPrefix(conf.Host(), "http") {

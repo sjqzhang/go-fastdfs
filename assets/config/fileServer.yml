@@ -86,7 +86,7 @@ filesMd5Name: "files.md5"
 removesMd5File: "removes.md5"
 smallFileSize: 1024 * 1024
 originPath: "/opt/fileServer"
-fileDownloadPathPrefix: "/"
+fileDownloadPathPrefix: "/file"
 
 
 

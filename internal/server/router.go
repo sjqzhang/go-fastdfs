@@ -18,7 +18,7 @@ func registerRoutes(app *gin.Engine, conf *config.Config) {
 	// groupRoute path is not allowed, conflict with normal api
 	// app.StaticFS("/file", http.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName))
 	// gin.Dir can set  if allows to list the files in the given dir
-	app.StaticFS("/file", gin.Dir(conf.AbsRunningDir()+"/"+conf.StoreDirName(), false))
+	app.StaticFS(conf.FileDownloadPathPrefix(), gin.Dir(conf.StoreDirName(), false))
 	app.LoadHTMLGlob("static/*")
 	// JSON-REST API Version 1
 	v1 := app.Group("/")
@@ -40,7 +40,7 @@ func registerRoutes(app *gin.Engine, conf *config.Config) {
 		api.GetMd5sForWeb("/get_md5s_by_date", v1, conf)
 		model.Svr.ReceiveMd5s("/receive_md5s", v1, conf) // ?
 
-		api.Upload("/repair", v1, conf)
+		api.Upload("/upload", v1, conf)
 		api.Repair("/repair", v1, conf)
 		api.BackUp("/backup", v1, conf)
 		api.GenGoogleSecret("/gen_google_secret", v1, conf)

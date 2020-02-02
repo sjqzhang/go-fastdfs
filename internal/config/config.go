@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/luoyunpeng/go-fastdfs/pkg"
 	log "github.com/sirupsen/logrus"
@@ -82,7 +83,7 @@ func (c *Config) initPeer() {
 	if ip = os.Getenv("FileServer_IP"); ip == "" {
 		ip = pkg.GetPublicIP()
 	}
-	peer := "http://" + ip + ":8080"
+	peer := "http://" + ip + c.Port()
 
 	c.params.Peers = append(c.params.Peers, peer)
 	if c.params.QueueSize == 0 {
@@ -418,8 +419,14 @@ func (c *Config) DownloadDomain() string {
 	return c.params.DownloadDomain
 }
 
-func (c *Config) SetDownloadDomain(domain string) {
-	c.params.DownloadDomain = domain
+func (c *Config) SetDownloadDomain() {
+	if !strings.HasPrefix(c.DownloadDomain(), "http") {
+		if c.DownloadDomain() == "" {
+			c.params.DownloadDomain = fmt.Sprintf("http://%s", c.Host())
+			return
+		}
+		c.params.DownloadDomain = fmt.Sprintf("http://%s", c.DownloadDomain())
+	}
 }
 
 func (c *Config) StatisticsFile() string {

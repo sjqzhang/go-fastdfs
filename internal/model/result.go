@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/luoyunpeng/go-fastdfs/internal/config"
@@ -24,8 +23,8 @@ type FileResult struct {
 	ModTime int64  `json:"mtime"`
 	//Just for Compatibility
 	Scenes  string `json:"scenes"`
-	Retmsg  string `json:"retmsg"`
-	Retcode int    `json:"retcode"`
+	RetMsg  string `json:"retmsg"`
+	RetCode int    `json:"retcode"`
 	Src     string `json:"src"`
 }
 
@@ -38,51 +37,40 @@ type FileInfoResult struct {
 	IsDir   bool   `json:"is_dir"`
 }
 
-func BuildFileResult(fileInfo *FileInfo, r *http.Request, conf *config.Config) FileResult {
-	var (
-		outName     string
-		fileResult  FileResult
-		p           string
-		downloadUrl string
-		host        string
-	)
-	host = strings.Replace(conf.Host(), "http://", "", -1)
-	if r != nil {
-		host = r.Host
+func BuildFileResult(fileInfo *FileInfo, reqHost string, conf *config.Config) FileResult {
+	host := strings.Replace(conf.Host(), "http://", "", -1)
+	if reqHost != "" {
+		// if is not null use the requestHost(ip:port)
+		host = reqHost
 	}
-	if !strings.HasPrefix(conf.DownloadDomain(), "http") {
-		if conf.DownloadDomain() == "" {
-			conf.SetDownloadDomain(fmt.Sprintf("http://%s", host))
-		} else {
-			conf.SetDownloadDomain(fmt.Sprintf("http://%s", conf.DownloadDomain()))
-		}
-	}
-
 	domain := conf.DownloadDomain()
 	if domain == "" {
 		domain = fmt.Sprintf("http://%s", host)
 	}
 
-	outName = fileInfo.Name
+	fileName := fileInfo.Name
 	if fileInfo.ReName != "" {
-		outName = fileInfo.ReName
+		fileName = fileInfo.ReName
 	}
-	p = strings.Replace(fileInfo.Path, conf.StoreDir()+"/", "", 1)
-	p = conf.FileDownloadPathPrefix() + p + "/" + outName
+	path := strings.Replace(fileInfo.Path, conf.StoreDir()+"/", "", 1)
+	//eg: /file/svg/1.svg,
+	downloadPathSubfix := conf.FileDownloadPathPrefix() + "/" + path + "/" + fileName
 
-	downloadUrl = fmt.Sprintf("http://%s/%s", host, p)
+	downloadUrl := fmt.Sprintf("http://%s%s", host, downloadPathSubfix)
 	if conf.DownloadDomain() != "" {
-		downloadUrl = fmt.Sprintf("%s/%s", conf.DownloadDomain(), p)
+		downloadUrl = fmt.Sprintf("%s%s", conf.DownloadDomain(), downloadPathSubfix)
 	}
-	fileResult.Url = downloadUrl
-	fileResult.Md5 = fileInfo.Md5
-	fileResult.Path = "/" + p
-	fileResult.Domain = domain
-	fileResult.Scene = fileInfo.Scene
-	fileResult.Size = fileInfo.Size
-	fileResult.ModTime = fileInfo.TimeStamp
-	// Just for Compatibility
-	fileResult.Src = fileResult.Path
-	fileResult.Scenes = fileInfo.Scene
-	return fileResult
+	result := FileResult{
+		Url:     downloadUrl,
+		Md5:     fileInfo.Md5,
+		Path:    downloadPathSubfix,
+		Domain:  domain,
+		Scene:   fileInfo.Scene,
+		Size:    fileInfo.Size,
+		ModTime: fileInfo.TimeStamp,
+		Src:     downloadPathSubfix,
+		Scenes:  fileInfo.Scene,
+	}
+
+	return result
 }
