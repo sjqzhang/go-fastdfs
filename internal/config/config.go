@@ -40,6 +40,7 @@ func NewConfig() *Config {
 		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", conf.LeveldbFile()))
 		panic(err)
 	}
+
 	conf.levelDB = levelDB
 
 	logLevelDB, err := leveldb.OpenFile(conf.LogLeveldbFile(), opts)
@@ -48,6 +49,7 @@ func NewConfig() *Config {
 		panic(err)
 
 	}
+
 	conf.logLevelDB = logLevelDB
 
 	conf.createFileServerDirectory()
@@ -62,6 +64,7 @@ func (c *Config) RegisterExit() {
 	if err != nil {
 		log.Info("close levelDB error: ", err)
 	}
+
 	err = c.LogLevelDB().Close()
 	if err != nil {
 		log.Info("close LogLevelDB error: ", err)
@@ -433,6 +436,7 @@ func (c *Config) SetDownloadDomain() {
 			c.params.DownloadDomain = c.Addr()
 			return
 		}
+
 		c.params.DownloadDomain = fmt.Sprintf("http://%s", c.DownloadDomain())
 	}
 }

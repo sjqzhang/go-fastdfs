@@ -95,6 +95,7 @@ func (svr *Server) RepairFileInfoFromFile(conf *config.Config) {
 					log.Info(fmt.Sprintf("ignore small file file %s", filePath+"/"+fi.Name()))
 					continue
 				}
+
 				pathMd5 = pkg.MD5(filePath + "/" + fi.Name())
 				//if finfo, _ := svr.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
 				//	log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))

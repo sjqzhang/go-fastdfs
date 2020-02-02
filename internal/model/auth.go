@@ -28,6 +28,7 @@ func CheckAuth(r *http.Request, conf *config.Config) bool {
 		log.Error(err)
 		return false
 	}
+
 	req = httplib.Post(conf.AuthUrl())
 	req.SetTimeout(time.Second*10, time.Second*10)
 	req.Param("__path__", r.URL.Path)
@@ -45,10 +46,12 @@ func CheckAuth(r *http.Request, conf *config.Config) bool {
 			log.Error(err)
 			return false
 		}
+
 		if jsonResult.Data != "ok" {
 			log.Warn(result)
 			return false
 		}
+
 	} else {
 		if result != "ok" {
 			log.Warn(result)
@@ -60,14 +63,14 @@ func CheckAuth(r *http.Request, conf *config.Config) bool {
 }
 
 func VerifyGoogleCode(secret string, code string, discrepancy int64) bool {
-	var (
-		gAuth *googleAuthenticator.GAuth
-	)
+	var gAuth *googleAuthenticator.GAuth
+
 	gAuth = googleAuthenticator.NewGAuth()
 	if ok, err := gAuth.VerifyCode(secret, code, discrepancy); ok {
 		return ok
 	} else {
 		log.Error(err)
+
 		return ok
 	}
 }
@@ -89,16 +92,18 @@ func (svr *Server) CheckDownloadAuth(ctx *gin.Context, conf *config.Config) (boo
 		code         string
 		ok           bool
 	)
+
 	r := ctx.Request
 	if conf.EnableDownloadAuth() && conf.AuthUrl() != "" && !IsPeer(r, conf) && !CheckAuth(r, conf) {
 		return false, errors.New("auth fail")
 	}
 	if conf.DownloadUseToken() && !IsPeer(r, conf) {
-		token = r.FormValue("token")
-		timestamp = r.FormValue("timestamp")
+		token = ctx.Query("token")
+		timestamp = ctx.Query("timestamp")
 		if token == "" || timestamp == "" {
 			return false, errors.New("invalid request")
 		}
+
 		maxTimestamp = time.Now().Add(time.Second *
 			time.Duration(conf.DownloadTokenExpire())).Unix()
 		minTimestamp = time.Now().Add(-time.Second *
@@ -109,6 +114,7 @@ func (svr *Server) CheckDownloadAuth(ctx *gin.Context, conf *config.Config) (boo
 		if ts > maxTimestamp || ts < minTimestamp {
 			return false, errors.New("timestamp expire")
 		}
+
 		fullPath, smallPath = GetFilePathFromRequest(ctx, conf)
 		if smallPath != "" {
 			pathMd5 = pkg.MD5(smallPath)
@@ -124,6 +130,7 @@ func (svr *Server) CheckDownloadAuth(ctx *gin.Context, conf *config.Config) (boo
 			return ok, nil
 		}
 	}
+
 	if conf.EnableGoogleAuth() && !IsPeer(r, conf) {
 		fullPath = r.RequestURI[2:len(r.RequestURI)]
 		fullPath = strings.Split(fullPath, "?")[0] // just path
@@ -135,5 +142,6 @@ func (svr *Server) CheckDownloadAuth(ctx *gin.Context, conf *config.Config) (boo
 			}
 		}
 	}
+
 	return true, nil
 }

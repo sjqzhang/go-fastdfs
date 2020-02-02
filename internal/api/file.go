@@ -69,7 +69,8 @@ func ListDir(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotAcceptable, result)
 			return
 		}
-		dir = r.FormValue("dir")
+
+		dir = ctx.Query("dir")
 		//if dir == "" {
 		//	result.Message = "dir can't null"
 		//	w.Write([]byte(pkg.JsonEncodePretty(result)))
@@ -86,6 +87,7 @@ func ListDir(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotFound, result)
 			return
 		}
+
 		for _, f := range filesInfo {
 			fi := model.FileInfoResult{
 				Name:    f.Name(),
@@ -97,8 +99,10 @@ func ListDir(path string, router *gin.RouterGroup, conf *config.Config) {
 			}
 			filesResult = append(filesResult, fi)
 		}
+
 		result.Status = "ok"
 		result.Data = filesResult
+
 		ctx.JSON(http.StatusOK, result)
 	})
 }
@@ -113,9 +117,9 @@ func Report(path string, router *gin.RouterGroup, conf *config.Config) {
 			html           string
 			err            error
 		)
+
 		r := ctx.Request
 		result.Status = "ok"
-		r.ParseForm()
 		if model.IsPeer(r, conf) {
 			reportFileName = conf.StaticDir() + "/report.html"
 			if pkg.Exist(reportFileName) {
@@ -125,15 +129,18 @@ func Report(path string, router *gin.RouterGroup, conf *config.Config) {
 					ctx.JSON(http.StatusNotFound, result)
 					return
 				}
+
 				html = string(data)
 				html = strings.Replace(html, "{group}", "", 1)
 
 				ctx.HTML(http.StatusOK, "report.html", html)
 				return
 			}
+
 			ctx.JSON(http.StatusNotFound, fmt.Sprintf("%s is not found", reportFileName))
 			return
 		}
+
 		ctx.JSON(http.StatusNotAcceptable, model.GetClusterNotPermitMessage(r))
 	})
 }
@@ -166,12 +173,14 @@ func GetMd5sForWeb(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotFound, model.GetClusterNotPermitMessage(r))
 			return
 		}
+
 		date = r.FormValue("date")
 		if result, err = model.GetMd5sByDate(date, conf.FileMd5Name(), conf); err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusNotFound, err.Error())
 			return
 		}
+
 		md5s = result.ToSlice()
 		for _, line := range md5s {
 			if line != nil && line != "" {
@@ -195,6 +204,7 @@ func Download(uri string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusBadRequest, "RequestURI is invalid")
 			return
 		}
+
 		if ok, err := model.Svr.CheckDownloadAuth(ctx, conf); !ok {
 			log.Error(err)
 			ctx.JSON(http.StatusUnauthorized, "not Permitted")
@@ -207,10 +217,12 @@ func Download(uri string, router *gin.RouterGroup, conf *config.Config) {
 				model.Svr.DownloadNotFound(ctx, conf)
 				return
 			}
+
 			if !conf.ShowDir() && fileInfo.IsDir() {
 				ctx.JSON(http.StatusNotAcceptable, "list dir deny")
 				return
 			}
+
 			model.DownloadNormalFileByURI(ctx, conf)
 			return
 		}
@@ -231,6 +243,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
 			}
+
 			fPath = conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.Name
 			if fileInfo.ReName != "" {
 				fPath = conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.ReName
@@ -239,6 +252,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
 			}
+
 			if fileInfo.OffSet == -1 {
 				err = model.RemoveKeyFromLevelDB(md5sum, conf.LevelDB()) // when file delete,delete from leveldb
 				if err != nil {
@@ -247,13 +261,14 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 			}
 
 			ctx.JSON(http.StatusNotFound, "no such file"+fileInfo.Path+"/"+fileInfo.Name)
+			return
 		}
 
 		if fPath != "" {
-			fullPath := conf.StoreDir() + "/" + fPath
-			fileInfo, err := os.Stat(fullPath)
+			absPath := conf.StoreDir() + "/" + fPath
+			fileInfo, err := os.Stat(absPath)
 			if err == nil {
-				sum := pkg.MD5(fullPath)
+				sum := pkg.MD5(fPath)
 				//if config.CommonConfig.EnableDistinctFile {
 				//	sum, err = pkg.GetFileSumByName(fpath, config.CommonConfig.FileSumArithmetic)
 				//	if err != nil {
@@ -269,6 +284,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 					OffSet:    -1, //very important
 					TimeStamp: fileInfo.ModTime().Unix(),
 				}
+
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
 			}
@@ -292,14 +308,17 @@ func CheckFilesExist(path string, router *gin.RouterGroup, conf *config.Config) 
 			if fileInfo, _ := model.GetFileInfoFromLevelDB(m, conf); fileInfo != nil {
 				if fileInfo.OffSet != -1 {
 					fileInfos = append(fileInfos, fileInfo)
+
 					continue
 				}
+
 				filePath := conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.Name
 				if fileInfo.ReName != "" {
 					filePath = conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.ReName
 				}
 				if pkg.Exist(filePath) {
 					fileInfos = append(fileInfos, fileInfo)
+
 					continue
 				} else {
 					if fileInfo.OffSet == -1 {
@@ -311,6 +330,7 @@ func CheckFilesExist(path string, router *gin.RouterGroup, conf *config.Config) 
 				}
 			}
 		}
+
 		if len(fileInfos) == 0 {
 			ctx.JSON(http.StatusNotFound, "no such file")
 			return
@@ -348,6 +368,7 @@ func Upload(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
+
 		ctx.Request.Body = uploadFileBody
 		done := make(chan bool, 1)
 		model.Svr.QueueUpload <- model.WrapReqResp{Ctx: ctx, Done: done}
@@ -369,12 +390,11 @@ func RemoveFile(path string, router *gin.RouterGroup, conf *config.Config) {
 			name     string
 		)
 		r := ctx.Request
-		r.ParseForm()
-		md5sum = r.FormValue("md5")
-		fpath = r.FormValue("path")
-		inner = r.FormValue("inner")
+		md5sum = ctx.Query("md5")
+		fpath = ctx.Query("path")
+		inner = ctx.Query("inner")
 		result.Status = "fail"
-		if !model.IsPeer(r, conf) {
+		if !model.IsPeer(ctx.Request, conf) {
 			ctx.JSON(http.StatusUnauthorized, model.GetClusterNotPermitMessage(r))
 			return
 		}
@@ -398,38 +418,46 @@ func RemoveFile(path string, router *gin.RouterGroup, conf *config.Config) {
 						log.Error(err)
 					}
 				}
+
 				go delFile(peer, md5sum, fileInfo)
 			}
 		}
+
 		if len(md5sum) < 32 {
 			result.Message = "md5 unvalid"
 			ctx.JSON(http.StatusNotFound, result)
 			return
 		}
+
 		if fileInfo, err = model.GetFileInfoFromLevelDB(md5sum, conf); err != nil {
 			result.Message = err.Error()
 			ctx.JSON(http.StatusNotFound, result)
 			return
 		}
+
 		if fileInfo.OffSet >= 0 {
 			result.Message = "small file delete not support"
+
 			ctx.JSON(http.StatusNotFound, result)
 			return
 		}
+
 		name = fileInfo.Name
 		if fileInfo.ReName != "" {
 			name = fileInfo.ReName
 		}
-		fpath = fileInfo.Path + "/" + name
+		fpath = conf.StoreDir() + "/" + fileInfo.Path + "/" + name
 		if fileInfo.Path != "" && pkg.FileExists(fpath) {
 			model.Svr.SaveFileMd5Log(fileInfo, conf.RemoveMd5File(), conf)
 			if err = os.Remove(fpath); err != nil {
 				result.Message = err.Error()
+
 				ctx.JSON(http.StatusNotFound, result)
 				return
 			} else {
 				result.Message = "remove success"
 				result.Status = "ok"
+
 				ctx.JSON(http.StatusOK, result)
 				return
 			}
@@ -442,9 +470,8 @@ func RemoveFile(path string, router *gin.RouterGroup, conf *config.Config) {
 
 func RepairFileInfo(path string, router *gin.RouterGroup, conf *config.Config) {
 	router.PUT(path, func(ctx *gin.Context) {
-		var (
-			result model.JsonResult
-		)
+		var result model.JsonResult
+
 		if !model.IsPeer(ctx.Request, conf) {
 			ctx.JSON(http.StatusNotFound, model.GetClusterNotPermitMessage(ctx.Request))
 			return
@@ -457,6 +484,7 @@ func RepairFileInfo(path string, router *gin.RouterGroup, conf *config.Config) {
 
 		result.Status = "ok"
 		result.Message = "repair job start,don't try again,very danger "
+
 		go model.Svr.RepairFileInfoFromFile(conf)
 
 		ctx.JSON(http.StatusNotFound, result)
@@ -474,6 +502,7 @@ func Reload(path string, router *gin.RouterGroup, conf *config.Config) {
 			cfgJson string
 			result  model.JsonResult
 		)
+
 		r := ctx.Request
 		result.Status = "fail"
 		r.ParseForm()
@@ -481,6 +510,7 @@ func Reload(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotFound, model.GetClusterNotPermitMessage(r))
 			return
 		}
+
 		cfgJson = r.FormValue("cfg")
 		action = r.FormValue("action")
 		_ = cfgJson
@@ -490,38 +520,46 @@ func Reload(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotFound, result)
 			return
 		}
+
 		if action == "set" {
 			if cfgJson == "" {
 				result.Message = "(error)parameter cfg(json) require"
 				ctx.JSON(http.StatusNotFound, result)
 				return
 			}
+
 			if err = json.Unmarshal([]byte(cfgJson), &cfg); err != nil {
 				log.Error(err)
 				result.Message = err.Error()
 				ctx.JSON(http.StatusNotFound, result)
 				return
 			}
+
 			result.Status = "ok"
 			cfgJson = pkg.JsonEncodePretty(cfg)
 			pkg.WriteFile(config.DefaultConfigFile, cfgJson)
+
 			ctx.JSON(http.StatusOK, result)
 			return
 		}
+
 		if action == "reload" {
 			if data, err = ioutil.ReadFile(config.DefaultConfigFile); err != nil {
 				result.Message = err.Error()
 				ctx.JSON(http.StatusNotFound, result)
 				return
 			}
+
 			if err = json.Unmarshal(data, &cfg); err != nil {
 				result.Message = err.Error()
 				ctx.JSON(http.StatusNotFound, result)
 				return
 			}
+
 			//config.ParseConfig(config.DefaultConfigFile)
 			model.Svr.InitComponent(true, conf)
 			result.Status = "ok"
+
 			ctx.JSON(http.StatusOK, result)
 			return
 		}
@@ -539,14 +577,15 @@ func BackUp(path string, router *gin.RouterGroup, conf *config.Config) {
 			inner  string
 			url    string
 		)
+
 		r := ctx.Request
 		result.Status = "ok"
-		r.ParseForm()
-		date = r.FormValue("date")
-		inner = r.FormValue("inner")
+		date = ctx.Query("date")
+		inner = ctx.Query("inner")
 		if date == "" {
 			date = pkg.GetToDay()
 		}
+
 		if model.IsPeer(r, conf) {
 			if inner != "1" {
 				for _, peer := range conf.Peers() {
@@ -560,10 +599,13 @@ func BackUp(path string, router *gin.RouterGroup, conf *config.Config) {
 							log.Error(err)
 						}
 					}
+
 					go backUp(peer, date)
 				}
 			}
+
 			go model.Svr.BackUpMetaDataByDate(date, conf)
+
 			result.Message = "back job start..."
 			ctx.JSON(http.StatusOK, result)
 			return
@@ -587,12 +629,13 @@ func Search(path string, router *gin.RouterGroup, conf *config.Config) {
 			md5s      []string
 		)
 		r := ctx.Request
-		kw = r.FormValue("kw")
+		kw = ctx.Query("kw")
 		if !model.IsPeer(r, conf) {
 			result.Message = model.GetClusterNotPermitMessage(r)
 			ctx.JSON(http.StatusNotAcceptable, result)
 			return
 		}
+
 		iter := conf.LevelDB().NewIterator(nil, nil)
 		for iter.Next() {
 			var fileInfo model.FileInfo
@@ -601,6 +644,7 @@ func Search(path string, router *gin.RouterGroup, conf *config.Config) {
 				log.Error(err)
 				continue
 			}
+
 			if strings.Contains(fileInfo.Name, kw) && !pkg.Contains(fileInfo.Md5, md5s) {
 				count = count + 1
 				fileInfos = append(fileInfos, fileInfo)
@@ -610,11 +654,13 @@ func Search(path string, router *gin.RouterGroup, conf *config.Config) {
 				break
 			}
 		}
+
 		iter.Release()
 		err = iter.Error()
 		if err != nil {
 			log.Error()
 		}
+
 		//fileInfos=svr.SearchDict(kw) // serch file from map for huge capacity
 		result.Status = "ok"
 		result.Data = fileInfos
@@ -631,11 +677,11 @@ func Repair(path string, router *gin.RouterGroup, conf *config.Config) {
 		)
 		r := ctx.Request
 		result.Status = "ok"
-		r.ParseForm()
-		force = r.FormValue("force")
+		force = ctx.Query("force")
 		if force == "1" {
 			forceRepair = true
 		}
+
 		if model.IsPeer(r, conf) {
 			go model.Svr.AutoRepair(forceRepair, conf)
 			result.Message = "repair job start..."

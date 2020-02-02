@@ -14,12 +14,14 @@ func registerRoutes(app *gin.Engine, conf *config.Config) {
 	if conf.EnableCrossOrigin() {
 		app.Use(pkg.CrossOrigin)
 	}
+
 	// http.Dir allows to list the files in the given dir, and can not set
 	// groupRoute path is not allowed, conflict with normal api
 	// app.StaticFS("/file", http.Dir(config.CommonConfig.AbsRunningDir+"/"+config.StoreDirName))
 	// gin.Dir can set  if allows to list the files in the given dir
 	app.StaticFS(conf.FileDownloadPathPrefix(), gin.Dir(conf.StoreDirName(), false))
 	app.LoadHTMLGlob(conf.StaticDir() + "/*")
+
 	// JSON-REST API Version 1
 	v1 := app.Group("/")
 	{
@@ -27,7 +29,6 @@ func registerRoutes(app *gin.Engine, conf *config.Config) {
 		api.Download("/download", v1, conf)
 		// curl http://ip:9090/test/check_file_exist?md5=b628f8ef4bc0dce120788ab91aaa3ebb
 		// curl http://ip:9090/test/check_file_exist?path=files/v1.0.0/bbs.log.txt
-		// TODO fix: no error message return, what does offset means? the peer port is wrong
 		api.CheckFilesExist("/check_files_exist", v1, conf)
 		api.CheckFileExist("/check_file_exist", v1, conf)
 		model.Svr.GetFileInfo("/info", v1, conf)

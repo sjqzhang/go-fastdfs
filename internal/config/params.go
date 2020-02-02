@@ -106,6 +106,7 @@ func NewParams() *Params {
 			panic(err)
 		}
 	}
+
 	var err error
 	p.IsInsideContainer, err = pkg.InsideContainer()
 	if err != nil {

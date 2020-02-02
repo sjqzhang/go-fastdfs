@@ -18,12 +18,12 @@ func GenGoogleCode(path string, router *gin.RouterGroup, conf *config.Config) {
 			err    error
 			result model.JsonResult
 			secret string
-			goauth *googleAuthenticator.GAuth
+			goAuth *googleAuthenticator.GAuth
 		)
+
 		r := ctx.Request
-		r.ParseForm()
-		goauth = googleAuthenticator.NewGAuth()
-		secret = r.FormValue("secret")
+		goAuth = googleAuthenticator.NewGAuth()
+		secret = ctx.Query("secret")
 		result.Status = "ok"
 		result.Message = "ok"
 		if !model.IsPeer(r, conf) {
@@ -31,7 +31,8 @@ func GenGoogleCode(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotAcceptable, result)
 			return
 		}
-		if result.Data, err = goauth.GetCode(secret); err != nil {
+
+		if result.Data, err = goAuth.GetCode(secret); err != nil {
 			result.Message = err.Error()
 			ctx.JSON(http.StatusNotFound, result)
 			return
@@ -44,9 +45,8 @@ func GenGoogleCode(path string, router *gin.RouterGroup, conf *config.Config) {
 // GenGoogleSecret generate google secret
 func GenGoogleSecret(path string, router *gin.RouterGroup, conf *config.Config) {
 	router.POST(path, func(ctx *gin.Context) {
-		var (
-			result model.JsonResult
-		)
+		var result model.JsonResult
+
 		result.Status = "ok"
 		result.Message = "ok"
 		r := ctx.Request

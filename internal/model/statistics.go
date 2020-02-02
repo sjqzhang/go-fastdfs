@@ -28,6 +28,7 @@ func (svr *Server) RepairStatByDate(date string, conf *config.Config) StatDateFi
 			log.Error(string(buffer))
 		}
 	}()
+
 	var (
 		err       error
 		keyPrefix string
@@ -36,10 +37,12 @@ func (svr *Server) RepairStatByDate(date string, conf *config.Config) StatDateFi
 		fileSize  int64
 		stat      StatDateFileInfo
 	)
+
 	keyPrefix = "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, conf.FileMd5())
 	iter := conf.LevelDB().NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
 	defer iter.Release()
+
 	for iter.Next() {
 		if err = json.Unmarshal(iter.Value(), &fileInfo); err != nil {
 			continue
@@ -53,6 +56,7 @@ func (svr *Server) RepairStatByDate(date string, conf *config.Config) StatDateFi
 	stat.Date = date
 	stat.FileCount = fileCount
 	stat.TotalSize = fileSize
+
 	return stat
 }
 
@@ -68,6 +72,7 @@ func (svr *Server) SaveStat(conf *config.Config) {
 				log.Error(string(buffer))
 			}
 		}()
+
 		stat := svr.statMap.Get()
 		if v, ok := stat[conf.StatisticsFileCountKey()]; ok {
 			switch v.(type) {
@@ -82,6 +87,7 @@ func (svr *Server) SaveStat(conf *config.Config) {
 			}
 		}
 	}
+
 	SaveStatFunc()
 }
 
@@ -94,6 +100,7 @@ func (svr *Server) GetStat(conf *config.Config) []StatDateFileInfo {
 		rows  []StatDateFileInfo
 		total StatDateFileInfo
 	)
+
 	min = 20190101
 	max = 20190101
 	for k := range svr.statMap.Get() {
@@ -102,6 +109,7 @@ func (svr *Server) GetStat(conf *config.Config) []StatDateFileInfo {
 			if i, err = strconv.ParseInt(ks[0], 10, 64); err != nil {
 				continue
 			}
+
 			if i >= max {
 				max = i
 			}
@@ -110,16 +118,19 @@ func (svr *Server) GetStat(conf *config.Config) []StatDateFileInfo {
 			}
 		}
 	}
+
 	for i := min; i <= max; i++ {
 		s := fmt.Sprintf("%d", i)
 		if v, ok := svr.statMap.GetValue(s + "_" + conf.StatFileTotalSizeKey()); ok {
 			var info StatDateFileInfo
 			info.Date = s
+
 			switch v.(type) {
 			case int64:
 				info.TotalSize = v.(int64)
 				total.TotalSize = total.TotalSize + v.(int64)
 			}
+
 			if v, ok := svr.statMap.GetValue(s + "_" + conf.StatisticsFileCountKey()); ok {
 				switch v.(type) {
 				case int64:
@@ -127,11 +138,14 @@ func (svr *Server) GetStat(conf *config.Config) []StatDateFileInfo {
 					total.FileCount = total.FileCount + v.(int64)
 				}
 			}
+
 			rows = append(rows, info)
 		}
 	}
+
 	total.Date = "all"
 	rows = append(rows, total)
+
 	return rows
 }
 
@@ -142,6 +156,7 @@ func (svr *Server) FormatStatInfo(conf *config.Config) {
 		count int64
 		stat  map[string]interface{}
 	)
+
 	if pkg.FileExists(conf.StatisticsFile()) {
 		if data, err = pkg.ReadFile(conf.StatisticsFile()); err != nil {
 			log.Error(err)
@@ -164,7 +179,7 @@ func (svr *Server) FormatStatInfo(conf *config.Config) {
 				}
 			}
 		}
-	} else {
-		svr.RepairStatByDate(pkg.GetToDay(), conf)
 	}
+
+	svr.RepairStatByDate(pkg.GetToDay(), conf)
 }

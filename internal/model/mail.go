@@ -13,6 +13,7 @@ func SendMail(to, subject, body, mailType string, conf *config.Config) error {
 	password := conf.MailPassword()
 	hp := strings.Split(host, ":")
 	auth := smtp.PlainAuth("", user, password, hp[0])
+
 	var contentType string
 	if mailType == "html" {
 		contentType = "Content-Type: text/" + mailType + "; charset=UTF-8"
@@ -22,5 +23,6 @@ func SendMail(to, subject, body, mailType string, conf *config.Config) error {
 	msg := []byte("To: " + to + "\r\nFrom: " + user + ">\r\nSubject: " + "\r\n" + contentType + "\r\n\r\n" + body)
 	sendTo := strings.Split(to, ";")
 	err := smtp.SendMail(host, auth, user, sendTo, msg)
+
 	return err
 }

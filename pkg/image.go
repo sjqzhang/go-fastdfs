@@ -20,6 +20,7 @@ func ResizeImage(w http.ResponseWriter, fullPath string, width, height uint) {
 		log.Error(err)
 		return
 	}
+
 	img, imgType, err := image.Decode(file)
 	if err != nil {
 		log.Error(err)

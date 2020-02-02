@@ -39,7 +39,7 @@ type Tuple struct {
 	Val interface{}
 }
 
-func NewCommonMap(size int) *CommonMap {
+func NewCommonMap() *CommonMap {
 	return &CommonMap{}
 
 }
@@ -54,14 +54,15 @@ func (cMap *CommonMap) Put(k string, v interface{}) {
 
 func (cMap *CommonMap) Iter() <-chan Tuple { // reduce memory
 	ch := make(chan Tuple)
-	go func() {
 
+	go func() {
 		cMap.m.Range(func(key, value interface{}) bool {
 			ch <- Tuple{Key: key.(string), Val: value}
 			return true
 		})
 		close(ch)
 	}()
+
 	return ch
 }
 
@@ -74,8 +75,10 @@ func (cMap *CommonMap) LockKey(k string) {
 		default:
 			log.Print(fmt.Sprintf("LockKey %s", k))
 		}
+
 		return
 	}
+
 	lock := &sync.Mutex{}
 	cMap.m.Store(k, lock)
 	lock.Lock()
@@ -107,6 +110,7 @@ func (cMap *CommonMap) Keys() []string {
 		keys = append(keys, key.(string))
 		return true
 	})
+
 	return keys
 }
 
@@ -133,6 +137,7 @@ func (cMap *CommonMap) AddCount(key string, count int) {
 		cMap.m.Store(key, tmp)
 		return
 	}
+
 	cMap.m.Store(key, 1)
 }
 
@@ -143,9 +148,10 @@ func (cMap *CommonMap) AddCountInt64(key string, count int64) {
 		cMap.m.Store(key, tmp)
 		return
 	}
-	cMap.m.Store(key, count)
 
+	cMap.m.Store(key, count)
 }
+
 func (cMap *CommonMap) Add(key string) {
 	if v, ok := cMap.m.Load(key); ok {
 		tmp := v.(int)
@@ -153,11 +159,13 @@ func (cMap *CommonMap) Add(key string) {
 		cMap.m.Store(key, tmp)
 		return
 	}
+
 	cMap.m.Store(key, 1)
 }
 
 func (cMap *CommonMap) Zero() {
 	var keys []string
+
 	cMap.m.Range(func(key, value interface{}) bool {
 		keys = append(keys, key.(string))
 		return true
@@ -174,6 +182,7 @@ func (cMap *CommonMap) Contains(i ...interface{}) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -183,6 +192,7 @@ func (cMap *CommonMap) Get() map[string]interface{} {
 		m[key.(string)] = value
 		return true
 	})
+
 	return m
 }
 
@@ -193,16 +203,19 @@ func GetUUID() string {
 		return ""
 	}
 	id := MD5(base64.URLEncoding.EncodeToString(b))
+
 	return fmt.Sprintf("%s-%s-%s-%s-%s", id[0:8], id[8:12], id[12:16], id[16:20], id[20:])
 }
 
-func GetUUID_op() string {
+func GetUUIDOp() string {
 	var b [32]byte
+
 	bSlice := b[:]
 	if _, err := io.ReadFull(rand.Reader, bSlice); err != nil {
 		return ""
 	}
 	id := MD5(base64.URLEncoding.EncodeToString(bSlice))
+
 	return fmt.Sprintf("%s-%s-%s-%s-%s", id[0:8], id[8:12], id[12:16], id[16:20], id[20:])
 }
 
@@ -211,38 +224,44 @@ func CopyFile(src, dst string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	if !sourceFileStat.Mode().IsRegular() {
 		return 0, fmt.Errorf("%s is not a regular file", src)
 	}
+
 	source, err := os.Open(src)
 	if err != nil {
 		return 0, err
 	}
 	defer source.Close()
+
 	destination, err := os.Create(dst)
 	if err != nil {
 		return 0, err
 	}
 	defer destination.Close()
+
 	nBytes, err := io.Copy(destination, source)
+
 	return nBytes, err
 }
 
 func RandInt(min, max int) int {
-	return func(min, max int) int {
-		r := random.New(random.NewSource(time.Now().UnixNano()))
-		if min >= max {
-			return max
-		}
-		return r.Intn(max-min) + min
-	}(min, max)
+	r := random.New(random.NewSource(time.Now().UnixNano()))
+	if min >= max {
+		return max
+	}
+
+	return r.Intn(max-min) + min
 }
 
 // GetToDay get today's string info
 func GetToDay() string {
 	var tmp [8]byte
 	tmpSlice := tmp[:0]
+
 	time.Now().AppendFormat(tmpSlice, "20060102")
+
 	return string(tmp[:])
 }
 
@@ -264,6 +283,7 @@ func UrlEncodeFromMap(m map[string]string) string {
 	for k, v := range m {
 		vv.Add(k, v)
 	}
+
 	return vv.Encode()
 }
 
@@ -282,6 +302,7 @@ func UrlDecodeToMap(body string) (map[string]string, error) {
 			m[_k] = _v[0]
 		}
 	}
+
 	return m, nil
 }
 
@@ -291,19 +312,21 @@ func GetDayFromTimeStamp(timeStamp int64) string {
 
 func StrToMapSet(str string, sep string) mapSet.Set {
 	result := mapSet.NewSet()
+
 	for _, v := range strings.Split(str, sep) {
 		result.Add(v)
 	}
+
 	return result
 }
 
 func MapSetToStr(set mapSet.Set, sep string) string {
-	var (
-		ret []string
-	)
+	var ret []string
+
 	for v := range set.Iter() {
 		ret = append(ret, v.(string))
 	}
+
 	return strings.Join(ret, sep)
 }
 
@@ -312,18 +335,22 @@ func GetPublicIP() string {
 		err  error
 		conn net.Conn
 	)
+
 	if conn, err = net.Dial("udp", "8.8.8.8:80"); err != nil {
 		return "127.0.0.1"
 	}
 	defer conn.Close()
+
 	localAddr := conn.LocalAddr().String()
 	idx := strings.LastIndex(localAddr, ":")
+
 	return localAddr[0:idx]
 }
 
 func MD5(str string) string {
 	md := md5.New()
 	md.Write([]byte(str))
+
 	return fmt.Sprintf("%x", md.Sum(nil))
 }
 
@@ -332,6 +359,7 @@ func GetFileMd5(file *os.File) string {
 	md5h := md5.New()
 	io.Copy(md5h, file)
 	sum := fmt.Sprintf("%x", md5h.Sum(nil))
+
 	return sum
 }
 
@@ -339,27 +367,25 @@ func GetFileSum(file *os.File, alg string) string {
 	alg = strings.ToLower(alg)
 	if alg == "sha1" {
 		return GetFileSha1Sum(file)
-	} else {
-		return GetFileMd5(file)
 	}
+
+	return GetFileMd5(file)
+
 }
 
 func GetFileSumByName(filepath string, alg string) (string, error) {
-	var (
-		err  error
-		file *os.File
-	)
-	file, err = os.Open(filepath)
+	file, err := os.Open(filepath)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
+
 	alg = strings.ToLower(alg)
 	if alg == "sha1" {
 		return GetFileSha1Sum(file), nil
-	} else {
-		return GetFileMd5(file), nil
 	}
+
+	return GetFileMd5(file), nil
 }
 
 func GetFileSha1Sum(file *os.File) string {
@@ -367,56 +393,52 @@ func GetFileSha1Sum(file *os.File) string {
 	md5h := sha1.New()
 	io.Copy(md5h, file)
 	sum := fmt.Sprintf("%x", md5h.Sum(nil))
+
 	return sum
 }
 
 func WriteFileByOffSet(filepath string, offset int64, data []byte) error {
-	var (
-		err   error
-		file  *os.File
-		count int
-	)
-	file, err = os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0666)
+	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	count, err = file.WriteAt(data, offset)
+
+	count, err := file.WriteAt(data, offset)
 	if err != nil {
 		return err
 	}
+
 	if count != len(data) {
 		return errors.New(fmt.Sprintf("write %s error", filepath))
 	}
+
 	return nil
 }
 
 func ReadFileByOffSet(filepath string, offset int64, length int) ([]byte, error) {
-	var (
-		err    error
-		file   *os.File
-		result []byte
-		count  int
-	)
-	file, err = os.Open(filepath)
+	file, err := os.Open(filepath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	result = make([]byte, length)
-	count, err = file.ReadAt(result, offset)
+
+	result := make([]byte, length)
+	count, err := file.ReadAt(result, offset)
 	if err != nil {
 		return nil, err
 	}
+
 	if count != length {
 		return nil, errors.New("read error")
 	}
+
 	return result, nil
 }
 
-func Contains(obj interface{}, arrayobj interface{}) bool {
-	targetValue := reflect.ValueOf(arrayobj)
-	switch reflect.TypeOf(arrayobj).Kind() {
+func Contains(obj interface{}, arrayObj interface{}) bool {
+	targetValue := reflect.ValueOf(arrayObj)
+	switch reflect.TypeOf(arrayObj).Kind() {
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < targetValue.Len(); i++ {
 			if targetValue.Index(i).Interface() == obj {
@@ -428,46 +450,52 @@ func Contains(obj interface{}, arrayobj interface{}) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 func FileExists(fileName string) bool {
 	_, err := os.Stat(fileName)
+
 	return err == nil
 }
 
 // FileAndExists check is the file exists, not dir
 func FileAndExists(fileName string) bool {
 	fileInfo, err := os.Stat(fileName)
+
 	return err == nil && !fileInfo.IsDir()
 }
 
 func WriteFile(path string, data string) bool {
 	if err := ioutil.WriteFile(path, []byte(data), 0775); err == nil {
 		return true
-	} else {
-		return false
 	}
+
+	return false
 }
 
 func WriteBinFile(path string, data []byte) bool {
 	if err := ioutil.WriteFile(path, data, 0775); err == nil {
 		return true
-	} else {
-		return false
 	}
+
+	return false
 }
 
 func Exist(filename string) bool {
 	_, err := os.Stat(filename)
+
 	return err == nil || os.IsExist(err)
 }
 
 func Match(matcher string, content string) []string {
 	var result []string
+
 	if reg, err := regexp.Compile(matcher); err == nil {
 		result = reg.FindAllString(content, -1)
 	}
+
 	return result
 }
 
@@ -492,6 +520,7 @@ func RemoveEmptyDir(pathName string) {
 				os.Remove(filePath)
 			}
 		}
+
 		return nil
 	}
 
@@ -530,32 +559,36 @@ func JsonEncodePretty(o interface{}) string {
 			resp = string(data)
 		}
 	}
+
 	var v interface{}
 	if ok := json.Unmarshal([]byte(resp), &v); ok == nil {
 		if buf, ok := json.MarshalIndent(v, "", "  "); ok == nil {
 			resp = string(buf)
 		}
 	}
+
 	return resp
 }
 
 func GetClientIp(r *http.Request) string {
-	client_ip := ""
+	clientIp := ""
 	headers := []string{"X_Forwarded_For", "X-Forwarded-For", "X-Real-Ip",
 		"X_Real_Ip", "Remote_Addr", "Remote-Addr"}
 	for _, v := range headers {
 		if _v, ok := r.Header[v]; ok {
 			if len(_v) > 0 {
-				client_ip = _v[0]
+				clientIp = _v[0]
 				break
 			}
 		}
 	}
-	if client_ip == "" {
+
+	if clientIp == "" {
 		clients := strings.Split(r.RemoteAddr, ":")
-		client_ip = clients[0]
+		clientIp = clients[0]
 	}
-	return client_ip
+
+	return clientIp
 }
 
 // GetRequestURI returns the request url, if group-manage is enable, add the group info to req url
@@ -563,6 +596,7 @@ func GetRequestURI(action string) string {
 	if strings.HasPrefix(action, "/") {
 		return action
 	}
+
 	return "/" + action
 }
 
@@ -576,7 +610,7 @@ func CheckUploadURIInvalid(uri string) bool {
 	return uri == "/" || uri == ""
 }
 
-// SetDownloadHeader add dowoload info to header
+// SetDownloadHeader add download info to header
 func SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment")
@@ -592,7 +626,7 @@ func CrossOrigin(ctx *gin.Context) {
 }
 
 //NotPermit adds 401 code to header
-func NotPermit(w http.ResponseWriter, r *http.Request) {
+func NotPermit(w http.ResponseWriter) {
 	w.WriteHeader(401)
 }
 
@@ -625,7 +659,6 @@ func ReadLinesOffsetN(filename string, offset uint, n int) ([]string, error) {
 	defer f.Close()
 
 	var ret []string
-
 	r := bufio.NewReader(f)
 	for i := 0; i < n+int(offset) || n < 0; i++ {
 		line, err := r.ReadString('\n')
@@ -648,6 +681,7 @@ func DownloadFileToResponse(url string, ctx *gin.Context) {
 		req  *httplib.BeegoHTTPRequest
 		resp *http.Response
 	)
+
 	req = httplib.Get(url)
 	req.SetTimeout(time.Second*20, time.Second*600)
 	resp, err = req.DoRequest()
@@ -655,6 +689,7 @@ func DownloadFileToResponse(url string, ctx *gin.Context) {
 		log.Error(err)
 	}
 	defer resp.Body.Close()
+
 	_, err = io.Copy(ctx.Writer, resp.Body)
 	if err != nil {
 		log.Error(err)
@@ -675,5 +710,6 @@ func CreateDirectories(dir string, perm os.FileMode) error {
 	if err := os.MkdirAll(dir, perm); err != nil {
 		return err
 	}
+
 	return nil
 }

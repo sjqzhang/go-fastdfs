@@ -22,6 +22,7 @@ func (svr *Server) BackUpMetaDataByDate(date string, conf *config.Config) {
 			log.Error(string(buffer))
 		}
 	}()
+
 	var (
 		err          error
 		keyPrefix    string
@@ -34,6 +35,7 @@ func (svr *Server) BackUpMetaDataByDate(date string, conf *config.Config) {
 		metaFileName string
 		fi           os.FileInfo
 	)
+
 	logFileName = conf.DataDir() + "/" + date + "/" + conf.FileMd5()
 	svr.lockMap.LockKey(logFileName)
 	defer svr.lockMap.UnLockKey(logFileName)
@@ -50,6 +52,7 @@ func (svr *Server) BackUpMetaDataByDate(date string, conf *config.Config) {
 		log.Error(err)
 		return
 	}
+
 	defer fileLog.Close()
 	fileMeta, err = os.OpenFile(metaFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	if err != nil {
@@ -57,14 +60,17 @@ func (svr *Server) BackUpMetaDataByDate(date string, conf *config.Config) {
 		return
 	}
 	defer fileMeta.Close()
+
 	keyPrefix = "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, conf.FileMd5())
 	iter := conf.LevelDB().NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
 	defer iter.Release()
+
 	for iter.Next() {
 		if err = json.Unmarshal(iter.Value(), &fileInfo); err != nil {
 			continue
 		}
+
 		name = fileInfo.Name
 		if fileInfo.ReName != "" {
 			name = fileInfo.ReName
@@ -73,21 +79,25 @@ func (svr *Server) BackUpMetaDataByDate(date string, conf *config.Config) {
 		if _, err = fileMeta.WriteString(msg); err != nil {
 			log.Error(err)
 		}
+
 		msg = fmt.Sprintf("%s\t%s\n", pkg.MD5(fileInfo.Path+"/"+name), string(iter.Value()))
 		if _, err = fileMeta.WriteString(msg); err != nil {
 			log.Error(err)
 		}
+
 		msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+name)
 		if _, err = fileLog.WriteString(msg); err != nil {
 			log.Error(err)
 		}
 	}
+
 	if fi, err = fileLog.Stat(); err != nil {
 		log.Error(err)
 	} else if fi.Size() == 0 {
 		fileLog.Close()
 		os.Remove(logFileName)
 	}
+
 	if fi, err = fileMeta.Stat(); err != nil {
 		log.Error(err)
 	} else if fi.Size() == 0 {

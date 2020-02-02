@@ -34,6 +34,7 @@ func Start(conf *config.Config) {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
+
 	signalListen(srv, conf)
 }
 
@@ -77,6 +78,7 @@ func signalListen(srv *http.Server, conf *config.Config) {
 	defer cancel()
 
 	conf.RegisterExit()
+
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal("File Server shutdown:", err)
 	}
