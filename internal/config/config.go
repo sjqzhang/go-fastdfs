@@ -116,7 +116,7 @@ func (c *Config) initUploadPage() {
 func (c *Config) CheckRunningDir() {
 	appDir, e1 := pkg.GetFileServerRunningAbsDir(os.Args[0])
 
-	if e1 == nil {
+	if e1 != nil {
 		panic(fmt.Sprintf("please switch directory to '%s' and start fileserver\n", appDir))
 	}
 	c.absRunningDir = appDir

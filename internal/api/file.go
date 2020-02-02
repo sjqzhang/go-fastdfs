@@ -223,20 +223,15 @@ func Download(uri string, router *gin.RouterGroup, conf *config.Config) {
 
 func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config) {
 	router.GET(reqPath, func(ctx *gin.Context) {
-		var (
-			err      error
-			fileInfo *model.FileInfo
-			fPath    string
-			fi       os.FileInfo
-		)
-		md5sum := ctx.Param("md5")
-		fPath = ctx.Param("path")
-		if fileInfo, err = model.GetFileInfoFromLevelDB(md5sum, conf); fileInfo != nil {
-			if fileInfo.OffSet != -1 {
+		md5sum := ctx.Query("md5")
+		fPath := ctx.Query("path")
+
+		if fileInfo, err := model.GetFileInfoFromLevelDB(md5sum, conf); fileInfo != nil {
+			if fileInfo.OffSet != -1 { // TODO: what does offset mean? -1 means deleted?
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
 			}
-			fPath = fileInfo.Path + "/" + fileInfo.Name
+			fPath = conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.Name
 			if fileInfo.ReName != "" {
 				fPath = fileInfo.Path + "/" + fileInfo.ReName
 			}
@@ -245,15 +240,18 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 				return
 			}
 			if fileInfo.OffSet == -1 {
-				model.RemoveKeyFromLevelDB(md5sum, conf.LevelDB()) // when file delete,delete from leveldb
+				err = model.RemoveKeyFromLevelDB(md5sum, conf.LevelDB()) // when file delete,delete from leveldb
+				if err != nil {
+					log.Warnf("delete %s from levelDB error: ", md5sum, err)
+				}
 			}
 
-			ctx.JSON(http.StatusNotFound, model.FileInfo{})
+			ctx.JSON(http.StatusNotFound, "no such file"+fileInfo.Path+"/"+fileInfo.Name)
 		}
 
 		if fPath != "" {
 			fullPath := conf.StoreDir() + "/" + fPath
-			fi, err = os.Stat(fullPath)
+			fileInfo, err := os.Stat(fullPath)
 			if err == nil {
 				sum := pkg.MD5(fullPath)
 				//if config.CommonConfig.EnableDistinctFile {
@@ -262,21 +260,21 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 				//		log.Error(err)
 				//	}
 				//}
-				fileInfo = &model.FileInfo{
+				fileInfo := &model.FileInfo{
 					Path:      path.Dir(fPath),
 					Name:      path.Base(fPath),
-					Size:      fi.Size(),
+					Size:      fileInfo.Size(),
 					Md5:       sum,
 					Peers:     []string{conf.Addr()},
 					OffSet:    -1, //very important
-					TimeStamp: fi.ModTime().Unix(),
+					TimeStamp: fileInfo.ModTime().Unix(),
 				}
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
 			}
 		}
 
-		ctx.JSON(http.StatusNotFound, "please check file path")
+		ctx.JSON(http.StatusNotFound, "please check file path or md5 value")
 	})
 }
 
