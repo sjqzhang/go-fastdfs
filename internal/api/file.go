@@ -233,7 +233,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 			}
 			fPath = conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.Name
 			if fileInfo.ReName != "" {
-				fPath = fileInfo.Path + "/" + fileInfo.ReName
+				fPath = conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.ReName
 			}
 			if pkg.Exist(fPath) {
 				ctx.JSON(http.StatusOK, fileInfo)
@@ -280,38 +280,43 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 
 func CheckFilesExist(path string, router *gin.RouterGroup, conf *config.Config) {
 	router.GET(path, func(ctx *gin.Context) {
-		var (
-			fileInfos []*model.FileInfo
-			filePath  string
-			result    model.JsonResult
-		)
-		r := ctx.Request
-		r.ParseForm()
-		md5sum := r.FormValue("md5s")
-		md5s := strings.Split(md5sum, ",")
+		var fileInfos []*model.FileInfo
+
+		md5sum := ctx.Query("md5s")
+		md5s := strings.Split(strings.Trim(md5sum, " "), ",")
+		if len(md5s) == 0 {
+			ctx.JSON(http.StatusNotFound, "at lease one md5 must given")
+			return
+		}
 		for _, m := range md5s {
 			if fileInfo, _ := model.GetFileInfoFromLevelDB(m, conf); fileInfo != nil {
 				if fileInfo.OffSet != -1 {
 					fileInfos = append(fileInfos, fileInfo)
 					continue
 				}
-				filePath = fileInfo.Path + "/" + fileInfo.Name
+				filePath := conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.Name
 				if fileInfo.ReName != "" {
-					filePath = fileInfo.Path + "/" + fileInfo.ReName
+					filePath = conf.StoreDir() + "/" + fileInfo.Path + "/" + fileInfo.ReName
 				}
 				if pkg.Exist(filePath) {
 					fileInfos = append(fileInfos, fileInfo)
 					continue
 				} else {
 					if fileInfo.OffSet == -1 {
-						model.RemoveKeyFromLevelDB(md5sum, conf.LevelDB()) // when file delete,delete from leveldb
+						err := model.RemoveKeyFromLevelDB(md5sum, conf.LevelDB()) // when file delete,delete from leveldb
+						if err != nil {
+							log.Warnf("delete %s from levelDB error: ", md5sum, err)
+						}
 					}
 				}
 			}
 		}
+		if len(fileInfos) == 0 {
+			ctx.JSON(http.StatusNotFound, "no such file")
+			return
+		}
 
-		result.Data = fileInfos
-		ctx.JSON(http.StatusOK, result)
+		ctx.JSON(http.StatusOK, fileInfos)
 	})
 }
 
@@ -320,7 +325,6 @@ func Upload(path string, router *gin.RouterGroup, conf *config.Config) {
 		tmpFolder := conf.StoreDir() + "/_tmp/" + pkg.GetToDay()
 		if !pkg.FileExists(tmpFolder) {
 			os.MkdirAll(tmpFolder, 0777)
-
 		}
 
 		tmpFileName := tmpFolder + "/" + pkg.GetUUID()
