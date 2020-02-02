@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/luoyunpeng/go-fastdfs/pkg"
+	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -18,6 +19,7 @@ const (
 
 type Config struct {
 	levelDB       *leveldb.DB
+	logLevelDb    *leveldb.DB
 	params        *Params
 	absRunningDir string
 }
@@ -38,6 +40,15 @@ func NewConfig() *Config {
 		panic(err)
 	}
 	conf.levelDB = levelDB
+
+	logLevelDB, err := leveldb.OpenFile(conf.LogLeveldbFile(), opts)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", conf.LogLeveldbFile()))
+		log.Error(err)
+		panic(err)
+
+	}
+	conf.logLevelDb = logLevelDB
 
 	conf.createFileServerDirectory()
 	conf.initPeer()
@@ -417,4 +428,12 @@ func (c *Config) StatisticsFile() string {
 
 func (c *Config) ConfigDir() string {
 	return c.params.ConfigDir
+}
+
+func (c *Config) LogLevelDB() *leveldb.DB {
+	return c.logLevelDb
+}
+
+func (c *Config) LevelDB() *leveldb.DB {
+	return c.levelDB
 }

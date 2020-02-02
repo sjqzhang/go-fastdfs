@@ -167,7 +167,7 @@ func GetMd5sForWeb(path string, router *gin.RouterGroup, conf *config.Config) {
 			return
 		}
 		date = r.FormValue("date")
-		if result, err = model.GetMd5sByDate(date, conf.FileMd5Name()); err != nil {
+		if result, err = model.GetMd5sByDate(date, conf.FileMd5Name(), conf); err != nil {
 			log.Error(err)
 			ctx.JSON(http.StatusNotFound, err.Error())
 			return
@@ -201,22 +201,22 @@ func Download(uri string, router *gin.RouterGroup, conf *config.Config) {
 			return
 		}
 
-		fullPath, smallPath := model.GetFilePathFromRequest(ctx)
+		fullPath, smallPath := model.GetFilePathFromRequest(ctx, conf)
 		if smallPath == "" {
 			if _, err := os.Stat(fullPath); err != nil {
-				model.Svr.DownloadNotFound(ctx)
+				model.Svr.DownloadNotFound(ctx, conf)
 				return
 			}
 			if !conf.ShowDir() && fileInfo.IsDir() {
 				ctx.JSON(http.StatusNotAcceptable, "list dir deny")
 				return
 			}
-			model.DownloadNormalFileByURI(ctx)
+			model.DownloadNormalFileByURI(ctx, conf)
 			return
 		}
 
-		if ok, _ := model.DownloadSmallFileByURI(ctx); !ok {
-			model.Svr.DownloadNotFound(ctx)
+		if ok, _ := model.DownloadSmallFileByURI(ctx, conf); !ok {
+			model.Svr.DownloadNotFound(ctx, conf)
 		}
 	})
 }
@@ -234,7 +234,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 		md5sum := ""
 		md5sum = r.FormValue("md5")
 		fpath = r.FormValue("path")
-		if fileInfo, err = model.Svr.GetFileInfoFromLevelDB(md5sum); fileInfo != nil {
+		if fileInfo, err = model.GetFileInfoFromLevelDB(md5sum, conf); fileInfo != nil {
 			if fileInfo.OffSet != -1 {
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
@@ -248,7 +248,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 				return
 			}
 			if fileInfo.OffSet == -1 {
-				model.RemoveKeyFromLevelDB(md5sum, model.Svr.LevelDB) // when file delete,delete from leveldb
+				model.RemoveKeyFromLevelDB(md5sum, conf.LevelDB()) // when file delete,delete from leveldb
 			}
 
 			ctx.JSON(http.StatusNotFound, model.FileInfo{})
@@ -294,7 +294,7 @@ func CheckFilesExist(path string, router *gin.RouterGroup, conf *config.Config) 
 		md5sum := r.FormValue("md5s")
 		md5s := strings.Split(md5sum, ",")
 		for _, m := range md5s {
-			if fileInfo, _ := model.Svr.GetFileInfoFromLevelDB(m); fileInfo != nil {
+			if fileInfo, _ := model.GetFileInfoFromLevelDB(m, conf); fileInfo != nil {
 				if fileInfo.OffSet != -1 {
 					fileInfos = append(fileInfos, fileInfo)
 					continue
@@ -308,7 +308,7 @@ func CheckFilesExist(path string, router *gin.RouterGroup, conf *config.Config) 
 					continue
 				} else {
 					if fileInfo.OffSet == -1 {
-						model.RemoveKeyFromLevelDB(md5sum, model.Svr.LevelDB) // when file delete,delete from leveldb
+						model.RemoveKeyFromLevelDB(md5sum, conf.LevelDB()) // when file delete,delete from leveldb
 					}
 				}
 			}
@@ -406,7 +406,7 @@ func RemoveFile(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotFound, result)
 			return
 		}
-		if fileInfo, err = model.Svr.GetFileInfoFromLevelDB(md5sum); err != nil {
+		if fileInfo, err = model.GetFileInfoFromLevelDB(md5sum, conf); err != nil {
 			result.Message = err.Error()
 			ctx.JSON(http.StatusNotFound, result)
 			return
@@ -422,7 +422,7 @@ func RemoveFile(path string, router *gin.RouterGroup, conf *config.Config) {
 		}
 		fpath = fileInfo.Path + "/" + name
 		if fileInfo.Path != "" && pkg.FileExists(fpath) {
-			model.Svr.SaveFileMd5Log(fileInfo, conf.RemoveMd5File())
+			model.Svr.SaveFileMd5Log(fileInfo, conf.RemoveMd5File(), conf)
 			if err = os.Remove(fpath); err != nil {
 				result.Message = err.Error()
 				ctx.JSON(http.StatusNotFound, result)
@@ -520,7 +520,7 @@ func Reload(path string, router *gin.RouterGroup, conf *config.Config) {
 				return
 			}
 			//config.ParseConfig(config.DefaultConfigFile)
-			model.Svr.InitComponent(true)
+			model.Svr.InitComponent(true, conf)
 			result.Status = "ok"
 			ctx.JSON(http.StatusOK, result)
 			return
@@ -593,7 +593,7 @@ func Search(path string, router *gin.RouterGroup, conf *config.Config) {
 			ctx.JSON(http.StatusNotAcceptable, result)
 			return
 		}
-		iter := model.Svr.LevelDB.NewIterator(nil, nil)
+		iter := conf.LevelDB().NewIterator(nil, nil)
 		for iter.Next() {
 			var fileInfo model.FileInfo
 			value := iter.Value()
@@ -637,7 +637,7 @@ func Repair(path string, router *gin.RouterGroup, conf *config.Config) {
 			forceRepair = true
 		}
 		if model.IsPeer(r, conf) {
-			go model.Svr.AutoRepair(forceRepair)
+			go model.Svr.AutoRepair(forceRepair, conf)
 			result.Message = "repair job start..."
 			ctx.JSON(http.StatusOK, result)
 			return

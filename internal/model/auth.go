@@ -109,13 +109,13 @@ func (svr *Server) CheckDownloadAuth(ctx *gin.Context, conf *config.Config) (boo
 		if ts > maxTimestamp || ts < minTimestamp {
 			return false, errors.New("timestamp expire")
 		}
-		fullPath, smallPath = GetFilePathFromRequest(ctx)
+		fullPath, smallPath = GetFilePathFromRequest(ctx, conf)
 		if smallPath != "" {
 			pathMd5 = pkg.MD5(smallPath)
 		} else {
 			pathMd5 = pkg.MD5(fullPath)
 		}
-		if fileInfo, err = svr.GetFileInfoFromLevelDB(pathMd5); err != nil {
+		if fileInfo, err = GetFileInfoFromLevelDB(pathMd5, conf); err != nil {
 			// TODO
 		} else {
 			if !(pkg.MD5(fileInfo.Md5+timestamp) == token) {

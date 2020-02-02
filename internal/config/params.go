@@ -112,6 +112,7 @@ func NewParams() *Params {
 		panic(err)
 	}
 
+	p.expandFilenames()
 	return p
 }
 

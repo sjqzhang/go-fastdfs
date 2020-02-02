@@ -33,13 +33,13 @@ type FileInfo struct {
 	op        string
 }
 
-func LoadFileInfoByDate(date string, filename string) (mapSet.Set, error) {
+func LoadFileInfoByDate(date string, filename string, levelDB *leveldb.DB) (mapSet.Set, error) {
 	var fileInfos mapSet.Set
 	fileInfos = mapSet.NewSet()
 	keyPrefix := "%s_%s_"
 	keyPrefix = fmt.Sprintf(keyPrefix, date, filename)
 
-	iter := Svr.logDB.NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
+	iter := levelDB.NewIterator(levelDBUtil.BytesPrefix([]byte(keyPrefix)), nil)
 	for iter.Next() {
 		var fileInfo FileInfo
 		if err := json.Unmarshal(iter.Value(), &fileInfo); err != nil {
@@ -117,9 +117,9 @@ func (svr *Server) RepairFileInfoFromFile(conf *config.Config) {
 				}
 
 				log.Info(filePath, "/", fi.Name())
-				svr.AppendToQueue(&fileInfo)
+				svr.AppendToQueue(&fileInfo, conf)
 				//svr.postFileToPeer(&fileInfo)
-				svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.LevelDB, conf)
+				svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, conf.LevelDB(), conf)
 				//svr.SaveFileMd5Log(&fileInfo, FileMd5Name)
 			}
 		}
@@ -157,7 +157,7 @@ func GetFilePathByInfo(fileInfo *FileInfo, withDocker bool) string {
 	return fileInfo.Path + "/" + fileName
 }
 
-func (svr *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo) bool {
+func (svr *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo, conf *config.Config) bool {
 	var (
 		err      error
 		fullpath string
@@ -169,7 +169,7 @@ func (svr *Server) CheckFileExistByInfo(md5s string, fileInfo *FileInfo) bool {
 	}
 	if fileInfo.OffSet >= 0 {
 		//small file
-		if info, err = svr.GetFileInfoFromLevelDB(fileInfo.Md5); err == nil && info.Md5 == fileInfo.Md5 {
+		if info, err = GetFileInfoFromLevelDB(fileInfo.Md5, conf); err == nil && info.Md5 == fileInfo.Md5 {
 			return true
 		} else {
 			return false
@@ -200,10 +200,10 @@ func (svr *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *lev
 	if err = db.Put([]byte(key), data, nil); err != nil {
 		return fileInfo, err
 	}
-	if db == svr.LevelDB { //search slow ,write fast, double write logDB
+	if db == conf.LevelDB() { //search slow ,write fast, double write logDB
 		logDate := pkg.GetDayFromTimeStamp(fileInfo.TimeStamp)
 		logKey := fmt.Sprintf("%s_%s_%s", logDate, conf.FileMd5Name(), fileInfo.Md5)
-		svr.logDB.Put([]byte(logKey), data, nil)
+		conf.LevelDB().Put([]byte(logKey), data, nil)
 	}
 	return fileInfo, nil
 }
@@ -229,11 +229,11 @@ func (svr *Server) SyncFileInfo(path string, router *gin.RouterGroup, conf *conf
 		}
 		if fileInfo.OffSet == -2 {
 			// optimize migrate
-			svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, svr.LevelDB, conf)
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, &fileInfo, conf.LevelDB(), conf)
 		} else {
-			svr.SaveFileMd5Log(&fileInfo, conf.Md5QueueFile())
+			svr.SaveFileMd5Log(&fileInfo, conf.Md5QueueFile(), conf)
 		}
-		svr.AppendToDownloadQueue(&fileInfo)
+		svr.AppendToDownloadQueue(&fileInfo, conf)
 		filename = fileInfo.Name
 		if fileInfo.ReName != "" {
 			filename = fileInfo.ReName
@@ -268,7 +268,7 @@ func (svr *Server) GetFileInfo(path string, router *gin.RouterGroup, conf *confi
 			filePath = strings.Replace(filePath, "/"+conf.FileDownloadPathPrefix(), conf.StoreDirName()+"/", 1)
 			md5sum = pkg.MD5(filePath)
 		}
-		if fileInfo, err = svr.GetFileInfoFromLevelDB(md5sum); err != nil {
+		if fileInfo, err = GetFileInfoFromLevelDB(md5sum, conf); err != nil {
 			log.Error(err)
 			result.Message = err.Error()
 			ctx.JSON(http.StatusNotFound, result)

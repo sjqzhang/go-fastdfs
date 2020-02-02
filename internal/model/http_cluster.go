@@ -152,7 +152,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo, conf *confi
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
-	if fileInfo.OffSet != -2 && conf.EnableDistinctFile() && svr.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
+	if fileInfo.OffSet != -2 && conf.EnableDistinctFile() && svr.CheckFileExistByInfo(fileInfo.Md5, fileInfo, conf) {
 		// ignore migrate file
 		log.Info(fmt.Sprintf("DownloadFromPeer file Exist, path:%s", fileInfo.Path+"/"+fileInfo.Name))
 		return
@@ -185,30 +185,30 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo, conf *confi
 	}
 	svr.lockMap.LockKey(fpath)
 	defer svr.lockMap.UnLockKey(fpath)
-	download_key := fmt.Sprintf("downloading_%d_%s", time.Now().Unix(), fpath)
-	svr.LevelDB.Put([]byte(download_key), []byte(""), nil)
+	downloadKey := fmt.Sprintf("downloading_%d_%s", time.Now().Unix(), fpath)
+	conf.LevelDB().Put([]byte(downloadKey), []byte(""), nil)
 	defer func() {
-		svr.LevelDB.Delete([]byte(download_key), nil)
+		conf.LevelDB().Delete([]byte(downloadKey), nil)
 	}()
 	if fileInfo.OffSet == -2 {
 		//migrate file
 		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size {
 			//prevent double download
-			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf)
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, conf.LevelDB(), conf)
 			//log.Info(fmt.Sprintf("file '%s' has download", fpath))
 			return
 		}
 		req := httplib.Get(downloadUrl)
 		req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
 		if err = req.ToFile(fpathTmp); err != nil {
-			svr.AppendToDownloadQueue(fileInfo) //retry
+			svr.AppendToDownloadQueue(fileInfo, conf) //retry
 			os.Remove(fpathTmp)
 			log.Error(err, fpathTmp)
 			return
 		}
 		if os.Rename(fpathTmp, fpath) == nil {
 			//svr.SaveFileMd5Log(fileInfo, FileMd5Name)
-			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf)
+			svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, conf.LevelDB(), conf)
 		}
 		return
 	}
@@ -218,7 +218,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo, conf *confi
 		//small file download
 		data, err = req.Bytes()
 		if err != nil {
-			svr.AppendToDownloadQueue(fileInfo) //retry
+			svr.AppendToDownloadQueue(fileInfo, conf) //retry
 			log.Error(err)
 			return
 		}
@@ -238,11 +238,11 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo, conf *confi
 			log.Warn(err)
 			return
 		}
-		svr.SaveFileMd5Log(fileInfo, conf.FileMd5())
+		svr.SaveFileMd5Log(fileInfo, conf.FileMd5(), conf)
 		return
 	}
 	if err = req.ToFile(fpathTmp); err != nil {
-		svr.AppendToDownloadQueue(fileInfo) //retry
+		svr.AppendToDownloadQueue(fileInfo, conf) //retry
 		os.Remove(fpathTmp)
 		log.Error(err)
 		return
@@ -268,7 +268,7 @@ func (svr *Server) DownloadFromPeer(peer string, fileInfo *FileInfo, conf *confi
 		return
 	}
 	if os.Rename(fpathTmp, fpath) == nil {
-		svr.SaveFileMd5Log(fileInfo, conf.FileMd5())
+		svr.SaveFileMd5Log(fileInfo, conf.FileMd5(), conf)
 	}
 }
 
@@ -286,7 +286,7 @@ func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceU
 			log.Error(string(buffer))
 		}
 	}()
-	if md5set, err = GetMd5sByDate(date, filename); err != nil {
+	if md5set, err = GetMd5sByDate(date, filename, conf); err != nil {
 		log.Error(err)
 		return
 	}
@@ -295,7 +295,7 @@ func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceU
 		if md == nil {
 			continue
 		}
-		if fileInfo, _ := svr.GetFileInfoFromLevelDB(md.(string)); fileInfo != nil && fileInfo.Md5 != "" {
+		if fileInfo, _ := GetFileInfoFromLevelDB(md.(string), conf); fileInfo != nil && fileInfo.Md5 != "" {
 			if isForceUpload {
 				fileInfo.Peers = []string{}
 			}
@@ -306,10 +306,10 @@ func (svr *Server) CheckFileAndSendToPeer(date string, filename string, isForceU
 				fileInfo.Peers = append(fileInfo.Peers, svr.host) // peer is null
 			}
 			if filename == conf.Md5QueueFile() {
-				svr.AppendToDownloadQueue(fileInfo)
+				svr.AppendToDownloadQueue(fileInfo, conf)
 				continue
 			}
-			svr.AppendToQueue(fileInfo)
+			svr.AppendToQueue(fileInfo, conf)
 		}
 	}
 }
@@ -369,7 +369,7 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo, conf *config.Config) {
 			// where not EnableDistinctFile should check
 			if info, err = checkPeerFileExist(peer, fileInfo.Md5, ""); info.Md5 != "" {
 				fileInfo.Peers = append(fileInfo.Peers, peer)
-				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf); err != nil {
+				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, conf.LevelDB(), conf); err != nil {
 					log.Error(err)
 				}
 				continue
@@ -387,19 +387,19 @@ func (svr *Server) postFileToPeer(fileInfo *FileInfo, conf *config.Config) {
 		if err != nil {
 			if fileInfo.retry <= conf.RetryCount() {
 				fileInfo.retry = fileInfo.retry + 1
-				svr.AppendToQueue(fileInfo)
+				svr.AppendToQueue(fileInfo, conf)
 			}
 			log.Error(err, fmt.Sprintf(" path:%s", fileInfo.Path+"/"+fileInfo.Name))
 		}
 		if !strings.HasPrefix(result, "http://") || err != nil {
 			log.Error(err)
-			svr.SaveFileMd5Log(fileInfo, conf.Md5ErrorFile())
+			svr.SaveFileMd5Log(fileInfo, conf.Md5ErrorFile(), conf)
 		}
 		if strings.HasPrefix(result, "http://") {
 			log.Info(result)
 			if !pkg.Contains(peer, fileInfo.Peers) {
 				fileInfo.Peers = append(fileInfo.Peers, peer)
-				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, svr.LevelDB, conf); err != nil {
+				if _, err = svr.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, conf.LevelDB(), conf); err != nil {
 					log.Error(err)
 				}
 			}
