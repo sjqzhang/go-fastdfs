@@ -38,7 +38,7 @@ type FileInfoResult struct {
 }
 
 func BuildFileResult(fileInfo *FileInfo, reqHost string, conf *config.Config) FileResult {
-	host := strings.Replace(conf.Host(), "http://", "", -1)
+	host := strings.Replace(conf.Addr(), "http://", "", -1)
 	if reqHost != "" {
 		// if is not null use the requestHost(ip:port)
 		host = reqHost
@@ -54,21 +54,21 @@ func BuildFileResult(fileInfo *FileInfo, reqHost string, conf *config.Config) Fi
 	}
 	path := strings.Replace(fileInfo.Path, conf.StoreDir()+"/", "", 1)
 	//eg: /file/svg/1.svg,
-	downloadPathSubfix := conf.FileDownloadPathPrefix() + "/" + path + "/" + fileName
+	downloadURLTail := conf.FileDownloadPathPrefix() + "/" + path + "/" + fileName
 
-	downloadUrl := fmt.Sprintf("http://%s%s", host, downloadPathSubfix)
+	downloadUrl := fmt.Sprintf("http://%s%s", host, downloadURLTail)
 	if conf.DownloadDomain() != "" {
-		downloadUrl = fmt.Sprintf("%s%s", conf.DownloadDomain(), downloadPathSubfix)
+		downloadUrl = fmt.Sprintf("%s%s", conf.DownloadDomain(), downloadURLTail)
 	}
 	result := FileResult{
 		Url:     downloadUrl,
 		Md5:     fileInfo.Md5,
-		Path:    downloadPathSubfix,
+		Path:    path + "/" + fileName,
 		Domain:  domain,
 		Scene:   fileInfo.Scene,
 		Size:    fileInfo.Size,
 		ModTime: fileInfo.TimeStamp,
-		Src:     downloadPathSubfix,
+		Src:     path + "/" + fileName,
 		Scenes:  fileInfo.Scene,
 	}
 

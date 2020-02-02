@@ -31,7 +31,7 @@ type Params struct {
 	DownloadTokenExpire  int      `yaml:"download_token_expire"`
 	QueueSize            int      `yaml:"queue_size"`
 	AutoRepair           bool     `yaml:"auto_repair"`
-	Host                 string   `yaml:"host"`
+	Addr                 string
 	FileSumArithmetic    string   `yaml:"file_sum_arithmetic"`
 	PeerId               string   `yaml:"peer_id"`
 	SupportGroupManage   bool     `yaml:"support_group_manage"`

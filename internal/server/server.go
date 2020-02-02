@@ -34,7 +34,7 @@ func Start(conf *config.Config) {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
-	signalListen(srv)
+	signalListen(srv, conf)
 }
 
 func cors(c *gin.Context) {
@@ -65,19 +65,21 @@ func cors(c *gin.Context) {
 	c.Next()
 }
 
-func signalListen(srv *http.Server) {
+func signalListen(srv *http.Server, conf *config.Config) {
 	// Wait for interrupt signal to gracefully shutdown the server with
 	// a timeout of 5 seconds.
 	quit := make(chan os.Signal)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	<-quit
+	signal.Notify(quit, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	log.Printf("receive %v, Exit", <-quit)
 	log.Println("**** Graceful shutdown monitor server ****")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
+	conf.RegisterExit()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Monitor Server shutdown:", err)
+		log.Fatal("File Server shutdown:", err)
 	}
-	log.Println("**** Monitor server exiting **** ")
+	log.Println("**** File server exiting **** ")
+
 }

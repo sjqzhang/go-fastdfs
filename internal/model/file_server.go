@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -22,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/astaxie/beego/httplib"
@@ -901,21 +899,6 @@ func (svr *Server) Stat(path string, router *gin.RouterGroup, conf *config.Confi
 	})
 }
 
-func RegisterExit(conf *config.Config) {
-	c := make(chan os.Signal)
-	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	go func() {
-		for s := range c {
-			switch s {
-			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-				conf.LevelDB().Close()
-				log.Info("Exit", s)
-				os.Exit(1)
-			}
-		}
-	}()
-}
-
 // Read: append the file info to queen channel, the file info will send to all peers
 func (svr *Server) AppendToQueue(fileInfo *FileInfo, conf *config.Config) {
 
@@ -1629,17 +1612,17 @@ func (svr *Server) InitComponent(isReload bool, conf *config.Config) {
 	if ip = os.Getenv("GO_FASTDFS_IP"); ip == "" {
 		ip = pkg.GetPublicIP()
 	}
-	if conf.Host() == "" {
+	if conf.Addr() == "" {
 		if len(strings.Split(conf.Port(), ":")) == 2 {
 			Svr.host = fmt.Sprintf("http://%s:%s", ip, strings.Split(conf.Port(), ":")[1])
-			conf.SetHost(Svr.host)
+			conf.SetAddr(Svr.host)
 			conf.SetDownloadDomain()
 		}
 	} else {
-		if strings.HasPrefix(conf.Host(), "http") {
-			Svr.host = conf.Host()
+		if strings.HasPrefix(conf.Addr(), "http") {
+			Svr.host = conf.Addr()
 		} else {
-			Svr.host = "http://" + conf.Host()
+			Svr.host = "http://" + conf.Addr()
 		}
 	}
 	ex, _ := regexp.Compile("\\d+\\.\\d+\\.\\d+\\.\\d+")

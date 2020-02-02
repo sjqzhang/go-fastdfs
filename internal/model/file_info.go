@@ -112,7 +112,7 @@ func (svr *Server) RepairFileInfoFromFile(conf *config.Config) {
 					Path:      filePath,
 					Md5:       pathMd5,
 					TimeStamp: fi.ModTime().Unix(),
-					Peers:     []string{conf.Host()},
+					Peers:     []string{conf.Addr()},
 					OffSet:    -2,
 				}
 

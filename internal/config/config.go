@@ -20,7 +20,7 @@ const (
 
 type Config struct {
 	levelDB       *leveldb.DB
-	logLevelDb    *leveldb.DB
+	logLevelDB    *leveldb.DB
 	params        *Params
 	absRunningDir string
 }
@@ -38,6 +38,7 @@ func NewConfig() *Config {
 	}
 	levelDB, err := leveldb.OpenFile(params.LeveldbFile, opts)
 	if err != nil {
+		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", conf.LeveldbFile()))
 		panic(err)
 	}
 	conf.levelDB = levelDB
@@ -45,17 +46,27 @@ func NewConfig() *Config {
 	logLevelDB, err := leveldb.OpenFile(conf.LogLeveldbFile(), opts)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("open db file %s fail,maybe has opening", conf.LogLeveldbFile()))
-		log.Error(err)
 		panic(err)
 
 	}
-	conf.logLevelDb = logLevelDB
+	conf.logLevelDB = logLevelDB
 
 	conf.createFileServerDirectory()
 	conf.initPeer()
 	conf.initUploadPage()
 
 	return conf
+}
+
+func (c *Config) RegisterExit() {
+	err := c.LevelDB().Close()
+	if err != nil {
+		log.Info("close levelDB error: ", err)
+	}
+	err = c.LogLevelDB().Close()
+	if err != nil {
+		log.Info("close LogLevelDB error: ", err)
+	}
 }
 
 func (c *Config) EnableFsNotify() bool {
@@ -108,10 +119,10 @@ func (c *Config) CheckRunningDir() {
 
 	curDir, e2 := filepath.Abs(".")
 
-	c.absRunningDir = appDir
 	if e1 == nil && e2 == nil && appDir != curDir {
 		panic(fmt.Sprintf("please switch directory to '%s' and start fileserver\n", appDir))
 	}
+	c.absRunningDir = appDir
 }
 
 func (c *Config) createFileServerDirectory() {
@@ -156,8 +167,8 @@ func (c *Config) ShowDir() bool {
 	return c.params.ShowDir
 }
 
-func (c *Config) Host() string {
-	return c.params.Host
+func (c *Config) Addr() string {
+	return c.params.Addr
 }
 
 func (c *Config) FileDownloadPathPrefix() string {
@@ -327,8 +338,8 @@ func (c *Config) Extensions() []string {
 	return c.params.Extensions
 }
 
-func (c *Config) SetHost(host string) {
-	c.params.Host = host
+func (c *Config) SetAddr(host string) {
+	c.params.Addr = host
 }
 
 func (c *Config) SetPeers(peers []string) {
@@ -422,7 +433,7 @@ func (c *Config) DownloadDomain() string {
 func (c *Config) SetDownloadDomain() {
 	if !strings.HasPrefix(c.DownloadDomain(), "http") {
 		if c.DownloadDomain() == "" {
-			c.params.DownloadDomain = fmt.Sprintf("http://%s", c.Host())
+			c.params.DownloadDomain = c.Addr()
 			return
 		}
 		c.params.DownloadDomain = fmt.Sprintf("http://%s", c.DownloadDomain())
@@ -438,7 +449,7 @@ func (c *Config) ConfigDir() string {
 }
 
 func (c *Config) LogLevelDB() *leveldb.DB {
-	return c.logLevelDb
+	return c.logLevelDB
 }
 
 func (c *Config) LevelDB() *leveldb.DB {

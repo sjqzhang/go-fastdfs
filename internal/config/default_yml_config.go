@@ -1,6 +1,7 @@
 package config
 
-var ymlConfig = `
+// TODO, will remove, seems no need
+var _ = `
 	# 绑定端号: "端口",
 	port: "%s",
 	#PeerID: "集群内唯一,请使用0-9的单字符，默认自动生成",

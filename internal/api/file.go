@@ -269,7 +269,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 					Name:      path.Base(fpath),
 					Size:      fi.Size(),
 					Md5:       sum,
-					Peers:     []string{conf.Host()},
+					Peers:     []string{conf.Addr()},
 					OffSet:    -1, //very important
 					TimeStamp: fi.ModTime().Unix(),
 				}
