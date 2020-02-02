@@ -192,7 +192,7 @@ func Download(uri string, router *gin.RouterGroup, conf *config.Config) {
 		// if params is not enough then redirect to upload
 		if pkg.CheckUploadURIInvalid(reqURI) {
 			log.Warnf("RequestURI-%s is invalid, redirect to index", reqURI)
-			ctx.JSON(http.StatusNotFound, "RequestURI is invalid, redirect to index")
+			ctx.JSON(http.StatusBadRequest, "RequestURI is invalid")
 			return
 		}
 		if ok, err := model.Svr.CheckDownloadAuth(ctx, conf); !ok {
@@ -226,24 +226,21 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 		var (
 			err      error
 			fileInfo *model.FileInfo
-			fpath    string
+			fPath    string
 			fi       os.FileInfo
 		)
-		r := ctx.Request
-		r.ParseForm()
-		md5sum := ""
-		md5sum = r.FormValue("md5")
-		fpath = r.FormValue("path")
+		md5sum := ctx.Param("md5")
+		fPath = ctx.Param("path")
 		if fileInfo, err = model.GetFileInfoFromLevelDB(md5sum, conf); fileInfo != nil {
 			if fileInfo.OffSet != -1 {
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
 			}
-			fpath = fileInfo.Path + "/" + fileInfo.Name
+			fPath = fileInfo.Path + "/" + fileInfo.Name
 			if fileInfo.ReName != "" {
-				fpath = fileInfo.Path + "/" + fileInfo.ReName
+				fPath = fileInfo.Path + "/" + fileInfo.ReName
 			}
-			if pkg.Exist(fpath) {
+			if pkg.Exist(fPath) {
 				ctx.JSON(http.StatusOK, fileInfo)
 				return
 			}
@@ -254,10 +251,11 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 			ctx.JSON(http.StatusNotFound, model.FileInfo{})
 		}
 
-		if fpath != "" {
-			fi, err = os.Stat(fpath)
+		if fPath != "" {
+			fullPath := conf.StoreDir() + "/" + fPath
+			fi, err = os.Stat(fullPath)
 			if err == nil {
-				sum := pkg.MD5(fpath)
+				sum := pkg.MD5(fullPath)
 				//if config.CommonConfig.EnableDistinctFile {
 				//	sum, err = pkg.GetFileSumByName(fpath, config.CommonConfig.FileSumArithmetic)
 				//	if err != nil {
@@ -265,8 +263,8 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 				//	}
 				//}
 				fileInfo = &model.FileInfo{
-					Path:      path.Dir(fpath),
-					Name:      path.Base(fpath),
+					Path:      path.Dir(fPath),
+					Name:      path.Base(fPath),
 					Size:      fi.Size(),
 					Md5:       sum,
 					Peers:     []string{conf.Addr()},
@@ -278,7 +276,7 @@ func CheckFileExist(reqPath string, router *gin.RouterGroup, conf *config.Config
 			}
 		}
 
-		ctx.JSON(http.StatusNotFound, model.FileInfo{})
+		ctx.JSON(http.StatusNotFound, "please check file path")
 	})
 }
 

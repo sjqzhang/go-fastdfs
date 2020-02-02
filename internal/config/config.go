@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/luoyunpeng/go-fastdfs/pkg"
@@ -117,9 +116,7 @@ func (c *Config) initUploadPage() {
 func (c *Config) CheckRunningDir() {
 	appDir, e1 := pkg.GetFileServerRunningAbsDir(os.Args[0])
 
-	curDir, e2 := filepath.Abs(".")
-
-	if e1 == nil && e2 == nil && appDir != curDir {
+	if e1 == nil {
 		panic(fmt.Sprintf("please switch directory to '%s' and start fileserver\n", appDir))
 	}
 	c.absRunningDir = appDir
