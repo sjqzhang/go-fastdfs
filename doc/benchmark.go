@@ -20,6 +20,7 @@ var worker *int
 var queue chan string
 var filesize *int
 var filecount *int
+var retry *int
 var gen *bool
 var done chan bool=make(chan bool,1)
 var wg sync.WaitGroup=sync.WaitGroup{}
@@ -48,6 +49,7 @@ func sendFile()  {
 			req.Param("output", "text")
 			req.Param("scene", "")
 			req.Param("path", "")
+			req.Retries(*retry)
 			if s,err:=req.String();err!=nil {
 				fmt.Println(err,filePath)
 			} else {
@@ -94,9 +96,10 @@ func main()  {
 	url=flag.String("url", "http://127.0.0.1:8080/group1/upload", "url")
 	dir=flag.String("dir", "./", "dir to upload")
 	worker=flag.Int("worker", 100, "num of worker")
+	retry=flag.Int("retry", -1, "retry times when fail")
 	filesize=flag.Int("filesize", 1024*1024, "file of size")
 	filecount=flag.Int("filecount", 1000000, "file of count")
-	gen=flag.Bool("gen", false, "is gen file")
+	gen=flag.Bool("gen", false, "gen file")
 	flag.Parse()
 	st:=time.Now()
 	if *gen {

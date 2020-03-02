@@ -84,4 +84,5 @@ http://yourserver ip:8080 注意：不要使用127.0.0.1上传
 
 ### [使用文档](https://sjqzhang.github.io/go-fastdfs/#character)
 
-[![asciicast](https://asciinema.org/a/258926.svg)](https://asciinema.org/a/258926)
+### [视频教程](https://www.bilibili.com/video/av92526484)
+
