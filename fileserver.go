@@ -2254,7 +2254,9 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 		}
 	}
 	if !this.util.FileExists(folder) {
-		os.MkdirAll(folder, 0775)
+		if err = os.MkdirAll(folder, 0775); err != nil {
+			log.Error(err)
+		}
 	}
 	outPath := fmt.Sprintf(folder+"/%s", fileInfo.Name)
 	if fileInfo.ReName != "" {
@@ -2316,7 +2318,11 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	folder = STORE_DIR + "/_tmp/" + time.Now().Format("20060102")
-	os.MkdirAll(folder, 0777)
+	if !this.util.FileExists(folder) {
+		if err = os.MkdirAll(folder, 0777); err != nil {
+			log.Error(err)
+		}
+	}
 	fn = folder + "/" + this.util.GetUUID()
 	defer func() {
 		os.Remove(fn)
