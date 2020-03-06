@@ -2364,6 +2364,7 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		data         []byte
 		code         string
 		secret       interface{}
+		msg          string
 	)
 	output = r.FormValue("output")
 	if Config().EnableCrossOrigin {
@@ -2372,12 +2373,14 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
+	result.Status = "fail"
 	if Config().AuthUrl != "" {
 		if !this.CheckAuth(w, r) {
-			log.Warn("auth fail", r.Form)
+			msg = "auth fail"
+			log.Warn(msg, r.Form)
 			this.NotPermit(w, r)
-			w.Write([]byte("auth fail"))
+			result.Message = msg
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 	}
@@ -2386,7 +2389,10 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		fileName = r.FormValue("filename")
 		output = r.FormValue("output")
 		if Config().ReadOnly {
-			w.Write([]byte("(error) readonly"))
+			msg = "(error) readonly"
+			result.Message = msg
+			log.Warn(msg)
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 		if Config().EnableCustomPath {
@@ -2403,7 +2409,10 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 			if secret, ok = this.sceneMap.GetValue(scene); ok {
 				if !this.VerifyGoogleCode(secret.(string), code, int64(Config().DownloadTokenExpire/30)) {
 					this.NotPermit(w, r)
-					w.Write([]byte("invalid request,error google code"))
+					msg = "invalid request,error google code"
+					result.Message = msg
+					log.Error(msg)
+					w.Write([]byte(this.util.JsonEncodePretty(result)))
 					return
 				}
 			}
@@ -2413,7 +2422,8 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		fileInfo.OffSet = -1
 		if uploadFile, uploadHeader, err = r.FormFile("file"); err != nil {
 			log.Error(err)
-			w.Write([]byte(err.Error()))
+			result.Message = err.Error()
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 		fileInfo.Peers = []string{}
@@ -2424,13 +2434,18 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		if output == "" {
 			output = "text"
 		}
-		if !this.util.Contains(output, []string{"json", "text"}) {
-			w.Write([]byte("output just support json or text"))
+		if !this.util.Contains(output, []string{"json", "text", "json2"}) {
+			msg = "output just support json or text or json2"
+			result.Message = msg
+			log.Warn(msg)
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 		fileInfo.Scene = scene
 		if _, err = this.CheckScene(scene); err != nil {
-			w.Write([]byte(err.Error()))
+			result.Message = err.Error()
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
+			log.Error(err)
 			return
 		}
 		if err != nil {
@@ -2439,7 +2454,9 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if _, err = this.SaveUploadFile(uploadFile, uploadHeader, &fileInfo, r); err != nil {
-			w.Write([]byte(err.Error()))
+			result.Message = err.Error()
+			log.Error(err)
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 		if Config().EnableDistinctFile {
@@ -2450,12 +2467,14 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 				} else {
 					os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
 				}
-				if output == "json" {
-					if data, err = json.Marshal(fileResult); err != nil {
-						log.Error(err)
-						w.Write([]byte(err.Error()))
+				if output == "json" || output == "json2" {
+					if output == "json2" {
+						result.Data = fileResult
+						result.Status = "ok"
+						w.Write([]byte(this.util.JsonEncodePretty(result)))
+						return
 					}
-					w.Write(data)
+					w.Write([]byte(this.util.JsonEncodePretty(fileResult)))
 				} else {
 					w.Write([]byte(fileResult.Url))
 				}
@@ -2463,11 +2482,17 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if fileInfo.Md5 == "" {
-			log.Warn(" fileInfo.Md5 is null")
+			msg = " fileInfo.Md5 is null"
+			log.Warn(msg)
+			result.Message = msg
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 		if md5sum != "" && fileInfo.Md5 != md5sum {
-			log.Warn(" fileInfo.Md5 and md5sum !=")
+			msg = " fileInfo.Md5 and md5sum !="
+			log.Warn(msg)
+			result.Message = msg
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 		if !Config().EnableDistinctFile {
@@ -2477,24 +2502,30 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
 			if err = this.SaveSmallFile(&fileInfo); err != nil {
 				log.Error(err)
+				result.Message = err.Error()
+				w.Write([]byte(this.util.JsonEncodePretty(result)))
 				return
 			}
 		}
 		this.saveFileMd5Log(&fileInfo, CONST_FILE_Md5_FILE_NAME) //maybe slow
 		go this.postFileToPeer(&fileInfo)
 		if fileInfo.Size <= 0 {
-			log.Error("file size is zero")
+			msg = "file size is zero"
+			result.Message = msg
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
+			log.Error(msg)
 			return
 		}
 		fileResult = this.BuildFileResult(&fileInfo, r)
-		 result.Data = fileResult
-	     result.Status = "ok"
-		if output == "json" {
-			if data, err = json.Marshal(fileResult); err != nil {
-				log.Error(err)
-				w.Write([]byte(err.Error()))
+
+		if output == "json" || output == "json2" {
+			if output == "json2" {
+				result.Data = fileResult
+				result.Status = "ok"
+				w.Write([]byte(this.util.JsonEncodePretty(result)))
+				return
 			}
-			w.Write(data)
+			w.Write([]byte(this.util.JsonEncodePretty(fileResult)))
 		} else {
 			w.Write([]byte(fileResult.Url))
 		}
@@ -2503,19 +2534,28 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		md5sum = r.FormValue("md5")
 		output = r.FormValue("output")
 		if md5sum == "" {
-			w.Write([]byte("(error) if you want to upload fast md5 is require" +
-				",and if you want to upload file,you must use post method  "))
+			msg = "(error) if you want to upload fast md5 is require" +
+				",and if you want to upload file,you must use post method  "
+			result.Message = msg
+			log.Error(msg)
+			w.Write([]byte(this.util.JsonEncodePretty(result)))
 			return
 		}
 		if v, _ := this.GetFileInfoFromLevelDB(md5sum); v != nil && v.Md5 != "" {
 			fileResult = this.BuildFileResult(v, r)
-			 result.Data = fileResult
-	         result.Status = "ok"
+			result.Data = fileResult
+			result.Status = "ok"
 		}
-		if output == "json" {
+		if output == "json" || output == "json2" {
 			if data, err = json.Marshal(fileResult); err != nil {
 				log.Error(err)
-				w.Write([]byte(err.Error()))
+				result.Message = err.Error()
+				w.Write([]byte(this.util.JsonEncodePretty(result)))
+				return
+			}
+			if output == "json2" {
+				w.Write([]byte(this.util.JsonEncodePretty(result)))
+				return
 			}
 			w.Write(data)
 		} else {
@@ -3596,7 +3636,7 @@ func (this *Server) Index(w http.ResponseWriter, r *http.Request) {
 					<span class="form-line">文件名(filename):
 					  <input type="text" id="filename" name="filename" value="" /></span>
 					<span class="form-line">输出(output):
-					  <input type="text" id="output" name="output" value="json" /></span>
+					  <input type="text" id="output" name="output" value="json2" title="json|text|json2" /></span>
 					<span class="form-line">自定义路径(path):
 					  <input type="text" id="path" name="path" value="" /></span>
 	              <span class="form-line">google认证码(code):
