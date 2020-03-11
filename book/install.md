@@ -13,9 +13,11 @@ wget --no-check-certificate  https://github.com/sjqzhang/go-fastdfs/releases/dow
 # Docker体验{#docker}
 
 ```
- docker run --name fastdfs -v /data/fastdfs_data:/data -p 8080:8080 -e GO_FASTDFS_DIR=/data sjqzhang/go-fastdfs
+ docker run --network=host --name fastdfs -v /data/fastdfs_data:/data -p 8080:8080 -e GO_FASTDFS_DIR=/data sjqzhang/go-fastdfs
 
 ```
+说明：go-fastdfs认证用到peer IP，所以最好用--network=host 不支持nat,bridge模式
+
 
 ## 编译安装{#compiler_install}
 

@@ -12,7 +12,9 @@ http://10.1.5.9:8080/upload
 ```
 # 命令上传{#cmdline}
 
-`curl -F file=@http-index-fs http://10.1.xx.60:8080/group1/upload` 	
+`curl -F scene=default -F file=@http-index-fs http://10.1.xx.60:8080/group1/upload` 
+
+说明：其它参数请参考web自带上传面面，文件参数前有个”@” 参数是-F 
 
 
 # WEB上传（浏览器打开）{#web}
