@@ -8,8 +8,7 @@ import (
 	"github.com/sjqzhang/goutil"
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"strings"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -30,15 +29,17 @@ func init()  {
 	util=goutil.Common{}
 }
 
-func getDir(dir string) []string  {
-    cmd:=exec.Command("find",dir,"-type","f")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err:=cmd.Run();err!=nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	return strings.Split( out.String(),"\n")
+func getDir(dir string) []string {
+	var (
+		paths []string
+	)
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			paths = append(paths, path)
+		}
+		return nil
+	})
+	return paths
 }
 
 func sendFile()  {

@@ -3462,6 +3462,7 @@ func (this *Server) GenGoogleSecret(w http.ResponseWriter, r *http.Request) {
 	if !this.IsPeer(r) {
 		result.Message = this.GetClusterNotPermitMessage(r)
 		w.Write([]byte(this.util.JsonEncodePretty(result)))
+		return
 	}
 	GetSeed := func(length int) string {
 		seeds := "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
