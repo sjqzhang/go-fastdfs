@@ -1841,6 +1841,9 @@ func (this *Server) IsPeer(r *http.Request) bool {
 		bflag bool
 	)
 	//return true
+	if this.util.Contains("0.0.0.0", Config().AdminIps) {
+		return true
+	}
 	ip = this.util.GetClientIp(r)
 	realIp := os.Getenv("GO_FASTDFS_IP")
 	if realIp == "" {
