@@ -14,6 +14,7 @@ import (
 	slog "log"
 	random "math/rand"
 	"mime/multipart"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"net/smtp"
@@ -53,7 +54,7 @@ import (
 
 var staticHandler http.Handler
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
-var server *Server
+var server *Server = nil
 var logacc log.LoggerInterface
 var FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR, STATIC_DIR}
 var CONST_QUEUE_SIZE = 10000
@@ -328,9 +329,12 @@ type FileInfoResult struct {
 
 func NewServer() *Server {
 	var (
-		server *Server
-		err    error
+		//server *Server
+		err error
 	)
+	if server != nil {
+		return server
+	}
 	server = &Server{
 		util:           &goutil.Common{},
 		statMap:        goutil.NewCommonMap(0),
@@ -1839,20 +1843,54 @@ func (this *Server) IsPeer(r *http.Request) bool {
 		ip    string
 		peer  string
 		bflag bool
+		cidr  *net.IPNet
+		err   error
 	)
+	IsPublicIP := func(IP net.IP) bool {
+		if IP.IsLoopback() || IP.IsLinkLocalMulticast() || IP.IsLinkLocalUnicast() {
+			return false
+		}
+		if ip4 := IP.To4(); ip4 != nil {
+			switch true {
+			case ip4[0] == 10:
+				return false
+			case ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31:
+				return false
+			case ip4[0] == 192 && ip4[1] == 168:
+				return false
+			default:
+				return true
+			}
+		}
+		return false
+	}
 	//return true
+	ip = this.util.GetClientIp(r)
 	if this.util.Contains("0.0.0.0", Config().AdminIps) {
+		if IsPublicIP(net.ParseIP(ip)) {
+			return false
+		}
 		return true
 	}
-	ip = this.util.GetClientIp(r)
+	if this.util.Contains(ip, Config().AdminIps) {
+		return true
+	}
+	for _, v := range Config().AdminIps {
+		if len(strings.Split(v, "/")) > 0 {
+			if _, cidr, err = net.ParseCIDR(v); err != nil {
+				log.Error(err)
+				return false
+			}
+			if cidr.Contains(net.ParseIP(ip)) {
+				return true
+			}
+		}
+	}
 	realIp := os.Getenv("GO_FASTDFS_IP")
 	if realIp == "" {
 		realIp = this.util.GetPulicIP()
 	}
 	if ip == "127.0.0.1" || ip == realIp {
-		return true
-	}
-	if this.util.Contains(ip, Config().AdminIps) {
 		return true
 	}
 	ip = "http://" + ip
@@ -4227,7 +4265,7 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	}
 	http.DefaultServeMux.ServeHTTP(res, req)
 }
-func (this *Server) Main() {
+func (this *Server) Start() {
 	go func() {
 		for {
 			this.CheckFileAndSendToPeer(this.util.GetToDay(), CONST_Md5_ERROR_FILE_NAME, false)
@@ -4316,5 +4354,5 @@ func (this *Server) Main() {
 	fmt.Println(err)
 }
 func main() {
-	server.Main()
+	server.Start()
 }
