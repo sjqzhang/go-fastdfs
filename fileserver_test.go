@@ -21,7 +21,7 @@ const (
 
 var testUtil = goutil.Common{}
 
-var endPoint = "http://127.0.0.1:8080"
+var endPoint = "http://127.0.0.1:8080/group1"
 var endPoint2 = ""
 
 var testCfg *GloablConfig
