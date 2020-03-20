@@ -2327,6 +2327,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	}
 	if fi, err = outFile.Stat(); err != nil {
 		log.Error(err)
+		return fileInfo, errors.New("(error)fail," + err.Error())
 	} else {
 		fileInfo.Size = fi.Size()
 	}
