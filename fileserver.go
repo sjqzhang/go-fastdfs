@@ -1876,7 +1876,7 @@ func (this *Server) IsPeer(r *http.Request) bool {
 		return true
 	}
 	for _, v := range Config().AdminIps {
-		if len(strings.Split(v, "/")) > 0 {
+		if strings.Contains(v, "/") {
 			if _, cidr, err = net.ParseCIDR(v); err != nil {
 				log.Error(err)
 				return false
