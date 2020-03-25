@@ -1334,12 +1334,15 @@ func (this *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width
 		log.Error(err)
 		return
 	}
-	img = resize.Resize(width, height, img, resize.Lanczos3)
+	if img.Bounds().Dx() >= int(width) && img.Bounds().Dy() >= int(height) {
+		img = resize.Resize(width, height, img, resize.Lanczos3)
+	}
 	if imgType == "jpg" || imgType == "jpeg" {
 		jpeg.Encode(w, img, nil)
 	} else if imgType == "png" {
 		png.Encode(w, img)
 	} else {
+		//空
 		w.Write(data)
 	}
 }
@@ -1361,7 +1364,10 @@ func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, h
 		return
 	}
 	file.Close()
-	img = resize.Resize(width, height, img, resize.Lanczos3)
+
+	if img.Bounds().Dx() >= int(width) && img.Bounds().Dy() >= int(height) {
+		img = resize.Resize(width, height, img, resize.Lanczos3)
+	}
 	if imgType == "jpg" || imgType == "jpeg" {
 		jpeg.Encode(w, img, nil)
 	} else if imgType == "png" {
@@ -1370,6 +1376,7 @@ func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, h
 		file.Seek(0, 0)
 		io.Copy(w, file)
 	}
+
 }
 func (this *Server) GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
