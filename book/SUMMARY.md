@@ -10,6 +10,7 @@
     * [编译安装](install.md#compiler_install)
     * [小集群安装](install.md#small-cluster)
     * [海量集群安装(推荐)](install.md#big-cluster)
+    * [https证书生成](ca.md)
 * [认证](authentication.md)
     * [按文件指纹认证](authentication.md#fingerprint)
     * [按google认证码认证](authentication.md#google)
