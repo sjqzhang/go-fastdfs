@@ -80,6 +80,8 @@ var (
 	CONST_LOG_LEVELDB_FILE_NAME = DATA_DIR + "/log.db"
 	CONST_STAT_FILE_NAME        = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME        = CONF_DIR + "/cfg.json"
+	CONST_SERVER_CRT_FILE_NAME  = CONF_DIR + "/server.crt"
+	CONST_SERVER_KEY_FILE_NAME  = CONF_DIR + "/server.key"
 	CONST_SEARCH_FILE_NAME      = DATA_DIR + "/search.txt"
 	CONST_UPLOAD_COUNTER_KEY    = "__CONST_UPLOAD_COUNTER_KEY__"
 	logConfigStr                = `
@@ -126,6 +128,8 @@ const (
 	cfgJson                        = `{
 	"绑定端号": "端口",
 	"addr": ":8080",
+	"是否开启https": "默认不开启，如需启开启，请在conf目录中增加证书文件 server.crt 私钥 文件 server.key",
+	"enable_https": false,
 	"PeerID": "集群内唯一,请使用0-9的单字符，默认自动生成",
 	"peer_id": "%s",
 	"本主机地址": "本机http地址,默认自动生成(注意端口必须与addr中的端口一致），必段为内网，自动生成不为内网请自行修改，下同",
@@ -271,6 +275,7 @@ type StatDateFileInfo struct {
 type GloablConfig struct {
 	Addr                 string   `json:"addr"`
 	Peers                []string `json:"peers"`
+	EnableHttps          bool     `json:"enable_https"`
 	Group                string   `json:"group"`
 	RenameFile           bool     `json:"rename_file"`
 	ShowDir              bool     `json:"show_dir"`
@@ -2047,10 +2052,11 @@ func (this *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 		filename    string
 	)
 	r.ParseForm()
+	fileInfoStr = r.FormValue("fileInfo")
 	if !this.IsPeer(r) {
+		log.Info("isn't peer fileInfo:", fileInfo)
 		return
 	}
-	fileInfoStr = r.FormValue("fileInfo")
 	if err = json.Unmarshal([]byte(fileInfoStr), &fileInfo); err != nil {
 		w.Write([]byte(this.GetClusterNotPermitMessage(r)))
 		log.Error(err)
@@ -2218,22 +2224,28 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 		downloadUrl string
 		domain      string
 		host        string
+		protocol    string
 	)
+	if Config().EnableHttps {
+		protocol = "https"
+	} else {
+		protocol = "http"
+	}
 	host = strings.Replace(Config().Host, "http://", "", -1)
 	if r != nil {
 		host = r.Host
 	}
 	if !strings.HasPrefix(Config().DownloadDomain, "http") {
 		if Config().DownloadDomain == "" {
-			Config().DownloadDomain = fmt.Sprintf("http://%s", host)
+			Config().DownloadDomain = fmt.Sprintf("%s://%s", protocol, host)
 		} else {
-			Config().DownloadDomain = fmt.Sprintf("http://%s", Config().DownloadDomain)
+			Config().DownloadDomain = fmt.Sprintf("%s://%s", protocol, Config().DownloadDomain)
 		}
 	}
 	if Config().DownloadDomain != "" {
 		domain = Config().DownloadDomain
 	} else {
-		domain = fmt.Sprintf("http://%s", host)
+		domain = fmt.Sprintf("%s://%s", protocol, host)
 	}
 	outname = fileInfo.Name
 	if fileInfo.ReName != "" {
@@ -2245,7 +2257,7 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 	} else {
 		p = p + "/" + outname
 	}
-	downloadUrl = fmt.Sprintf("http://%s/%s", host, p)
+	downloadUrl = fmt.Sprintf("%s://%s/%s", protocol, host, p)
 	if Config().DownloadDomain != "" {
 		downloadUrl = fmt.Sprintf("%s/%s", Config().DownloadDomain, p)
 	}
@@ -2274,7 +2286,6 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if len(Config().Extensions) > 0 && !this.util.Contains(path.Ext(fileInfo.Name), Config().Extensions) {
 		return fileInfo, errors.New("(error)file extension mismatch")
 	}
-
 	if Config().RenameFile {
 		fileInfo.ReName = this.util.MD5(this.util.GetUUID()) + path.Ext(fileInfo.Name)
 	}
@@ -3757,6 +3768,8 @@ func init() {
 	CONST_LOG_LEVELDB_FILE_NAME = DATA_DIR + "/log.db"
 	CONST_STAT_FILE_NAME = DATA_DIR + "/stat.json"
 	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
+	CONST_SERVER_CRT_FILE_NAME = CONF_DIR + "/server.crt"
+	CONST_SERVER_KEY_FILE_NAME = CONF_DIR + "/server.key"
 	CONST_SEARCH_FILE_NAME = DATA_DIR + "/search.txt"
 	FOLDERS = []string{DATA_DIR, STORE_DIR, CONF_DIR, STATIC_DIR}
 	logAccessConfigStr = strings.Replace(logAccessConfigStr, "{DOCKER_DIR}", DOCKER_DIR, -1)
@@ -4343,17 +4356,23 @@ func (this *Server) Start() {
 	http.Handle(fmt.Sprintf("%s/static/", groupRoute), http.StripPrefix(fmt.Sprintf("%s/static/", groupRoute), http.FileServer(http.Dir("./static"))))
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
-	srv := &http.Server{
-		Addr:              Config().Addr,
-		Handler:           new(HttpHandler),
-		ReadTimeout:       time.Duration(Config().ReadTimeout) * time.Second,
-		ReadHeaderTimeout: time.Duration(Config().ReadHeaderTimeout) * time.Second,
-		WriteTimeout:      time.Duration(Config().WriteTimeout) * time.Second,
-		IdleTimeout:       time.Duration(Config().IdleTimeout) * time.Second,
+	if Config().EnableHttps {
+		err := http.ListenAndServeTLS(Config().Addr, CONST_SERVER_CRT_FILE_NAME, CONST_SERVER_KEY_FILE_NAME, new(HttpHandler))
+		log.Error(err)
+		fmt.Println(err)
+	} else {
+		srv := &http.Server{
+			Addr:              Config().Addr,
+			Handler:           new(HttpHandler),
+			ReadTimeout:       time.Duration(Config().ReadTimeout) * time.Second,
+			ReadHeaderTimeout: time.Duration(Config().ReadHeaderTimeout) * time.Second,
+			WriteTimeout:      time.Duration(Config().WriteTimeout) * time.Second,
+			IdleTimeout:       time.Duration(Config().IdleTimeout) * time.Second,
+		}
+		err := srv.ListenAndServe()
+		log.Error(err)
+		fmt.Println(err)
 	}
-	err := srv.ListenAndServe()
-	log.Error(err)
-	fmt.Println(err)
 }
 func main() {
 	server.Start()
