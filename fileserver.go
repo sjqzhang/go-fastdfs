@@ -37,6 +37,7 @@ import (
 	"github.com/astaxie/beego/httplib"
 	mapset "github.com/deckarep/golang-set"
 	_ "github.com/eventials/go-tus"
+	"github.com/garyburd/redigo/redis"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/nfnt/resize"
 	"github.com/radovskyb/watcher"
@@ -160,12 +161,23 @@ const (
 	"default_scene": "default",
 	"是否显示目录": "默认显示,方便调试用,上线时请关闭",
 	"show_dir": true,
+	"redis配置": "用于保存文件元信息",
+	"redis": {
+		"address": "127.0.0.1:6380",
+		"pwd": "",
+		"maxIdle": 10,
+		"maxActive": 100,
+		"idleTimeout": 30,
+		"connectTimeout": 2,
+		"db": 0
+	},
 	"邮件配置": "",
 	"mail": {
 		"user": "abc@163.com",
 		"password": "abc",
 		"host": "smtp.163.com:25"
 	},
+	"enable_redis": false,
 	"告警接收邮件列表": "接收人数组",
 	"alarm_receivers": [],
 	"告警接收URL": "方法post,参数:subject,message",
@@ -218,8 +230,18 @@ type Server struct {
 	lockMap        *goutil.CommonMap
 	sceneMap       *goutil.CommonMap
 	searchMap      *goutil.CommonMap
+	rp             *redis.Pool
 	curDate        string
 	host           string
+}
+type Redis struct {
+	Address        string `json:"address"`
+	Pwd            string `json:"pwd"`
+	MaxIdle        int    `json:"maxIdle"`
+	MaxActive      int    `json:"maxActive"`
+	IdleTimeout    int    `json:"idleTimeout"`
+	ConnectTimeout int    `json:"connectTimeout"`
+	DB             int    `json:"db"`
 }
 type FileInfo struct {
 	Name      string   `json:"name"`
@@ -322,6 +344,8 @@ type GloablConfig struct {
 	RetryCount           int      `json:"retry_count"`
 	SyncDelay            int64    `json:"sync_delay"`
 	WatchChanSize        int      `json:"watch_chan_size"`
+	Redis                Redis    `json:"redis"`
+	EnableRedis          bool     `json:"enable_redis"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -1775,12 +1799,28 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 func (this *Server) IsExistFromLevelDB(key string, db *leveldb.DB) (bool, error) {
 	return db.Has([]byte(key), nil)
 }
+func (this *Server) redisDo(action string, args ...interface{}) (reply interface{}, err error) {
+	c := this.rp.Get()
+	defer c.Close()
+	return c.Do(action, args...)
+}
 func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
 	var (
 		err      error
 		data     []byte
 		fileInfo FileInfo
+		fiJson   string
 	)
+	if Config().EnableRedis {
+		if fiJson, err = redis.String(this.redisDo("GET", key)); err != nil {
+			return nil, err
+		} else {
+			if err = json.Unmarshal([]byte(fiJson), &fileInfo); err != nil {
+				return nil, err
+			}
+			return &fileInfo, nil
+		}
+	}
 	if data, err = this.ldb.Get([]byte(key), nil); err != nil {
 		return nil, err
 	}
@@ -1840,6 +1880,9 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *le
 		logDate := this.util.GetDayFromTimeStamp(fileInfo.TimeStamp)
 		logKey := fmt.Sprintf("%s_%s_%s", logDate, CONST_FILE_Md5_FILE_NAME, fileInfo.Md5)
 		this.logDB.Put([]byte(logKey), data, nil)
+	}
+	if Config().EnableRedis {
+		this.redisDo("SET", key, string(data))
 	}
 	return fileInfo, nil
 }
@@ -4173,6 +4216,39 @@ func (this *Server) FormatStatInfo() {
 		this.RepairStatByDate(this.util.GetToDay())
 	}
 }
+
+func (this *Server) initRedis() *redis.Pool {
+
+	pool := &redis.Pool{
+		MaxIdle:     Config().Redis.MaxIdle,
+		MaxActive:   Config().Redis.MaxActive,
+		IdleTimeout: time.Duration(Config().Redis.IdleTimeout) * time.Second,
+		Wait:        true,
+		Dial: func() (redis.Conn, error) {
+			conn, err := redis.Dial("tcp", Config().Redis.Address,
+				redis.DialConnectTimeout(time.Duration(Config().Redis.ConnectTimeout)*time.Second),
+				redis.DialPassword(Config().Redis.Pwd),
+				redis.DialDatabase(Config().Redis.DB),
+			)
+			if err != nil {
+				fmt.Println(err)
+				log.Error(err)
+			}
+			return conn, err
+
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("ping")
+			if err != nil {
+				log.Error(err)
+				return err
+			}
+			return err
+		},
+	}
+	return pool
+}
+
 func (this *Server) initComponent(isReload bool) {
 	var (
 		ip string
@@ -4217,6 +4293,9 @@ func (this *Server) initComponent(isReload bool) {
 		if len(kv) == 2 {
 			this.sceneMap.Put(kv[0], kv[1])
 		}
+	}
+	if Config().EnableRedis {
+		this.rp = this.initRedis()
 	}
 	if Config().ReadTimeout == 0 {
 		Config().ReadTimeout = 60 * 10
