@@ -162,22 +162,12 @@ const (
 	"是否显示目录": "默认显示,方便调试用,上线时请关闭",
 	"show_dir": true,
 	"redis配置": "用于保存文件元信息",
-	"redis": {
-		"address": "127.0.0.1:6380",
-		"pwd": "",
-		"maxIdle": 10,
-		"maxActive": 100,
-		"idleTimeout": 30,
-		"connectTimeout": 2,
-		"db": 0
-	},
 	"邮件配置": "",
 	"mail": {
 		"user": "abc@163.com",
 		"password": "abc",
 		"host": "smtp.163.com:25"
 	},
-	"enable_redis": false,
 	"告警接收邮件列表": "接收人数组",
 	"alarm_receivers": [],
 	"告警接收URL": "方法post,参数:subject,message",
@@ -510,6 +500,10 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 		msg = fmt.Sprintf("%s\t%s\n", this.util.MD5(fileInfo.Path+"/"+name), string(iter.Value()))
 		if _, err = fileMeta.WriteString(msg); err != nil {
 			log.Error(err)
+		}
+		if Config().EnableRedis {
+			this.SaveFileInfoToRedis(fileInfo.Md5, &fileInfo)
+			this.SaveFileInfoToRedis(this.util.MD5(fileInfo.Path+"/"+name), &fileInfo)
 		}
 		msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+name)
 		if _, err = fileLog.WriteString(msg); err != nil {
@@ -1862,6 +1856,19 @@ func (this *Server) RemoveKeyFromLevelDB(key string, db *leveldb.DB) error {
 	err = db.Delete([]byte(key), nil)
 	return err
 }
+func (this *Server) SaveFileInfoToRedis(key string, fileInfo *FileInfo) (*FileInfo, error) {
+	var (
+		err  error
+		data []byte
+	)
+	if data, err = json.Marshal(fileInfo); err != nil {
+		return fileInfo, err
+	}
+	if _, err = this.redisDo("SET", key, string(data)); err != nil {
+		return nil, err
+	}
+	return fileInfo, nil
+}
 func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *leveldb.DB) (*FileInfo, error) {
 	var (
 		err  error
@@ -1881,8 +1888,10 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *le
 		logKey := fmt.Sprintf("%s_%s_%s", logDate, CONST_FILE_Md5_FILE_NAME, fileInfo.Md5)
 		this.logDB.Put([]byte(logKey), data, nil)
 	}
-	if Config().EnableRedis {
-		this.redisDo("SET", key, string(data))
+	if Config().EnableRedis && db == this.ldb {
+		if _, err = this.redisDo("SET", key, string(data)); err != nil {
+			log.Error(err)
+		}
 	}
 	return fileInfo, nil
 }
