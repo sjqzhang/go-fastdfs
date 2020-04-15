@@ -1,0 +1,30 @@
+.page-view-totla {
+    font-size: 36px;
+    color: #666;
+    line-height: 36px;
+    padding: 5px 0 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-all;
+    white-space: nowrap;
+}
+.shortcut-button{
+    width: 100px;
+    height: 80px;
+    display: block;
+    float: left;
+    margin-left: 10px;
+    margin-top: 10px;
+    cursor: pointer;
+    text-align: center;
+}
+.shortcut-button-icon{
+    display: block;
+    height: 55px;
+    text-align: center;
+    line-height: 55px;
+    background: #F8F8F8;
+}
+.shortcut-button:hover{
+    color: #2F4056;
+}
