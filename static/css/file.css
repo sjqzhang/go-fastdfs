@@ -1,0 +1,82 @@
+html,body,.layui-container,.layui-row,.layui-col-md12{
+    height: 100%;
+}
+.layui-card{
+    min-height: 100%;
+}
+.icon {
+    width: 1.3em;
+    height: 1.3em;
+    vertical-align: -0.5em;
+    fill: currentColor;
+    overflow: hidden;
+    margin-right: 5px;
+}
+.file-list-header-ul{
+    display: table;
+    width: 100%;
+    line-height: 30px;
+    border-bottom: 1px solid #eee;
+}
+.layui-card-body{
+    overflow: auto;
+}
+.file-list{
+    min-width: 950px;
+}
+.file-list-header-li{
+    display: table-cell;
+}
+.file-list-name{
+    width: 55%;
+}
+.file-list-size{
+    width: 15%;
+}
+.file-list-date{
+    width: 15%;
+}
+.file-list-handle{
+    width: 15%;
+}
+.file-list-file{
+    float: left;
+}
+.file-list-file-box{
+    border-bottom: 1px solid #eee;
+    line-height: 50px;
+    padding-left: 8px;
+}
+.file-list-file-box:hover{
+    background: #eeeeee;
+}
+.file-list-file-name{
+    width: 55%;
+}
+.file-list-file-size{
+    width: 15%;
+}
+.file-list-file-date{
+    width: 15%;
+}
+.file-list-file-handle{
+    width: 15%;
+}
+.path-side-btn{
+    cursor: pointer;
+}
+.clear{ clear:both}
+.file-details-box{
+    padding: 15px;
+}
+.file-details-box li{
+    line-height: 40px;
+    font-size: 1.1em;
+    border-bottom: 1px solid #f3f3f3;
+    word-wrap: break-word;
+    display: flex;
+}
+.file-details-box li span{
+    float: left;
+    font-weight: 600;
+}
