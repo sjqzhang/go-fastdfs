@@ -223,6 +223,7 @@ type Server struct {
 	rp             *redis.Pool
 	curDate        string
 	host           string
+	routers        map[*regexp.Regexp]func(http.ResponseWriter, *http.Request)
 }
 type Redis struct {
 	Address        string `json:"address"`
@@ -366,6 +367,7 @@ func NewServer() *Server {
 		queueFileLog:   make(chan *FileLog, CONST_QUEUE_SIZE),
 		queueUpload:    make(chan WrapReqResp, 100),
 		sumMap:         goutil.NewCommonMap(365 * 3),
+		routers:        make(map[*regexp.Regexp]func(http.ResponseWriter, *http.Request)),
 	}
 
 	defaultTransport := &http.Transport{
@@ -4257,7 +4259,28 @@ func (this *Server) initRedis() *redis.Pool {
 	}
 	return pool
 }
-
+func (this *Server) Routing(w http.ResponseWriter, r *http.Request) {
+	realPath := r.URL.Path
+	for re, service := range this.routers {
+		if m := re.FindStringSubmatch(realPath); m != nil {
+			//p := re.String()
+			//if strings.Index(p, STATIC_DIR_NAME) != -1 {
+			//	p = p[0 : strings.LastIndex(p, "/")+1]
+			//	p = strings.Replace(realPath, p, "", 1) //realPath /group1/static/uppy.html
+			//	if b, e := Asset(p); e == nil {         // p uppy.html
+			//		w.Write(b)
+			//		return
+			//	}
+			//}
+			service(w, r)
+			return
+		}
+	}
+	this.Download(w, r)
+}
+func (this *Server) RegisterRouting(pattern *regexp.Regexp, handler func(http.ResponseWriter, *http.Request)) {
+	this.routers[pattern] = handler
+}
 func (this *Server) initComponent(isReload bool) {
 	var (
 		ip string
@@ -4412,10 +4435,8 @@ func (this *Server) Start() {
 	}()
 	uploadPage := "upload.html"
 	if groupRoute == "" {
-		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
 		http.HandleFunc(fmt.Sprintf("/%s", uploadPage), this.Index)
 	} else {
-		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
 		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Download)
 		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute, uploadPage), this.Index)
 	}
@@ -4441,7 +4462,9 @@ func (this *Server) Start() {
 	http.HandleFunc(fmt.Sprintf("%s/receive_md5s", groupRoute), this.ReceiveMd5s)
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_secret", groupRoute), this.GenGoogleSecret)
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), this.GenGoogleCode)
-	http.Handle(fmt.Sprintf("%s/static/", groupRoute), http.StripPrefix(fmt.Sprintf("%s/static/", groupRoute), http.FileServer(http.Dir("./static"))))
+	http.HandleFunc(fmt.Sprintf("%s", "/"), this.Routing) //default handler
+	http.HandleFunc(fmt.Sprintf("%s/static/", groupRoute), this.Routing)
+	server.RegisterRouting(regexp.MustCompile(fmt.Sprintf("%s/%s/.*", groupRoute, STATIC_DIR_NAME)), http.FileServer(http.Dir(STATIC_DIR_NAME)).ServeHTTP)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	if Config().EnableHttps {
