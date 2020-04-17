@@ -4463,7 +4463,6 @@ func (this *Server) Start() {
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_secret", groupRoute), this.GenGoogleSecret)
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), this.GenGoogleCode)
 	http.HandleFunc(fmt.Sprintf("%s", "/"), this.Routing) //default handler
-	http.HandleFunc(fmt.Sprintf("%s/static/", groupRoute), this.Routing)
 	http.Handle(fmt.Sprintf("%s/%s/", groupRoute, STATIC_DIR_NAME), http.StripPrefix(fmt.Sprintf("%s/%s/", groupRoute, STATIC_DIR_NAME), http.FileServer(http.Dir(STATIC_DIR_NAME))))
 	//server.RegisterRouting(regexp.MustCompile(fmt.Sprintf("%s/%s/.*", groupRoute, STATIC_DIR_NAME)), http.FileServer(http.Dir(STATIC_DIR_NAME)).ServeHTTP)
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
