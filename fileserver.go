@@ -186,6 +186,8 @@ const (
 	"enable_migrate": false,
 	"文件是否去重": "默认去重",
 	"enable_distinct_file": true,
+	"图片是否缩放": "默认是",
+	"enable_image_resize": true,
 	"是否开启跨站访问": "默认开启",
 	"enable_cross_origin": true,
 	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
@@ -315,6 +317,7 @@ type GloablConfig struct {
 	EnableMigrate        bool     `json:"enable_migrate"`
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
 	ReadOnly             bool     `json:"read_only"`
+	EnableImageResize    bool     `json:"enable_image_resize"`
 	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
 	EnableGoogleAuth     bool     `json:"enable_google_auth"`
 	AuthUrl              string   `json:"auth_url"`
@@ -1235,7 +1238,9 @@ func (this *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Reque
 	}
 	fullpath, _ := this.GetFilePathFromRequest(w, r)
 	if imgWidth != 0 || imgHeight != 0 {
-		this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
+		if Config().EnableImageResize {
+			this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
+		}
 		return true, nil
 	}
 	staticHandler.ServeHTTP(w, r)
@@ -1370,11 +1375,25 @@ func (this *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width
 }
 func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, height uint) {
 	var (
-		img     image.Image
-		err     error
-		imgType string
-		file    *os.File
+		img            image.Image
+		err            error
+		imgType        string
+		file           *os.File
+		smallFile      *os.File
+		resizeFileName string
+		resizePath     string
 	)
+	resizePath = path.Dir(fullpath)
+	resizeFileName = "cache_" + this.util.MD5(fmt.Sprintf("%s?w=%d&h=%d", fullpath, width, height))
+	resizePath = fmt.Sprintf("%s/%s", resizePath, resizeFileName)
+	if this.util.IsExist(resizePath) {
+		if smallFile, err = os.Open(resizePath); err != nil {
+			log.Error(err)
+		}
+		defer smallFile.Close()
+		io.Copy(w, smallFile)
+		return
+	}
 	file, err = os.Open(fullpath)
 	if err != nil {
 		log.Error(err)
@@ -1385,16 +1404,24 @@ func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, h
 		log.Error(err)
 		return
 	}
-	file.Close()
+	defer file.Close()
+	if smallFile, err = os.Create(resizePath); err != nil {
+		log.Error(err)
+		return
+	}
+	defer smallFile.Close()
 	img = resize.Resize(width, height, img, resize.Lanczos3)
 	if imgType == "jpg" || imgType == "jpeg" {
-		jpeg.Encode(w, img, nil)
+		jpeg.Encode(smallFile, img, nil)
 	} else if imgType == "png" {
-		png.Encode(w, img)
+		png.Encode(smallFile, img)
 	} else {
 		file.Seek(0, 0)
 		io.Copy(w, file)
+		return
 	}
+	smallFile.Seek(0, 0)
+	io.Copy(w, smallFile)
 }
 func (this *Server) GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
