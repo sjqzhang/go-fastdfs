@@ -2458,28 +2458,29 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fn = folder + "/" + this.util.GetUUID()
-	defer func() {
-		os.Remove(fn)
-	}()
+
 	fpTmp, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
 		log.Error(err)
 		w.Write([]byte(err.Error()))
 		return
 	}
-	fpTmp.Close()
 	if _, err = io.Copy(fpTmp, r.Body); err != nil {
 		log.Error(err)
 		w.Write([]byte(err.Error()))
 		return
 	}
+	fpTmp.Close()
 	if fpBody, err = os.Open(fn); err != nil {
 		log.Error(err)
 		w.Write([]byte(err.Error()))
 		return
 	}
 	r.Body = fpBody
-	defer fpBody.Close()
+	defer func() {
+		fpBody.Close()
+		os.Remove(fn)
+	}()
 	done := make(chan bool, 1)
 	this.queueUpload <- WrapReqResp{&w, r, done}
 	<-done
