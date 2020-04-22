@@ -2467,14 +2467,19 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
-	defer fpTmp.Close()
+	fpTmp.Close()
 	if _, err = io.Copy(fpTmp, r.Body); err != nil {
 		log.Error(err)
 		w.Write([]byte(err.Error()))
 		return
 	}
-	fpBody, err = os.Open(fn)
+	if fpBody, err = os.Open(fn); err != nil {
+		log.Error(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
 	r.Body = fpBody
+	defer fpBody.Close()
 	done := make(chan bool, 1)
 	this.queueUpload <- WrapReqResp{&w, r, done}
 	<-done
