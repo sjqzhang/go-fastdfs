@@ -878,7 +878,11 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	//fmt.Println("downloadFromPeer",fileInfo)
 	p := strings.Replace(fileInfo.Path, STORE_DIR_NAME+"/", "", 1)
 	//filename=this.util.UrlEncode(filename)
-	downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
+	if Config().SupportGroupManage {
+		downloadUrl = peer + "/" + Config().Group + "/" + p + "/" + filename
+	} else {
+		downloadUrl = peer + "/" + p + "/" + filename
+	}
 	log.Info("DownloadFromPeer: ", downloadUrl)
 	fpath = DOCKER_DIR + fileInfo.Path + "/" + filename
 	fpathTmp = DOCKER_DIR + fileInfo.Path + "/" + fmt.Sprintf("%s_%s", "tmp_", filename)
