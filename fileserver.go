@@ -37,7 +37,6 @@ import (
 	"github.com/astaxie/beego/httplib"
 	mapset "github.com/deckarep/golang-set"
 	_ "github.com/eventials/go-tus"
-	"github.com/garyburd/redigo/redis"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/nfnt/resize"
 	"github.com/radovskyb/watcher"
@@ -161,7 +160,6 @@ const (
 	"default_scene": "default",
 	"是否显示目录": "默认显示,方便调试用,上线时请关闭",
 	"show_dir": true,
-	"redis配置": "用于保存文件元信息",
 	"邮件配置": "",
 	"mail": {
 		"user": "abc@163.com",
@@ -186,8 +184,6 @@ const (
 	"enable_migrate": false,
 	"文件是否去重": "默认去重",
 	"enable_distinct_file": true,
-	"图片是否缩放": "默认是",
-	"enable_image_resize": true,
 	"是否开启跨站访问": "默认开启",
 	"enable_cross_origin": true,
 	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
@@ -222,19 +218,8 @@ type Server struct {
 	lockMap        *goutil.CommonMap
 	sceneMap       *goutil.CommonMap
 	searchMap      *goutil.CommonMap
-	rp             *redis.Pool
 	curDate        string
 	host           string
-	routers        map[*regexp.Regexp]func(http.ResponseWriter, *http.Request)
-}
-type Redis struct {
-	Address        string `json:"address"`
-	Pwd            string `json:"pwd"`
-	MaxIdle        int    `json:"maxIdle"`
-	MaxActive      int    `json:"maxActive"`
-	IdleTimeout    int    `json:"idleTimeout"`
-	ConnectTimeout int    `json:"connectTimeout"`
-	DB             int    `json:"db"`
 }
 type FileInfo struct {
 	Name      string   `json:"name"`
@@ -317,7 +302,6 @@ type GloablConfig struct {
 	EnableMigrate        bool     `json:"enable_migrate"`
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
 	ReadOnly             bool     `json:"read_only"`
-	EnableImageResize    bool     `json:"enable_image_resize"`
 	EnableCrossOrigin    bool     `json:"enable_cross_origin"`
 	EnableGoogleAuth     bool     `json:"enable_google_auth"`
 	AuthUrl              string   `json:"auth_url"`
@@ -338,8 +322,6 @@ type GloablConfig struct {
 	RetryCount           int      `json:"retry_count"`
 	SyncDelay            int64    `json:"sync_delay"`
 	WatchChanSize        int      `json:"watch_chan_size"`
-	Redis                Redis    `json:"redis"`
-	EnableRedis          bool     `json:"enable_redis"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -370,7 +352,6 @@ func NewServer() *Server {
 		queueFileLog:   make(chan *FileLog, CONST_QUEUE_SIZE),
 		queueUpload:    make(chan WrapReqResp, 100),
 		sumMap:         goutil.NewCommonMap(365 * 3),
-		routers:        make(map[*regexp.Regexp]func(http.ResponseWriter, *http.Request)),
 	}
 
 	defaultTransport := &http.Transport{
@@ -505,10 +486,6 @@ func (this *Server) BackUpMetaDataByDate(date string) {
 		msg = fmt.Sprintf("%s\t%s\n", this.util.MD5(fileInfo.Path+"/"+name), string(iter.Value()))
 		if _, err = fileMeta.WriteString(msg); err != nil {
 			log.Error(err)
-		}
-		if Config().EnableRedis {
-			this.SaveFileInfoToRedis(fileInfo.Md5, &fileInfo)
-			this.SaveFileInfoToRedis(this.util.MD5(fileInfo.Path+"/"+name), &fileInfo)
 		}
 		msg = fmt.Sprintf("%s|%d|%d|%s\n", fileInfo.Md5, fileInfo.Size, fileInfo.TimeStamp, fileInfo.Path+"/"+name)
 		if _, err = fileLog.WriteString(msg); err != nil {
@@ -1242,9 +1219,7 @@ func (this *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Reque
 	}
 	fullpath, _ := this.GetFilePathFromRequest(w, r)
 	if imgWidth != 0 || imgHeight != 0 {
-		if Config().EnableImageResize {
-			this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
-		}
+		this.ResizeImage(w, fullpath, uint(imgWidth), uint(imgHeight))
 		return true, nil
 	}
 	staticHandler.ServeHTTP(w, r)
@@ -1379,25 +1354,11 @@ func (this *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width
 }
 func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, height uint) {
 	var (
-		img            image.Image
-		err            error
-		imgType        string
-		file           *os.File
-		smallFile      *os.File
-		resizeFileName string
-		resizePath     string
+		img     image.Image
+		err     error
+		imgType string
+		file    *os.File
 	)
-	resizePath = path.Dir(fullpath)
-	resizeFileName = "cache_" + this.util.MD5(fmt.Sprintf("%s?w=%d&h=%d", fullpath, width, height))
-	resizePath = fmt.Sprintf("%s/%s", resizePath, resizeFileName)
-	if this.util.IsExist(resizePath) {
-		if smallFile, err = os.Open(resizePath); err != nil {
-			log.Error(err)
-		}
-		defer smallFile.Close()
-		io.Copy(w, smallFile)
-		return
-	}
 	file, err = os.Open(fullpath)
 	if err != nil {
 		log.Error(err)
@@ -1408,24 +1369,16 @@ func (this *Server) ResizeImage(w http.ResponseWriter, fullpath string, width, h
 		log.Error(err)
 		return
 	}
-	defer file.Close()
-	if smallFile, err = os.Create(resizePath); err != nil {
-		log.Error(err)
-		return
-	}
-	defer smallFile.Close()
+	file.Close()
 	img = resize.Resize(width, height, img, resize.Lanczos3)
 	if imgType == "jpg" || imgType == "jpeg" {
-		jpeg.Encode(smallFile, img, nil)
+		jpeg.Encode(w, img, nil)
 	} else if imgType == "png" {
-		png.Encode(smallFile, img)
+		png.Encode(w, img)
 	} else {
 		file.Seek(0, 0)
 		io.Copy(w, file)
-		return
 	}
-	smallFile.Seek(0, 0)
-	io.Copy(w, smallFile)
 }
 func (this *Server) GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
@@ -1826,28 +1779,12 @@ func (this *Server) Sync(w http.ResponseWriter, r *http.Request) {
 func (this *Server) IsExistFromLevelDB(key string, db *leveldb.DB) (bool, error) {
 	return db.Has([]byte(key), nil)
 }
-func (this *Server) redisDo(action string, args ...interface{}) (reply interface{}, err error) {
-	c := this.rp.Get()
-	defer c.Close()
-	return c.Do(action, args...)
-}
 func (this *Server) GetFileInfoFromLevelDB(key string) (*FileInfo, error) {
 	var (
 		err      error
 		data     []byte
 		fileInfo FileInfo
-		fiJson   string
 	)
-	if Config().EnableRedis {
-		if fiJson, err = redis.String(this.redisDo("GET", key)); err != nil {
-			return nil, err
-		} else {
-			if err = json.Unmarshal([]byte(fiJson), &fileInfo); err != nil {
-				return nil, err
-			}
-			return &fileInfo, nil
-		}
-	}
 	if data, err = this.ldb.Get([]byte(key), nil); err != nil {
 		return nil, err
 	}
@@ -1889,19 +1826,6 @@ func (this *Server) RemoveKeyFromLevelDB(key string, db *leveldb.DB) error {
 	err = db.Delete([]byte(key), nil)
 	return err
 }
-func (this *Server) SaveFileInfoToRedis(key string, fileInfo *FileInfo) (*FileInfo, error) {
-	var (
-		err  error
-		data []byte
-	)
-	if data, err = json.Marshal(fileInfo); err != nil {
-		return fileInfo, err
-	}
-	if _, err = this.redisDo("SET", key, string(data)); err != nil {
-		return nil, err
-	}
-	return fileInfo, nil
-}
 func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *leveldb.DB) (*FileInfo, error) {
 	var (
 		err  error
@@ -1920,11 +1844,6 @@ func (this *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *le
 		logDate := this.util.GetDayFromTimeStamp(fileInfo.TimeStamp)
 		logKey := fmt.Sprintf("%s_%s_%s", logDate, CONST_FILE_Md5_FILE_NAME, fileInfo.Md5)
 		this.logDB.Put([]byte(logKey), data, nil)
-	}
-	if Config().EnableRedis && db == this.ldb {
-		if _, err = this.redisDo("SET", key, string(data)); err != nil {
-			log.Error(err)
-		}
 	}
 	return fileInfo, nil
 }
@@ -2462,7 +2381,6 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fn = folder + "/" + this.util.GetUUID()
-
 	fpTmp, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
 		log.Error(err)
@@ -2485,6 +2403,8 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		fpBody.Close()
 		os.Remove(fn)
 	}()
+	fpBody, err = os.Open(fn)
+	r.Body = fpBody
 	done := make(chan bool, 1)
 	this.queueUpload <- WrapReqResp{&w, r, done}
 	<-done
@@ -4264,60 +4184,6 @@ func (this *Server) FormatStatInfo() {
 		this.RepairStatByDate(this.util.GetToDay())
 	}
 }
-
-func (this *Server) initRedis() *redis.Pool {
-
-	pool := &redis.Pool{
-		MaxIdle:     Config().Redis.MaxIdle,
-		MaxActive:   Config().Redis.MaxActive,
-		IdleTimeout: time.Duration(Config().Redis.IdleTimeout) * time.Second,
-		Wait:        true,
-		Dial: func() (redis.Conn, error) {
-			conn, err := redis.Dial("tcp", Config().Redis.Address,
-				redis.DialConnectTimeout(time.Duration(Config().Redis.ConnectTimeout)*time.Second),
-				redis.DialPassword(Config().Redis.Pwd),
-				redis.DialDatabase(Config().Redis.DB),
-			)
-			if err != nil {
-				fmt.Println(err)
-				log.Error(err)
-			}
-			return conn, err
-
-		},
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			_, err := c.Do("ping")
-			if err != nil {
-				log.Error(err)
-				return err
-			}
-			return err
-		},
-	}
-	return pool
-}
-func (this *Server) Routing(w http.ResponseWriter, r *http.Request) {
-	realPath := r.URL.Path
-	for re, service := range this.routers {
-		if m := re.FindStringSubmatch(realPath); m != nil {
-			//p := re.String()
-			//if strings.Index(p, STATIC_DIR_NAME) != -1 {
-			//	p = p[0 : strings.LastIndex(p, "/")+1]
-			//	p = strings.Replace(realPath, p, "", 1) //realPath /group1/static/uppy.html
-			//	if b, e := Asset(p); e == nil {         // p uppy.html
-			//		w.Write(b)
-			//		return
-			//	}
-			//}
-			service(w, r)
-			return
-		}
-	}
-	this.Download(w, r)
-}
-func (this *Server) RegisterRouting(pattern *regexp.Regexp, handler func(http.ResponseWriter, *http.Request)) {
-	this.routers[pattern] = handler
-}
 func (this *Server) initComponent(isReload bool) {
 	var (
 		ip string
@@ -4362,9 +4228,6 @@ func (this *Server) initComponent(isReload bool) {
 		if len(kv) == 2 {
 			this.sceneMap.Put(kv[0], kv[1])
 		}
-	}
-	if Config().EnableRedis {
-		this.rp = this.initRedis()
 	}
 	if Config().ReadTimeout == 0 {
 		Config().ReadTimeout = 60 * 10
@@ -4472,8 +4335,10 @@ func (this *Server) Start() {
 	}()
 	uploadPage := "upload.html"
 	if groupRoute == "" {
+		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
 		http.HandleFunc(fmt.Sprintf("/%s", uploadPage), this.Index)
 	} else {
+		http.HandleFunc(fmt.Sprintf("%s", "/"), this.Download)
 		http.HandleFunc(fmt.Sprintf("%s", groupRoute), this.Download)
 		http.HandleFunc(fmt.Sprintf("%s/%s", groupRoute, uploadPage), this.Index)
 	}
@@ -4499,9 +4364,7 @@ func (this *Server) Start() {
 	http.HandleFunc(fmt.Sprintf("%s/receive_md5s", groupRoute), this.ReceiveMd5s)
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_secret", groupRoute), this.GenGoogleSecret)
 	http.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), this.GenGoogleCode)
-	http.HandleFunc(fmt.Sprintf("%s", "/"), this.Routing) //default handler
-	http.Handle(fmt.Sprintf("%s/%s/", groupRoute, STATIC_DIR_NAME), http.StripPrefix(fmt.Sprintf("%s/%s/", groupRoute, STATIC_DIR_NAME), http.FileServer(http.Dir(STATIC_DIR_NAME))))
-	//server.RegisterRouting(regexp.MustCompile(fmt.Sprintf("%s/%s/.*", groupRoute, STATIC_DIR_NAME)), http.FileServer(http.Dir(STATIC_DIR_NAME)).ServeHTTP)
+	http.Handle(fmt.Sprintf("%s/static/", groupRoute), http.StripPrefix(fmt.Sprintf("%s/static/", groupRoute), http.FileServer(http.Dir("./static"))))
 	http.HandleFunc("/"+Config().Group+"/", this.Download)
 	fmt.Println("Listen on " + Config().Addr)
 	if Config().EnableHttps {
