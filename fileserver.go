@@ -2400,11 +2400,15 @@ func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = fpBody
 	defer func() {
-		fpBody.Close()
-		os.Remove(fn)
+		err = fpBody.Close()
+		if err != nil {
+			log.Error(err)
+		}
+		err = os.Remove(fn)
+		if err != nil {
+			log.Error(err)
+		}
 	}()
-	fpBody, err = os.Open(fn)
-	r.Body = fpBody
 	done := make(chan bool, 1)
 	this.queueUpload <- WrapReqResp{&w, r, done}
 	<-done
