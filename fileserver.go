@@ -890,6 +890,14 @@ func (this *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 			log.Error(err, fpathTmp)
 			return
 		}
+		if fi, err = os.Stat(fpathTmp); err != nil {
+			os.Remove(fpathTmp)
+			return
+		}
+		if fi.Size() != fileInfo.Size {
+			log.Error("file size check error")
+			os.Remove(fpathTmp)
+		}
 		if os.Rename(fpathTmp, fpath) == nil {
 			//this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 			this.SaveFileInfoToLevelDB(fileInfo.Md5, fileInfo, this.ldb)
@@ -1324,6 +1332,7 @@ func (this *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r 
 	resp, err = req.DoRequest()
 	if err != nil {
 		log.Error(err)
+		return
 	}
 	defer resp.Body.Close()
 	_, err = io.Copy(w, resp.Body)
@@ -3816,6 +3825,14 @@ func init() {
 		log.Error(err.Error())
 	}
 	ParseConfig(CONST_CONF_FILE_NAME)
+	if ips, _ := server.util.GetAllIpsV4(); len(ips) > 0 {
+		_ip := server.util.Match("\\d+\\.\\d+\\.\\d+\\.\\d+", Config().Host)
+		if len(_ip) > 0 && !server.util.Contains(_ip[0], ips) {
+			msg := fmt.Sprintf("host config is error,must in local ips:%s", strings.Join(ips, ","))
+			log.Warn(msg)
+			panic(msg)
+		}
+	}
 	if Config().QueueSize == 0 {
 		Config().QueueSize = CONST_QUEUE_SIZE
 	}
