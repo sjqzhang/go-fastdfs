@@ -1,30 +1,33 @@
 package goutil
 
-
 import (
-	"sync"
-	"fmt"
-	"log"
-	"encoding/json"
-	"io"
-	"encoding/base64"
-	"os"
-	"time"
-	"net/url"
-	"net"
+	"bytes"
+	"context"
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/sha1"
-	"reflect"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/deckarep/golang-set"
+	"io"
 	"io/ioutil"
+	"log"
+	random "math/rand"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime/debug"
-	"path/filepath"
-	"github.com/deckarep/golang-set"
 	"strings"
-	"errors"
-	random "math/rand"
-	"crypto/rand"
-	"net/http"
+	"sync"
+	"syscall"
+	"time"
 )
 
 type CommonMap struct {
@@ -38,7 +41,6 @@ type Tuple struct {
 }
 
 type Common struct {
-
 }
 
 func NewCommonMap(size int) *CommonMap {
@@ -200,7 +202,6 @@ func (s *CommonMap) Get() map[string]interface{} {
 	}
 	return m
 }
-
 
 func (this *Common) GetUUID() string {
 	b := make([]byte, 48)
@@ -527,5 +528,90 @@ func (this *Common) GetClientIp(r *http.Request) string {
 	}
 	return client_ip
 }
+func (this *Common) Exec(cmd []string, timeout int) (string, int) {
+	var out bytes.Buffer
+	duration := time.Duration(timeout) * time.Second
+	ctx, _ := context.WithTimeout(context.Background(), duration)
+	var command *exec.Cmd
+	command = exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	command.Stdin = os.Stdin
+	command.Stdout = &out
+	command.Stderr = &out
+	err := command.Run()
+	if err != nil {
+		log.Println(err, cmd)
+		return  err.Error(), -1
+	}
+	status := command.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
+	return out.String(), status
+}
 
+func (this *Common) GetAllIpsV4() ([]string,error) {
+	var(
+		ips[] string
+		allIps[] string
+		err error
+	)
+	if allIps,err=this.GetAllIps();err!=nil {
+		return ips,err
+	}
+	for _,ip:=range allIps {
+		i:=this.Match("\\d+\\.\\d+\\.\\d+\\.\\d+",ip)
+		if len(i)>0 {
+			ips=append(ips,i[0])
+		}
+	}
+	return ips,nil
+}
 
+func (this *Common) GetAllIpsV6() ([]string,error) {
+	var(
+		ips[] string
+		allIps[] string
+		err error
+	)
+	if allIps,err=this.GetAllIps();err!=nil {
+		return ips,err
+	}
+	for _,ip:=range allIps {
+		i:=this.Match("[0-9a-z:]{15,}",ip)
+		if len(i)>0 {
+			ips=append(ips,i[0])
+		}
+	}
+	return ips,nil
+}
+func (this *Common) GetAllMacs() ([]string,error) {
+	var (
+		err error
+		interfaces[] net.Interface
+		macs[] string
+	)
+	if interfaces,err=net.Interfaces();err!=nil {
+		return macs,err
+	}
+	for _, v := range interfaces {
+		macs=append(macs, v.HardwareAddr.String())
+	}
+	return macs,nil
+}
+
+func (this *Common) GetAllIps() ([]string,error) {
+	var (
+		err error
+		interfaces[] net.Interface
+		ips[] string
+		addrs[] net.Addr
+	)
+	if interfaces,err=net.Interfaces();err!=nil {
+		return ips,err
+	}
+	for _, v := range interfaces {
+		if addrs,err=v.Addrs();err==nil {
+			for _,addr:=range addrs {
+				ips = append(ips,addr.String())
+			}
+		}
+	}
+	return ips,nil
+}
