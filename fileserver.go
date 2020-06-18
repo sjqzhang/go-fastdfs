@@ -3830,7 +3830,7 @@ func init() {
 		if len(_ip) > 0 && !server.util.Contains(_ip[0], ips) {
 			msg := fmt.Sprintf("host config is error,must in local ips:%s", strings.Join(ips, ","))
 			log.Warn(msg)
-			panic(msg)
+			fmt.Println(msg)
 		}
 	}
 	if Config().QueueSize == 0 {
