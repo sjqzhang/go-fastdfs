@@ -3803,14 +3803,21 @@ func init() {
 	}
 	server = NewServer()
 
-	peerId := fmt.Sprintf("%d", server.util.RandInt(0, 9))
+	var peerId string
+	if peerId = os.Getenv("GO_FASTDFS_PEER_ID"); peerId == "" {
+		peerId = fmt.Sprintf("%d", server.util.RandInt(0, 9))
+	}
 	if !server.util.FileExists(CONST_CONF_FILE_NAME) {
 		var ip string
 		if ip = os.Getenv("GO_FASTDFS_IP"); ip == "" {
 			ip = server.util.GetPulicIP()
 		}
 		peer := "http://" + ip + ":8080"
-		cfg := fmt.Sprintf(cfgJson, peerId, peer, peer)
+		var peers string
+		if peers = os.Getenv("GO_FASTDFS_PEERS"); peers == ""{
+			peers = peer
+		}
+		cfg := fmt.Sprintf(cfgJson, peerId, peer, peers)
 		server.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {
