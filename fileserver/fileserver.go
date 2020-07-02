@@ -127,7 +127,7 @@ const (
 	CONST_MESSAGE_CLUSTER_IP       = "Can only be called by the cluster ip or 127.0.0.1 or admin_ips(cfg.json),current ip:%s"
 	cfgJson                        = `{
 	"绑定端号": "端口",
-	"addr": "%s",
+	"addr": ":%s",
 	"是否开启https": "默认不开启，如需启开启，请在conf目录中增加证书文件 StartServer.crt 私钥 文件 StartServer.key",
 	"enable_https": false,
 	"PeerID": "集群内唯一,请使用0-9的单字符，默认自动生成",
