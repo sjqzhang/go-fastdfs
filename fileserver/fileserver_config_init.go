@@ -7,7 +7,7 @@ import (
 
 /***
 通过环境变量来初始化默认配置，例如
-GO_FASTDFS_PEER_ID=1;GO_FASTDFS_PORT="8080";GO_FASTDFS_IP=tomcat.gavin.com;GO_FASTDFS_PEERS="http://tomcat.gavin.com:8080";GO_FASTDFS_PORT=8080;GO_FASTDFS_GROUP=group1;
+GO_FASTDFS_PEER_ID=1;GO_FASTDFS_IP=tomcat.gavin.com;GO_FASTDFS_PEERS="http://tomcat.gavin.com:8080";GO_FASTDFS_PORT=8080;GO_FASTDFS_GROUP=group1;
 ***/
 
 func (server *Server) getInitPeerId() string{
