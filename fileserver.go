@@ -1,6 +1,8 @@
 package main
 
-import "go-fastdfs/fileserver"
+import (
+	"go-fastdfs/fileserver"
+)
 
 func main() {
 	fileserver.StartServer.Start()
