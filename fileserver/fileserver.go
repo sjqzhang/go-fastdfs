@@ -147,7 +147,7 @@ const (
 	"重试同步失败文件的时间": "单位秒",
 	"refresh_interval": 1800,
 	"是否自动重命名": "默认不自动重命名,使用原文件名",
-	"rename_file": true,
+	"rename_file": %s,
 	"是否支持web上传,方便调试": "默认支持web上传",
 	"enable_web_upload": true,
 	"是否支持非日期路径": "默认支持非日期路径,也即支持自定义路径,需要上传文件时指定path",
@@ -3807,7 +3807,8 @@ func init() {
 		port := StartServer.getInitPort()
 		group := StartServer.getInitGroup()
 		adminIp := StartServer.getInitAdminIp()
-		cfg := fmt.Sprintf(cfgJson, port, peerId, host, peers, group, adminIp)
+		renameFile := StartServer.getInitRenameFile()
+		cfg := fmt.Sprintf(cfgJson, port, peerId, host, peers, group, renameFile, adminIp)
 		StartServer.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {

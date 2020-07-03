@@ -69,3 +69,11 @@ func (server *Server) getInitAdminIp() string{
 	}
 	return adminIp;
 }
+
+func (server *Server) getInitRenameFile() string{
+	var renameFile string
+	if renameFile = strings.Trim(os.Getenv("GO_FASTDFS_RENAME"), cutset); renameFile == "" {
+		renameFile = "false"
+	}
+	return renameFile;
+}
