@@ -3219,6 +3219,7 @@ func (this *Server) CheckClusterStatus() {
 			subject string
 			body    string
 			req     *httplib.BeegoHTTPRequest
+			data    []byte
 		)
 		for _, peer := range Config().Peers {
 			req = httplib.Get(fmt.Sprintf("%s%s", peer, this.getRequestURI("status")))
@@ -3245,9 +3246,30 @@ func (this *Server) CheckClusterStatus() {
 						log.Error(err)
 					}
 				}
+				log.Error(err)
+			} else {
+				var statusMap map[string]interface{}
+				if data, err = json.Marshal(status.Data); err != nil {
+					log.Error(err)
+					return
+				}
+				if err = json.Unmarshal(data, &statusMap); err != nil {
+					log.Error(err)
+				}
+				if v, ok := statusMap["Fs.PeerId"]; ok {
+					if v == Config().PeerId {
+						log.Error(fmt.Sprintf("PeerId is confict:%s", v))
+					}
+				}
+				if v, ok := statusMap["Fs.Local"]; ok {
+					if v == Config().Host {
+						log.Error(fmt.Sprintf("Host is confict:%s", v))
+					}
+				}
 			}
 		}
 	}
+	check()
 	go func() {
 		for {
 			time.Sleep(time.Minute * 10)
@@ -3814,7 +3836,7 @@ func init() {
 		}
 		peer := "http://" + ip + ":8080"
 		var peers string
-		if peers = os.Getenv("GO_FASTDFS_PEERS"); peers == ""{
+		if peers = os.Getenv("GO_FASTDFS_PEERS"); peers == "" {
 			peers = peer
 		}
 		cfg := fmt.Sprintf(cfgJson, peerId, peer, peers)
