@@ -2324,11 +2324,18 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	if fileInfo.ReName != "" {
 		outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
 	}
-	if this.util.FileExists(outPath) && Config().EnableDistinctFile {
+	if this.util.FileExists(outPath) {
 		for i := 0; i < 10000; i++ {
-			outPath = fmt.Sprintf(folder+"/%d_%s", i, filepath.Base(header.Filename))
-			fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
+			tempFolder := fmt.Sprintf(folder+"/%d", i)
+			if !this.util.FileExists(tempFolder) {
+				if err = os.MkdirAll(tempFolder, 0775); err != nil {
+					log.Error(err)
+				}
+			}
+			outPath = fmt.Sprintf(tempFolder+"/%s", i, filepath.Base(header.Filename))
+			//fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
 			if !this.util.FileExists(outPath) {
+				folder = tempFolder
 				break
 			}
 		}
