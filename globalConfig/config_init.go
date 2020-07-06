@@ -1,7 +1,8 @@
-package fileserver
+package globalConfig
 
 import (
 	"fmt"
+	"github.com/sjqzhang/goutil"
 	"os"
 	"strings"
 )
@@ -15,42 +16,45 @@ import (
 -e GO_FASTDFS_GROUP=group1 \
 ***/
 const cutset = " "
-func (server *Server) getInitPeerId() string{
+var util *goutil.Common = &goutil.Common{}
+
+
+func getInitPeerId() string{
 	var peerId string
 	if peerId = strings.Trim(os.Getenv("GO_FASTDFS_PEER_ID"), cutset); peerId == "" {
-		peerId = fmt.Sprintf("%d", server.util.RandInt(0, 9))
+		peerId = fmt.Sprintf("%d", util.RandInt(0, 9))
 	}
 	return peerId
 }
 
-func (server *Server) getInitPort() string{
+func getInitPort() string{
 	var port string
 	if port = strings.Trim(os.Getenv("GO_FASTDFS_PORT"), cutset); port == "" {
 		port = "8080"
 	}
 	return port
 }
-func (server *Server) getInitIp() string{
+func GetInitIp() string{
 	var ip string
 	if ip = strings.Trim(os.Getenv("GO_FASTDFS_IP"), cutset); ip == "" {
-		ip = server.util.GetPulicIP()
+		ip = util.GetPulicIP()
 	}
 	return ip
 }
-func (server *Server) getInitHost() string{
-	peer := "http://" + server.getInitIp() + ":" + server.getInitPort()
+func getInitHost() string{
+	peer := "http://" + GetInitIp() + ":" + getInitPort()
 	return peer;
 }
 
-func (server *Server) getInitPeers() string {
+func getInitPeers() string {
 	var peers string
 	if peers = strings.Trim(os.Getenv("GO_FASTDFS_PEERS"), cutset); peers == "" {
-		peers = "\"" + server.getInitHost() + "\""
+		peers = "\"" + getInitHost() + "\""
 	}
 	return peers
 }
 
-func (server *Server) getInitGroup() string{
+func getInitGroup() string{
 	var group string
 	if group = strings.Trim(os.Getenv("GO_FASTDFS_GROUP"), cutset); group == "" {
 		group = "group1"
@@ -58,7 +62,7 @@ func (server *Server) getInitGroup() string{
 	return group;
 }
 
-func (server *Server) getInitAdminIp() string{
+func getInitAdminIp() string{
 	adminIp := strings.Trim(os.Getenv("GO_FASTDFS_ADMIN_IP"), cutset)
 	if adminIp == "" {
 		adminIp = "\"127.0.0.1\""
@@ -70,7 +74,7 @@ func (server *Server) getInitAdminIp() string{
 	return adminIp;
 }
 
-func (server *Server) getInitRenameFile() string{
+func getInitRenameFile() string{
 	var renameFile string
 	if renameFile = strings.Trim(os.Getenv("GO_FASTDFS_RENAME"), cutset); renameFile == "" {
 		renameFile = "false"
@@ -78,10 +82,40 @@ func (server *Server) getInitRenameFile() string{
 	return renameFile;
 }
 
-func (server *Server) getInitDistinctFile() string{
+func getInitDistinctFile() string{
 	var enableDistinctFile string
 	if enableDistinctFile = strings.Trim(os.Getenv("GO_FASTDFS_DISTINCT_FILE"), cutset); enableDistinctFile == "" {
 		enableDistinctFile = "true"
 	}
 	return enableDistinctFile;
+}
+
+func (handler *Handler) InitGlobalConfig() bool{
+	DOCKER_DIR := os.Getenv("GO_FASTDFS_DIR")
+	if DOCKER_DIR != "" {
+		if !strings.HasSuffix(DOCKER_DIR, "/") {
+			DOCKER_DIR = DOCKER_DIR + "/"
+		}
+	}
+
+	CONF_DIR = DOCKER_DIR + CONF_DIR_NAME
+	CONST_CONF_FILE_NAME = CONF_DIR + "/cfg.json"
+	CONST_SERVER_CRT_FILE_NAME = CONF_DIR + "/server.crt"
+	CONST_SERVER_KEY_FILE_NAME = CONF_DIR + "/server.key"
+
+	os.MkdirAll(CONF_DIR, 0775)
+	peerId := getInitPeerId()
+	if !util.FileExists(CONST_CONF_FILE_NAME) {
+		host := getInitHost()
+		peers := getInitPeers()
+		port := getInitPort()
+		group := getInitGroup()
+		adminIp := getInitAdminIp()
+		renameFile := getInitRenameFile()
+		distinctFile := getInitDistinctFile()
+		cfg := fmt.Sprintf(CfgJson, port, peerId, host, peers, group, renameFile, adminIp, distinctFile)
+		result := util.WriteFile(CONST_CONF_FILE_NAME, cfg)
+		return result
+	}
+	return true
 }

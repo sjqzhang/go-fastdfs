@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/astaxie/beego/httplib"
 	"github.com/eventials/go-tus"
 	"github.com/sjqzhang/goutil"
-	"go-fastdfs/fileserver"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
@@ -26,7 +24,7 @@ var testUtil = goutil.Common{}
 var endPoint = "http://127.0.0.1:8080/group1"
 var endPoint2 = ""
 
-var testCfg *fileserver.GloablConfig
+var testCfg *GloablConfig
 
 var testSmallFileMd5 = ""
 var testBigFileMd5 = ""
@@ -104,7 +102,7 @@ func uploadContinueBig(t *testing.T) {
 
 func refreshConfig(t *testing.T) {
 	var (
-		cfg    fileserver.GloablConfig
+		cfg    GloablConfig
 		err    error
 		cfgStr string
 		result string
@@ -140,11 +138,11 @@ func refreshConfig(t *testing.T) {
 func testConfig(t *testing.T) {
 
 	var (
-		cfg        fileserver.GloablConfig
+		cfg        GloablConfig
 		err        error
 		cfgStr     string
 		result     string
-		jsonResult fileserver.JsonResult
+		jsonResult JsonResult
 	)
 
 	req := httplib.Get(endPoint + "/reload?action=get")
@@ -171,7 +169,7 @@ func testConfig(t *testing.T) {
 	}
 
 	if cfg.Group == "" || cfg.Addr == "" {
-		t.Error("fail config")
+		t.Error("fail globalConfig")
 
 	}
 
@@ -250,7 +248,7 @@ func testApis(t *testing.T) {
 	)
 
 	apis := []string{"/index","/status", "/stat", "/repair?force=1", "/repair_stat",
-		"/sync?force=1&date=" + testUtil.GetToDay(),"/delete?md5="+ testSmallFileMd5,
+		"/sync?force=1&date=" + testUtil.GetToDay(),"/delete?md5="+testSmallFileMd5,
 		"/repair_fileinfo","","/list_dir","/gen_google_code?secret=N7IET373HB2C5M6D",
 		"/gen_google_secret","/receive_md5s?md5s=xx","/remove_empty_dir","/backup","/search?kw=ab",
 		"/reload=get","/back","/report"}
@@ -305,7 +303,7 @@ func uploadContinueSmall(t *testing.T) {
 }
 
 func uploadSmall(t *testing.T) {
-	var obj fileserver.FileResult
+	var obj FileResult
 	req := httplib.Post(endPoint + "/upload")
 	req.PostFile("file", CONST_SMALL_FILE_NAME)
 	req.Param("output", "json")
@@ -325,7 +323,7 @@ func uploadSmall(t *testing.T) {
 }
 
 func uploadLarge(t *testing.T) {
-	var obj fileserver.FileResult
+	var obj FileResult
 	req := httplib.Post(endPoint + "/upload")
 	req.PostFile("file", CONST_BIG_FILE_NAME)
 	req.Param("output", "json")
@@ -346,7 +344,7 @@ func uploadLarge(t *testing.T) {
 }
 
 func checkFileExist(t *testing.T) {
-	var obj fileserver.FileInfo
+	var obj FileInfo
 	req := httplib.Post(endPoint + "/check_file_exist")
 	req.Param("md5", testBigFileMd5)
 	req.ToJSON(&obj)
@@ -386,9 +384,9 @@ func Test_main(t *testing.T) {
 			uploadLarge(t)
 			checkFileExist(t)
 			testApis(t)
-			if endPoint != endPoint2 && endPoint2 !="" {
+			if endPoint != endPoint2 && endPoint2!="" {
 				endPoint = endPoint2
-				fmt.Println("#######endPoint2######", endPoint2)
+				fmt.Println("#######endPoint2######",endPoint2)
 				initFile(1024*testUtil.RandInt(100, 512), 1024*1024*testUtil.RandInt(2, 20))
 				uploadContinueBig(t)
 				uploadContinueSmall(t)
