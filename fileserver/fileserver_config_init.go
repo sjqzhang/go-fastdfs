@@ -77,3 +77,11 @@ func (server *Server) getInitRenameFile() string{
 	}
 	return renameFile;
 }
+
+func (server *Server) getInitDistinctFile() string{
+	var enableDistinctFile string
+	if enableDistinctFile = strings.Trim(os.Getenv("GO_FASTDFS_DISTINCT_FILE"), cutset); enableDistinctFile == "" {
+		enableDistinctFile = "true"
+	}
+	return enableDistinctFile;
+}

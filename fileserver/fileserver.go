@@ -183,7 +183,7 @@ const (
 	"是否启用迁移": "默认不启用",
 	"enable_migrate": false,
 	"文件是否去重": "默认去重",
-	"enable_distinct_file": true,
+	"enable_distinct_file": %s,
 	"是否开启跨站访问": "默认开启",
 	"enable_cross_origin": true,
 	"是否开启Google认证，实现安全的上传、下载": "默认不开启",
@@ -3830,7 +3830,8 @@ func init() {
 		group := StartServer.getInitGroup()
 		adminIp := StartServer.getInitAdminIp()
 		renameFile := StartServer.getInitRenameFile()
-		cfg := fmt.Sprintf(cfgJson, port, peerId, host, peers, group, renameFile, adminIp)
+		distinctFile := StartServer.getInitDistinctFile()
+		cfg := fmt.Sprintf(cfgJson, port, peerId, host, peers, group, renameFile, adminIp, distinctFile)
 		StartServer.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {
