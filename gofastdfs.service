@@ -4,6 +4,7 @@ Wants=network.target
 
 [Service]
 PIDFile=/home/gofastdfs/conf/app.pid
+WorkingDirectory=/home/gofastdfs
 Environment="GO_FASTDFS_DIR=/home/gofastdfs" #/home/gofastdfs 修改成你的安装路径
 ExecStart=/home/gofastdfs/fileserver $GO_FASTDFS_DIR
 ExecReload=/bin/kill -s HUP $MAINPID
