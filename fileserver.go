@@ -973,6 +973,12 @@ func (this *Server) CrossOrigin(w http.ResponseWriter, r *http.Request) {
 func (this *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment")
+	if name, ok := r.URL.Query()["name"]; ok {
+		if v, err := url.QueryUnescape(name[0]); err == nil {
+			name[0] = v
+		}
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment;filename=%s", name[0]))
+	}
 }
 func (this *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	var (
@@ -2275,6 +2281,9 @@ func (this *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileRes
 		downloadUrl = fmt.Sprintf("%s/%s", Config().DownloadDomain, p)
 	}
 	fileResult.Url = downloadUrl
+	if Config().DefaultDownload {
+		fileResult.Url = fmt.Sprintf("%s?name=%s&download=1", downloadUrl, url.PathEscape(outname))
+	}
 	fileResult.Md5 = fileInfo.Md5
 	fileResult.Path = "/" + p
 	fileResult.Domain = domain
