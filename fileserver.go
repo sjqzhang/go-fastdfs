@@ -2337,6 +2337,13 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 		outPath = fmt.Sprintf(folder+"/%s", fileInfo.ReName)
 	}
 	if this.util.FileExists(outPath) && Config().EnableDistinctFile {
+		log.Info(fmt.Sprintf("重复上传: %s", outPath)) 
+		outFile,err = os.OpenFile(outPath,  os.O_RDWR | os.O_APPEND | os. O_CREATE,066)
+		defer outFile.Close()
+		if err != nil {
+			log.Error(err)
+			return fileInfo, errors.New("(error)fail," + err.Error())
+		}
 		for i := 0; i < 10000; i++ {
 			outPath = fmt.Sprintf(folder+"/%d_%s", i, filepath.Base(header.Filename))
 			fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
@@ -2344,19 +2351,20 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 				break
 			}
 		}
-	}
-	log.Info(fmt.Sprintf("upload: %s", outPath))
-	if outFile, err = os.Create(outPath); err != nil {
-		return fileInfo, err
-	}
-	defer outFile.Close()
-	if err != nil {
-		log.Error(err)
-		return fileInfo, errors.New("(error)fail," + err.Error())
-	}
-	if _, err = io.Copy(outFile, file); err != nil {
-		log.Error(err)
-		return fileInfo, errors.New("(error)fail," + err.Error())
+	} else{
+		log.Info(fmt.Sprintf("upload: %s", outPath))
+		if outFile, err = os.Create(outPath); err != nil {
+			return fileInfo, err
+		}
+		defer outFile.Close()
+		if err != nil {
+			log.Error(err)
+			return fileInfo, errors.New("(error)fail," + err.Error())
+		}
+		if _, err = io.Copy(outFile, file); err != nil {
+			log.Error(err)
+			return fileInfo, errors.New("(error)fail," + err.Error())
+		}
 	}
 	if fi, err = outFile.Stat(); err != nil {
 		log.Error(err)
