@@ -66,13 +66,13 @@ Note: Please read this article carefully before using it, especially [wiki](http
 
 
 [![asciicast](https://asciinema.org/a/258926.svg)](https://asciinema.org/a/258926)
-#Start the server (compiled, [download](https://github.com/sjqzhang/fastdfs/releases) experience)
+# Start the server (compiled, [download](https://github.com/sjqzhang/fastdfs/releases) experience)
 ```
 ./fileserver
 ```
 
 
-#Command upload
+# Command upload
 
 `curl -F file=@http-index-fs http://10.1.xx.60:8080/upload`
 
@@ -81,7 +81,7 @@ Note: Please read this article carefully before using it, especially [wiki](http
 
 `http://127.0.0.1:8080`
 
-#Code upload (options see browser upload)
+# Code upload (options see browser upload)
 ## python
 ```python
 import requests
@@ -198,7 +198,7 @@ Please use md5, path, scene field, others are added to be compatible with the ol
 ```
 
 - Is there an API document?
-[API documentation] (doc/api.md)
+[API documentation](doc/api.md)
 
 - Is there a management background?
 ```
@@ -466,7 +466,7 @@ Specific self-realization
 third solution,
 It is recommended to implement the hjsplit split merge function with go, which has cross-platform capabilities. (Unrealized, waiting for you to come....)
 Option 4
-Use the built-in relay function (using the protocol for resumable uploads protocol, [Details] (https://tus.io/))
+Use the built-in relay function (using the protocol for resumable uploads protocol, [Details](https://tus.io/))
  Note: Option 4, you can only specify one upload server, do not support simultaneous writes, and the uploaded url has changed.
  Original upload url: http://10.1.5.9:8080/<group>/upload
  Breakpoint upload url: http://10.1.5.9:8080/<group>/big/upload/
@@ -506,9 +506,9 @@ For security reasons, the management API can only be called inside the cluster o
 
 
 
-- If you have any questions, please click [Reply] (https://github.com/sjqzhang/go-fastdfs/issues/new)
+- If you have any questions, please click [Reply](https://github.com/sjqzhang/go-fastdfs/issues/new)
 ## Have questions?
 ![QR code](doc/wechat.jpg)
 
 
-#### [donation] (doc/pay.png)
+#### ![donation](doc/pay.png)
