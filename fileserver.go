@@ -4104,6 +4104,17 @@ func (this *Server) initTus() {
 		for {
 			select {
 			case info := <-handler.CompleteUploads:
+				callBack := func(info tusd.FileInfo, fileInfo *FileInfo) {
+					if callback_url, ok := info.MetaData["callback_url"]; ok {
+						req := httplib.Post(callback_url)
+						req.SetTimeout(time.Second*10, time.Second*10)
+						req.Param("info", server.util.JsonEncodePretty(fileInfo))
+						req.Param("id", info.ID)
+						if _, err := req.String(); err != nil {
+							log.Error(err)
+						}
+					}
+				}
 				log.Info("CompleteUploads", info)
 				name := ""
 				pathCustom := ""
@@ -4147,7 +4158,9 @@ func (this *Server) initTus() {
 				} else {
 					tpath := this.GetFilePathByInfo(fi, true)
 					if fi.Md5 != "" && this.util.FileExists(tpath) {
-						if _, err := this.SaveFileInfoToLevelDB(info.ID, fi, this.ldb); err != nil {
+						var err error
+						var fileInfo *FileInfo
+						if fileInfo, err = this.SaveFileInfoToLevelDB(info.ID, fi, this.ldb); err != nil {
 							log.Error(err)
 						}
 						log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
@@ -4155,6 +4168,7 @@ func (this *Server) initTus() {
 						log.Info("remove file:", infoFullPath)
 						os.Remove(oldFullPath)
 						os.Remove(infoFullPath)
+						go callBack(info, fileInfo)
 						continue
 					}
 				}
@@ -4188,17 +4202,7 @@ func (this *Server) initTus() {
 				}
 				this.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 				go this.postFileToPeer(fileInfo)
-				callBack := func(info tusd.FileInfo, fileInfo *FileInfo) {
-					if callback_url, ok := info.MetaData["callback_url"]; ok {
-						req := httplib.Post(callback_url)
-						req.SetTimeout(time.Second*10, time.Second*10)
-						req.Param("info", server.util.JsonEncodePretty(fileInfo))
-						req.Param("id", info.ID)
-						if _, err := req.String(); err != nil {
-							log.Error(err)
-						}
-					}
-				}
+
 				go callBack(info, fileInfo)
 			}
 		}
