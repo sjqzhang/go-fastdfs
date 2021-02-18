@@ -485,6 +485,7 @@ func (this *Common) JsonEncodePretty(o interface{}) string {
     if err!=nil {
         return ""
     }
+	return string(buffer.Bytes())
 
 	resp := ""
 	switch o.(type) {
