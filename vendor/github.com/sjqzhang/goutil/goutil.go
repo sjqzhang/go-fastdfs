@@ -477,6 +477,15 @@ func (this *Common) RemoveEmptyDir(pathname string) {
 	}
 }
 func (this *Common) JsonEncodePretty(o interface{}) string {
+   buffer := &bytes.Buffer{}
+    encoder := json.NewEncoder(buffer)
+    encoder.SetEscapeHTML(false)
+   encoder.SetIndent("","  ")
+    err := encoder.Encode(o)
+    if err!=nil {
+        return ""
+    }
+
 	resp := ""
 	switch o.(type) {
 	case map[string]interface{}:
