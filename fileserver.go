@@ -2377,7 +2377,7 @@ func (this *Server) SaveUploadFile(file multipart.File, header *multipart.FileHe
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)
 	fileInfo.Peers = append(fileInfo.Peers, this.host)
-	//fmt.Println("upload",fileInfo)
+	//fmt.Println("upload", fileInfo)
 	return fileInfo, nil
 }
 func (this *Server) Upload(w http.ResponseWriter, r *http.Request) {
@@ -2548,10 +2548,8 @@ func (this *Server) upload(w http.ResponseWriter, r *http.Request) {
 		if Config().EnableDistinctFile {
 			if v, _ := this.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
 				fileResult = this.BuildFileResult(v, r)
-				if Config().RenameFile {
-					os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.ReName)
-				} else {
-					os.Remove(DOCKER_DIR + fileInfo.Path + "/" + fileInfo.Name)
+				if this.GetFilePathByInfo(&fileInfo, false) != this.GetFilePathByInfo(v, false) {
+					os.Remove(this.GetFilePathByInfo(&fileInfo, false))
 				}
 				if output == "json" || output == "json2" {
 					if output == "json2" {
