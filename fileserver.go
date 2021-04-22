@@ -143,6 +143,12 @@ const (
 	"是否合并小文件": "默认不合并,合并可以解决inode不够用的情况（当前对于小于1M文件）进行合并",
 	"enable_merge_small_file": false,
     "允许后缀名": "允许可以上传的文件后缀名，如jpg,jpeg,png等。留空允许所有。",
+	"图片是否缩放": "默认是",
+	"enable_image_resize": true,
+	"图片最大宽度": "默认值2000",
+	"image_max_width": 2000,
+	"图片最大高度": "默认值1000",
+	"image_max_height": 1000,
 	"extensions": [],
 	"重试同步失败文件的时间": "单位秒",
 	"refresh_interval": 1800,
@@ -152,7 +158,7 @@ const (
 	"enable_web_upload": true,
 	"是否支持非日期路径": "默认支持非日期路径,也即支持自定义路径,需要上传文件时指定path",
 	"enable_custom_path": true,
-	"下载域名": "用于外网下载文件的域名,不包含http://",
+	"下载域名": "用于外网下载文件的域名",
 	"download_domain": "",
 	"场景列表": "当设定后，用户指的场景必项在列表中，默认不做限制(注意：如果想开启场景认功能，格式如下：'场景名:googleauth_secret' 如 default:N7IET373HB2C5M6D ",
 	"scenes": [],
@@ -178,7 +184,7 @@ const (
 	"auto_repair": true,
 	"文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
 	"file_sum_arithmetic": "md5",
-	"管理ip列表": "用于管理集的ip白名单,",
+	"管理ip列表": "用于管理集的ip白名单,如果放开所有内网则可以用 0.0.0.0 ,注意为了安全，不对外网开放",
 	"admin_ips": ["127.0.0.1"],
 	"是否启用迁移": "默认不启用",
 	"enable_migrate": false,
@@ -322,6 +328,8 @@ type GloablConfig struct {
 	RetryCount           int      `json:"retry_count"`
 	SyncDelay            int64    `json:"sync_delay"`
 	WatchChanSize        int      `json:"watch_chan_size"`
+	ImageMaxWidth        int      `json:"image_max_width"`
+	ImageMaxHeight       int      `json:"image_max_height"`
 }
 type FileInfoResult struct {
 	Name    string `json:"name"`
@@ -1175,11 +1183,17 @@ func (this *Server) DownloadSmallFileByURI(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			log.Error(err)
 		}
+		if imgWidth > Config().ImageMaxWidth {
+			imgWidth = Config().ImageMaxWidth
+		}
 	}
 	if height != "" {
 		imgHeight, err = strconv.Atoi(height)
 		if err != nil {
 			log.Error(err)
+		}
+		if imgHeight > Config().ImageMaxHeight {
+			imgHeight = Config().ImageMaxHeight
 		}
 	}
 	data, notFound, err = this.GetSmallFileByURI(w, r)
@@ -1221,11 +1235,17 @@ func (this *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Reque
 		if err != nil {
 			log.Error(err)
 		}
+		if imgWidth > Config().ImageMaxWidth {
+			imgWidth = Config().ImageMaxWidth
+		}
 	}
 	if height != "" {
 		imgHeight, err = strconv.Atoi(height)
 		if err != nil {
 			log.Error(err)
+		}
+		if imgHeight > Config().ImageMaxHeight {
+			imgHeight = Config().ImageMaxHeight
 		}
 	}
 	if isDownload {
@@ -1358,6 +1378,7 @@ func (this *Server) ResizeImageByBytes(w http.ResponseWriter, data []byte, width
 		log.Error(err)
 		return
 	}
+	fmt.Println(width, height)
 	img = resize.Resize(width, height, img, resize.Lanczos3)
 	if imgType == "jpg" || imgType == "jpeg" {
 		jpeg.Encode(w, img, nil)
@@ -4316,6 +4337,12 @@ func (this *Server) initComponent(isReload bool) {
 	}
 	if Config().WatchChanSize == 0 {
 		Config().WatchChanSize = 100000
+	}
+	if Config().ImageMaxHeight == 0 {
+		Config().ImageMaxHeight = 2000
+	}
+	if Config().ImageMaxWidth == 0 {
+		Config().ImageMaxWidth = 2000
 	}
 }
 
