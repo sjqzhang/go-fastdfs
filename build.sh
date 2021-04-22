@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BIN_VERSION="go-fastdfs:${1-not set}"
+BIN_VERSION="go-fastdfs:${1-$(git describe  --tags `git rev-parse HEAD`)}"
 
 if [[ ! -d src ]];then
 
