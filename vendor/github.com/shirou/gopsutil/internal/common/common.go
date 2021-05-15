@@ -94,6 +94,17 @@ func (i FakeInvoke) CommandWithContext(ctx context.Context, name string, arg ...
 
 var ErrNotImplementedError = errors.New("not implemented yet")
 
+// ReadFile reads contents from a file
+func ReadFile(filename string) (string, error) {
+	content, err := ioutil.ReadFile(filename)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(content), nil
+}
+
 // ReadLines reads contents from a file and splits them by new lines.
 // A convenience wrapper to ReadLinesOffsetN(filename, 0, -1).
 func ReadLines(filename string) ([]string, error) {
@@ -163,7 +174,7 @@ func UintToString(orig []uint8) string {
 	return string(ret[0:size])
 }
 
-func ByteToString(orig []byte) string {
+func ByteToString(orig []int8) string {
 	n := -1
 	l := -1
 	for i, b := range orig {
@@ -181,9 +192,19 @@ func ByteToString(orig []byte) string {
 		n = i + 1
 	}
 	if n == -1 {
-		return string(orig)
+		b := make([]byte, len(orig))
+		for i, v := range orig {
+			b[i] = byte(v)
+		}
+		return string(b)
+		//return string(orig)
 	}
-	return string(orig[l:n])
+	b := make([]byte, len(orig[l:n]))
+	for i, v := range orig[l:n] {
+		b[i] = byte(v)
+	}
+	return string(b)
+	//return string(orig[l:n])
 }
 
 // ReadInts reads contents from single line file and returns them as []int32.
@@ -315,7 +336,6 @@ func GetEnv(key string, dfault string, combineWith ...string) string {
 		copy(all[1:], combineWith)
 		return filepath.Join(all...)
 	}
-	panic("invalid switch case")
 }
 
 func HostProc(combineWith ...string) string {
@@ -336,6 +356,10 @@ func HostVar(combineWith ...string) string {
 
 func HostRun(combineWith ...string) string {
 	return GetEnv("HOST_RUN", "/run", combineWith...)
+}
+
+func HostDev(combineWith ...string) string {
+	return GetEnv("HOST_DEV", "/dev", combineWith...)
 }
 
 // getSysctrlEnv sets LC_ALL=C in a list of env vars for use when running

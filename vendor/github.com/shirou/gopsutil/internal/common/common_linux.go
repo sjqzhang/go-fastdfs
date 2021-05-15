@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
@@ -54,14 +54,7 @@ func NumProcs() (uint64, error) {
 	return cnt, nil
 }
 
-// cachedBootTime must be accessed via atomic.Load/StoreUint64
-var cachedBootTime uint64
-
 func BootTimeWithContext(ctx context.Context) (uint64, error) {
-	t := atomic.LoadUint64(&cachedBootTime)
-	if t != 0 {
-		return t, nil
-	}
 
 	system, role, err := Virtualization()
 	if err != nil {
@@ -94,8 +87,7 @@ func BootTimeWithContext(ctx context.Context) (uint64, error) {
 				if err != nil {
 					return 0, err
 				}
-				t = uint64(b)
-				atomic.StoreUint64(&cachedBootTime, t)
+				t := uint64(b)
 				return t, nil
 			}
 		}
@@ -108,8 +100,7 @@ func BootTimeWithContext(ctx context.Context) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		t = uint64(time.Now().Unix()) - uint64(b)
-		atomic.StoreUint64(&cachedBootTime, t)
+		t := uint64(time.Now().Unix()) - uint64(b)
 		return t, nil
 	}
 
@@ -120,9 +111,24 @@ func Virtualization() (string, string, error) {
 	return VirtualizationWithContext(context.Background())
 }
 
+// required variables for concurrency safe virtualization caching
+var (
+	cachedVirtMap   map[string]string
+	cachedVirtMutex sync.RWMutex
+	cachedVirtOnce  sync.Once
+)
+
 func VirtualizationWithContext(ctx context.Context) (string, string, error) {
-	var system string
-	var role string
+	var system, role string
+
+	// if cached already, return from cache
+	cachedVirtMutex.RLock() // unlock won't be deferred so concurrent reads don't wait for long
+	if cachedVirtMap != nil {
+		cachedSystem, cachedRole := cachedVirtMap["system"], cachedVirtMap["role"]
+		cachedVirtMutex.RUnlock()
+		return cachedSystem, cachedRole, nil
+	}
+	cachedVirtMutex.RUnlock()
 
 	filename := HostProc("xen")
 	if PathExists(filename) {
@@ -204,6 +210,17 @@ func VirtualizationWithContext(ctx context.Context) (string, string, error) {
 		}
 	}
 
+	if PathExists(filepath.Join(filename, "1", "environ")) {
+		contents, err := ReadFile(filepath.Join(filename, "1", "environ"))
+
+		if err == nil {
+			if strings.Contains(contents, "container=lxc") {
+				system = "lxc"
+				role = "guest"
+			}
+		}
+	}
+
 	if PathExists(filepath.Join(filename, "self", "cgroup")) {
 		contents, err := ReadLines(filepath.Join(filename, "self", "cgroup"))
 		if err == nil {
@@ -230,6 +247,17 @@ func VirtualizationWithContext(ctx context.Context) (string, string, error) {
 			role = "host"
 		}
 	}
+
+	// before returning for the first time, cache the system and role
+	cachedVirtOnce.Do(func() {
+		cachedVirtMutex.Lock()
+		defer cachedVirtMutex.Unlock()
+		cachedVirtMap = map[string]string{
+			"system": system,
+			"role":   role,
+		}
+	})
+
 	return system, role, nil
 }
 

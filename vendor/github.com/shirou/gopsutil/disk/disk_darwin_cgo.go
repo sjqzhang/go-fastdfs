@@ -7,7 +7,7 @@ package disk
 #cgo LDFLAGS: -framework CoreFoundation -framework IOKit
 #include <stdint.h>
 #include <CoreFoundation/CoreFoundation.h>
-#include "disk_darwin.h"
+#include "iostat_darwin.h"
 */
 import "C"
 
@@ -16,10 +16,6 @@ import (
 
 	"github.com/shirou/gopsutil/internal/common"
 )
-
-func IOCounters(names ...string) (map[string]IOCountersStat, error) {
-	return IOCountersWithContext(context.Background(), names...)
-}
 
 func IOCountersWithContext(ctx context.Context, names ...string) (map[string]IOCountersStat, error) {
 	var buf [C.NDRIVE]C.DriveStats

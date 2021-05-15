@@ -4,88 +4,67 @@ package disk
 
 import (
 	"context"
-	"path"
-	"unsafe"
 
 	"github.com/shirou/gopsutil/internal/common"
 	"golang.org/x/sys/unix"
 )
 
-func Partitions(all bool) ([]PartitionStat, error) {
-	return PartitionsWithContext(context.Background(), all)
-}
-
+// PartitionsWithContext returns disk partition.
+// 'all' argument is ignored, see: https://github.com/giampaolo/psutil/issues/906
 func PartitionsWithContext(ctx context.Context, all bool) ([]PartitionStat, error) {
 	var ret []PartitionStat
 
-	count, err := Getfsstat(nil, MntWait)
+	count, err := unix.Getfsstat(nil, unix.MNT_WAIT)
 	if err != nil {
 		return ret, err
 	}
-	fs := make([]Statfs, count)
-	if _, err = Getfsstat(fs, MntWait); err != nil {
+	fs := make([]unix.Statfs_t, count)
+	if _, err = unix.Getfsstat(fs, unix.MNT_WAIT); err != nil {
 		return ret, err
 	}
 	for _, stat := range fs {
 		opts := "rw"
-		if stat.Flags&MntReadOnly != 0 {
+		if stat.Flags&unix.MNT_RDONLY != 0 {
 			opts = "ro"
 		}
-		if stat.Flags&MntSynchronous != 0 {
+		if stat.Flags&unix.MNT_SYNCHRONOUS != 0 {
 			opts += ",sync"
 		}
-		if stat.Flags&MntNoExec != 0 {
+		if stat.Flags&unix.MNT_NOEXEC != 0 {
 			opts += ",noexec"
 		}
-		if stat.Flags&MntNoSuid != 0 {
+		if stat.Flags&unix.MNT_NOSUID != 0 {
 			opts += ",nosuid"
 		}
-		if stat.Flags&MntUnion != 0 {
+		if stat.Flags&unix.MNT_UNION != 0 {
 			opts += ",union"
 		}
-		if stat.Flags&MntAsync != 0 {
+		if stat.Flags&unix.MNT_ASYNC != 0 {
 			opts += ",async"
 		}
-		if stat.Flags&MntSuidDir != 0 {
-			opts += ",suiddir"
+		if stat.Flags&unix.MNT_DONTBROWSE != 0 {
+			opts += ",nobrowse"
 		}
-		if stat.Flags&MntSoftDep != 0 {
-			opts += ",softdep"
+		if stat.Flags&unix.MNT_AUTOMOUNTED != 0 {
+			opts += ",automounted"
 		}
-		if stat.Flags&MntNoSymFollow != 0 {
-			opts += ",nosymfollow"
+		if stat.Flags&unix.MNT_JOURNALED != 0 {
+			opts += ",journaled"
 		}
-		if stat.Flags&MntGEOMJournal != 0 {
-			opts += ",gjounalc"
-		}
-		if stat.Flags&MntMultilabel != 0 {
+		if stat.Flags&unix.MNT_MULTILABEL != 0 {
 			opts += ",multilabel"
 		}
-		if stat.Flags&MntACLs != 0 {
-			opts += ",acls"
+		if stat.Flags&unix.MNT_NOATIME != 0 {
+			opts += ",noatime"
 		}
-		if stat.Flags&MntNoATime != 0 {
-			opts += ",noattime"
-		}
-		if stat.Flags&MntClusterRead != 0 {
-			opts += ",nocluster"
-		}
-		if stat.Flags&MntClusterWrite != 0 {
-			opts += ",noclusterw"
-		}
-		if stat.Flags&MntNFS4ACLs != 0 {
-			opts += ",nfs4acls"
+		if stat.Flags&unix.MNT_NODEV != 0 {
+			opts += ",nodev"
 		}
 		d := PartitionStat{
-			Device:     common.IntToString(stat.Mntfromname[:]),
-			Mountpoint: common.IntToString(stat.Mntonname[:]),
-			Fstype:     common.IntToString(stat.Fstypename[:]),
+			Device:     common.ByteToString(stat.Mntfromname[:]),
+			Mountpoint: common.ByteToString(stat.Mntonname[:]),
+			Fstype:     common.ByteToString(stat.Fstypename[:]),
 			Opts:       opts,
-		}
-		if all == false {
-			if !path.IsAbs(d.Device) || !common.PathExists(d.Device) {
-				continue
-			}
 		}
 
 		ret = append(ret, d)
@@ -94,25 +73,6 @@ func PartitionsWithContext(ctx context.Context, all bool) ([]PartitionStat, erro
 	return ret, nil
 }
 
-func Getfsstat(buf []Statfs, flags int) (n int, err error) {
-	return GetfsstatWithContext(context.Background(), buf, flags)
-}
-
-func GetfsstatWithContext(ctx context.Context, buf []Statfs, flags int) (n int, err error) {
-	var _p0 unsafe.Pointer
-	var bufsize uintptr
-	if len(buf) > 0 {
-		_p0 = unsafe.Pointer(&buf[0])
-		bufsize = unsafe.Sizeof(Statfs{}) * uintptr(len(buf))
-	}
-	r0, _, e1 := unix.Syscall(SYS_GETFSSTAT64, uintptr(_p0), bufsize, uintptr(flags))
-	n = int(r0)
-	if e1 != 0 {
-		err = e1
-	}
-	return
-}
-
 func getFsType(stat unix.Statfs_t) string {
-	return common.IntToString(stat.Fstypename[:])
+	return common.ByteToString(stat.Fstypename[:])
 }
