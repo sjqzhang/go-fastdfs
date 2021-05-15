@@ -37,14 +37,8 @@ func NewClient(url string, config *Config) (*Client, error) {
 		config.Header = make(http.Header)
 	}
 
-	var c *http.Client
-
-	if config.Transport == nil {
-		c = &http.Client{}
-	} else {
-		c = &http.Client{
-			Transport: config.Transport,
-		}
+	if config.HttpClient == nil {
+		config.HttpClient = &http.Client{}
 	}
 
 	return &Client{
@@ -53,7 +47,7 @@ func NewClient(url string, config *Config) (*Client, error) {
 		Version: ProtocolVersion,
 		Header:  config.Header,
 
-		client: c,
+		client: config.HttpClient,
 	}, nil
 }
 

@@ -19,7 +19,7 @@ obtain the same lock twice, this fork forbids this behavior.
 install
 -------
 Install [Go 1][5], either [from source][6] or [with a prepackaged binary][7].
-For Windows support, Go 1.4 or newer is required.
+For Windows suport, Go 1.4 or newer is required.
 
 Then run
 
