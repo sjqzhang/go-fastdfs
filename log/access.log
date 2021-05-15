@@ -1,0 +1,5 @@
+2021-05-15 15:40:55 [INF] [fileserver.go:4365] [main.HttpHandler.ServeHTTP.func1] [Access] 2021/05/15 - 15:40:55 | 14.551974ms | 127.0.0.1 | GET | 200 |/
+2021-05-15 15:40:56 [INF] [fileserver.go:4365] [main.HttpHandler.ServeHTTP.func1] [Access] 2021/05/15 - 15:40:56 | 82.779µs | 127.0.0.1 | GET | 200 |/static/uppy.min.css
+2021-05-15 15:40:56 [INF] [fileserver.go:4365] [main.HttpHandler.ServeHTTP.func1] [Access] 2021/05/15 - 15:40:56 | 26.99µs | 127.0.0.1 | GET | 200 |/static/uppy.min.js
+2021-05-15 15:40:56 [INF] [fileserver.go:4365] [main.HttpHandler.ServeHTTP.func1] [Access] 2021/05/15 - 15:40:56 | 36.222µs | 127.0.0.1 | GET | 200 |/favicon.ico
+2021-05-15 15:41:07 [INF] [fileserver.go:4365] [main.HttpHandler.ServeHTTP.func1] [Access] 2021/05/15 - 15:41:07 | 1.985171ms | 127.0.0.1 | POST | 200 |/group1/upload
