@@ -13,7 +13,7 @@ require (
 	github.com/json-iterator/go v1.1.11
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/radovskyb/watcher v1.0.7
-	github.com/shirou/gopsutil v3.21.4+incompatible
+	github.com/shirou/gopsutil/v3 v3.21.4
 	github.com/sjqzhang/googleAuthenticator v0.0.0-20160926062737-f198f070e0b1
 	github.com/sjqzhang/goutil v0.0.0-20200618044433-2319148e0a46
 	github.com/sjqzhang/seelog v0.0.0-20180104061743-556439109558
