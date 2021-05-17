@@ -3,3 +3,4 @@ vendor/*
 data/*
 files/*
 conf/*
+build/*
