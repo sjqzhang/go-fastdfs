@@ -22,7 +22,7 @@ func main() {
 	dfs.BUILD_TIME = BUILD_TIME
 	dfs.GO_VERSION = GO_VERSION
 	dfs.GIT_VERSION = GIT_VERSION
-	root := cobra.Command{Use: "go_fastdfs"}
+	root := cobra.Command{Use: "fileserver"}
 	root.AddCommand(
 		version.Cmd,
 		doc.Cmd,

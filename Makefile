@@ -5,7 +5,7 @@ VERSION_MASTER=master
 COMMIT=`git rev-parse --short HEAD`
 BUILDDATE=`date "+%Y-%m-%d/%H:%M:%S"`
 BUILD_DIR=build
-APP_NAME=go_fastdfs
+APP_NAME=fileserver
 sources=$(wildcard *.go)
 
 build = GOOS=$(1) GOARCH=$(2) go build -o ${BUILD_DIR}/$(APP_NAME)-$(1)-$(2) -ldflags "-w -s -X 'main.VERSION=${VERSION}' -X 'main.GO_VERSION=${GO_VERSION}' -X 'main.GIT_VERSION=${COMMIT}' -X 'main.BUILD_TIME=${BUILDDATE}'" main.go
