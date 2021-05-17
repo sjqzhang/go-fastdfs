@@ -1,33 +1,29 @@
-package main
+package doc
 
 import (
-	"flag"
 	"fmt"
-	"github.com/astaxie/beego/httplib"
-	"github.com/eventials/go-tus"
-	"github.com/sjqzhang/goutil"
-	"github.com/syndtr/goleveldb/leveldb"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/astaxie/beego/httplib"
+	"github.com/eventials/go-tus"
+	"github.com/sjqzhang/goutil"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
-var url *string
-var dir *string
-var worker *int
+var Url *string
+var Dir *string
+var Worker *int
+var Scene *string
+
 var queue chan string
-
 var store tus.Store
-
-//var filesize *int
-//var filecount *int
-//var retry *int
-//var gen *bool
-var scene *string
 var done chan bool = make(chan bool, 1)
+
 var wg sync.WaitGroup = sync.WaitGroup{}
 var util goutil.Common
 
@@ -66,26 +62,8 @@ func (s *LeveldbStore) Close() {
 	s.Close()
 }
 
-func init() {
-	util = goutil.Common{}
-	defaultTransport := &http.Transport{
-		DisableKeepAlives:   true,
-		Dial:                httplib.TimeoutDialer(time.Second*15, time.Second*300),
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 100,
-	}
-	settins := httplib.BeegoHTTPSettings{
-		UserAgent:        "Go-FastDFS",
-		ConnectTimeout:   15 * time.Second,
-		ReadWriteTimeout: 15 * time.Second,
-		Gzip:             true,
-		DumpBody:         true,
-		Transport:        defaultTransport,
-	}
-	httplib.SetDefaultSetting(settins)
-
-	//store,_=NewLeveldbStore("upload.db")
-
+func GetDir(dir string) []string {
+	return getDir(dir)
 }
 
 func getDir(dir string) []string {
@@ -108,7 +86,7 @@ func sendFile() {
 			return
 		}
 		filePath := <-queue
-		if strings.Index(*url, "/big/upload") > 0 {
+		if strings.Index(*Url, "/big/upload") > 0 {
 			bigUpload(filePath)
 		} else {
 			normalUpload(filePath)
@@ -123,14 +101,14 @@ func normalUpload(filePath string) {
 		if re := recover(); re != nil {
 		}
 	}()
-	req := httplib.Post(*url)
+	req := httplib.Post(*Url)
 	req.PostFile("file", filePath) //注意不是全路径
 	req.Param("output", "text")
 	req.Param("scene", "")
-	path := strings.Replace(filePath, *dir, "", 1)
+	path := strings.Replace(filePath, *Dir, "", 1)
 	filename := filepath.Base(path)
 	path = strings.Replace(filepath.Dir(path), "\\", "/", -1)
-	req.Param("path", *scene+"/"+strings.TrimLeft(path, "/"))
+	req.Param("path", *Scene+"/"+strings.TrimLeft(path, "/"))
 	req.Param("filename", filename)
 	req.Retries(-1)
 	if s, err := req.String(); err != nil {
@@ -155,7 +133,7 @@ func bigUpload(filePath string) {
 	cfg := tus.DefaultConfig()
 	//cfg.Store=store
 	//cfg.Resume=true
-	client, err := tus.NewClient(*url, cfg)
+	client, err := tus.NewClient(*Url, cfg)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -175,41 +153,45 @@ func bigUpload(filePath string) {
 
 }
 
-func startWorker() {
+func StartWorker() {
 	defer func() {
 		if re := recover(); re != nil {
 		}
 	}()
-	for i := 0; i < *worker; i++ {
+	for i := 0; i < *Worker; i++ {
 		go sendFile()
 	}
 }
 
-func main() {
-
-	url = flag.String("url", "http://127.0.0.1:8080/group1/upload", "url")
-	dir = flag.String("dir", "./", "dir to upload")
-	worker = flag.Int("worker", 100, "num of worker")
-	scene = flag.String("scene", "default", "scene")
-	//retry=flag.Int("retry", -1, "retry times when fail")
-	//uploadPath=flag.String("uploadPath", "./", "upload path")
-	//filesize=flag.Int("filesize", 1024*1024, "file of size")
-	//filecount=flag.Int("filecount", 1000000, "file of count")
-	//gen=flag.Bool("gen", false, "gen file")
-	flag.Parse()
+func StartServer() {
 	st := time.Now()
-	//if *gen {
-	//	genFile()
-	//	fmt.Println(time.Since(st))
-	//	os.Exit(0)
-	//}
-	files := getDir(*dir)
+	files := getDir(*Dir)
 	wg.Add(len(files))
 	queue = make(chan string, len(files))
 	for i := 0; i < len(files); i++ {
 		queue <- files[i]
 	}
-	startWorker()
+	StartWorker()
 	wg.Wait()
 	fmt.Println(time.Since(st))
+}
+
+func init() {
+	util = goutil.Common{}
+	defaultTransport := &http.Transport{
+		DisableKeepAlives:   true,
+		Dial:                httplib.TimeoutDialer(time.Second*15, time.Second*300),
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+	}
+	settings := httplib.BeegoHTTPSettings{
+		UserAgent:        "Go-FastDFS",
+		ConnectTimeout:   15 * time.Second,
+		ReadWriteTimeout: 15 * time.Second,
+		Gzip:             true,
+		DumpBody:         true,
+		Transport:        defaultTransport,
+	}
+	httplib.SetDefaultSetting(settings)
+	//store,_=NewLeveldbStore("upload.db")
 }
