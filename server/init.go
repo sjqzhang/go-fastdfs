@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/astaxie/beego/httplib"
+	"github.com/busyfree/tusd/pkg/filestore"
+	"github.com/busyfree/tusd/pkg/handler"
 	log "github.com/sjqzhang/seelog"
-	"github.com/sjqzhang/tusd"
-	"github.com/sjqzhang/tusd/filestore"
 )
 
 func (c *Server) initTus() {
@@ -58,7 +58,7 @@ func (c *Server) initTus() {
 	if Config().SupportGroupManage {
 		bigDir = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
 	}
-	composer := tusd.NewStoreComposer()
+	composer := handler.NewStoreComposer()
 	// support raw tus upload and download
 	store.GetReaderExt = func(id string) (io.Reader, error) {
 		var (
@@ -111,24 +111,24 @@ func (c *Server) initTus() {
 		}
 	}
 	store.UseIn(composer)
-	SetupPreHooks := func(composer *tusd.StoreComposer) {
+	SetupPreHooks := func(composer *handler.StoreComposer) {
 		composer.UseCore(hookDataStore{
 			DataStore: composer.Core,
 		})
 	}
 	SetupPreHooks(composer)
-	handler, err := tusd.NewHandler(tusd.Config{
+	h, err := handler.NewHandler(handler.Config{
 		Logger:                  l,
 		BasePath:                bigDir,
 		StoreComposer:           composer,
 		NotifyCompleteUploads:   true,
 		RespectForwardedHeaders: true,
 	})
-	notify := func(handler *tusd.Handler) {
+	notify := func(h *handler.Handler) {
 		for {
 			select {
-			case info := <-handler.CompleteUploads:
-				callBack := func(info tusd.FileInfo, fileInfo *FileInfo) {
+			case info := <-h.CompleteUploads:
+				callBack := func(info handler.FileInfo, fileInfo *FileInfo) {
 					if callback_url, ok := info.MetaData["callback_url"]; ok {
 						req := httplib.Post(callback_url)
 						req.SetTimeout(time.Second*10, time.Second*10)
@@ -143,19 +143,19 @@ func (c *Server) initTus() {
 				name := ""
 				pathCustom := ""
 				scene := Config().DefaultScene
-				if v, ok := info.MetaData["filename"]; ok {
+				if v, ok := info.Upload.MetaData["filename"]; ok {
 					name = v
 				}
-				if v, ok := info.MetaData["scene"]; ok {
+				if v, ok := info.Upload.MetaData["scene"]; ok {
 					scene = v
 				}
-				if v, ok := info.MetaData["path"]; ok {
+				if v, ok := info.Upload.MetaData["path"]; ok {
 					pathCustom = v
 				}
 				var err error
 				md5sum := ""
-				oldFullPath := BIG_DIR + "/" + info.ID + ".bin"
-				infoFullPath := BIG_DIR + "/" + info.ID + ".info"
+				oldFullPath := BIG_DIR + "/" + info.Upload.ID + ".bin"
+				infoFullPath := BIG_DIR + "/" + info.Upload.ID + ".info"
 				if md5sum, err = c.util.GetFileSumByName(oldFullPath, Config().FileSumArithmetic); err != nil {
 					log.Error(err)
 					continue
@@ -184,7 +184,7 @@ func (c *Server) initTus() {
 					if fi.Md5 != "" && c.util.FileExists(tpath) {
 						var err error
 						var fileInfo *FileInfo
-						if fileInfo, err = c.SaveFileInfoToLevelDB(info.ID, fi, c.ldb); err != nil {
+						if fileInfo, err = c.SaveFileInfoToLevelDB(info.Upload.ID, fi, c.ldb); err != nil {
 							log.Error(err)
 						}
 						log.Info(fmt.Sprintf("file is found md5:%s", fi.Md5))
@@ -192,7 +192,7 @@ func (c *Server) initTus() {
 						log.Info("remove file:", infoFullPath)
 						os.Remove(oldFullPath)
 						os.Remove(infoFullPath)
-						go callBack(info, fileInfo)
+						go callBack(info.Upload, fileInfo)
 						continue
 					}
 				}
@@ -208,7 +208,7 @@ func (c *Server) initTus() {
 					Name:      name,
 					Path:      fpath2,
 					ReName:    filename,
-					Size:      info.Size,
+					Size:      info.Upload.Size,
 					TimeStamp: timeStamp,
 					Md5:       md5sum,
 					Peers:     []string{c.host},
@@ -220,22 +220,22 @@ func (c *Server) initTus() {
 				}
 				log.Info(fileInfo)
 				os.Remove(infoFullPath)
-				if _, err = c.SaveFileInfoToLevelDB(info.ID, fileInfo, c.ldb); err != nil {
+				if _, err = c.SaveFileInfoToLevelDB(info.Upload.ID, fileInfo, c.ldb); err != nil {
 					//assosiate file id
 					log.Error(err)
 				}
 				c.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 				go c.postFileToPeer(fileInfo)
 
-				go callBack(info, fileInfo)
+				go callBack(info.Upload, fileInfo)
 			}
 		}
 	}
-	go notify(handler)
+	go notify(h)
 	if err != nil {
 		log.Error(err)
 	}
-	http.Handle(bigDir, http.StripPrefix(bigDir, handler))
+	http.Handle(bigDir, http.StripPrefix(bigDir, h))
 }
 
 func (c *Server) initComponent(isReload bool) {

@@ -2,14 +2,15 @@ package server
 
 import (
 	"fmt"
-	"github.com/astaxie/beego/httplib"
-	log "github.com/sjqzhang/seelog"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/astaxie/beego/httplib"
+	log "github.com/sjqzhang/seelog"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func (c *Server) RemoveDownloading() {
