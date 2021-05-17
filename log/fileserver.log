@@ -2,3 +2,12 @@
 2021-05-15 15:40:40 [INF] [fileserver.go:431] [main.ParseConfig] {:8080 [http://10.0.0.20:8080] false group1 false true [] 1800 true  true [] [] default {abc@163.com abc smtp.163.com:25}  false 600 0 true http://10.0.0.20:8080 md5 4 true [127.0.0.1] false false true false true false  false true true 0 false false false 0 0 0 0 0 0 0 0 0 0 2000 1000}
 2021-05-15 15:40:40 [INF] [fileserver.go:433] [main.ParseConfig] config parse success
 2021-05-15 15:41:07 [INF] [file.go:320] [os.Create] upload: files/default/20210515/15/41/4/basicprofile.jpeg
+2021-05-17 12:09:05 [INF] [server.go:114] [github.com/sjqzhang/go-fastdfs/server.InitServer] succes init log access
+2021-05-17 12:09:05 [INF] [config.go:250] [github.com/sjqzhang/go-fastdfs/server.ParseConfig] {:8080 [http://10.0.0.20:8080] false group1 false true [] 1800 true  true [] [] default {abc@163.com abc smtp.163.com:25}  false 600 0 true http://10.0.0.20:8080 md5 4 true [127.0.0.1] false false true false true false  false true true 0 false false false 0 0 0 0 0 0 0 0 0 0 2000 1000}
+2021-05-17 12:09:05 [INF] [config.go:252] [github.com/sjqzhang/go-fastdfs/server.ParseConfig] config parse success
+2021-05-17 12:55:58 [INF] [server.go:107] [github.com/sjqzhang/go-fastdfs/server.InitServer] succes init log access
+2021-05-17 12:55:58 [INF] [config.go:250] [github.com/sjqzhang/go-fastdfs/server.ParseConfig] {:8080 [http://10.0.0.20:8080] false group1 false true [] 1800 true  true [] [] default {abc@163.com abc smtp.163.com:25}  false 600 0 true http://10.0.0.20:8080 md5 4 true [127.0.0.1] false false true false true false  false true true 0 false false false 0 0 0 0 0 0 0 0 0 0 2000 1000}
+2021-05-17 12:55:58 [INF] [config.go:252] [github.com/sjqzhang/go-fastdfs/server.ParseConfig] config parse success
+2021-05-17 12:59:06 [INF] [server.go:103] [github.com/sjqzhang/go-fastdfs/server.InitServer] succes init log access
+2021-05-17 12:59:06 [INF] [config.go:250] [github.com/sjqzhang/go-fastdfs/server.ParseConfig] {:8080 [http://10.0.0.20:8080] false group1 false true [] 1800 true  true [] [] default {abc@163.com abc smtp.163.com:25}  false 600 0 true http://10.0.0.20:8080 md5 4 true [127.0.0.1] false false true false true false  false true true 0 false false false 0 0 0 0 0 0 0 0 0 0 2000 1000}
+2021-05-17 12:59:06 [INF] [config.go:252] [github.com/sjqzhang/go-fastdfs/server.ParseConfig] config parse success

@@ -17,5 +17,7 @@ require (
 	github.com/sjqzhang/goutil v0.0.0-20200618044433-2319148e0a46
 	github.com/sjqzhang/seelog v0.0.0-20180104061743-556439109558
 	github.com/sjqzhang/tusd v0.0.0-20190220031306-a6a9d78ef54a
+	github.com/spf13/cobra v1.1.3
 	github.com/syndtr/goleveldb v1.0.0
+	go.uber.org/automaxprocs v1.4.0
 )
