@@ -1,4 +1,5 @@
 .idea
 vendor/*
-data
-files
+data/*
+files/*
+conf/*
