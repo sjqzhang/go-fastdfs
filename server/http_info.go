@@ -16,8 +16,8 @@ import (
 
 	"github.com/astaxie/beego/httplib"
 	mapset "github.com/deckarep/golang-set"
-	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/mem"
 	log "github.com/sjqzhang/seelog"
 	"github.com/syndtr/goleveldb/leveldb"
 )
