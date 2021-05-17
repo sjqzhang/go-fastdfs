@@ -1,4 +1,4 @@
-package main
+package doc
 
 import (
 	"encoding/json"
@@ -24,58 +24,53 @@ type FileInfo struct {
 	op        string
 }
 
-func main()  {
+func testDB() {
 
-	util:=goutil.Common{}
+	util := goutil.Common{}
 	o := &opt.Options{
-		Filter: filter.NewBloomFilter(256),
+		Filter:              filter.NewBloomFilter(256),
 		CompactionTableSize: 1024 * 1024 * 20,
 		WriteBuffer:         1024 * 1024 * 20,
 	}
 	db, err := leveldb.OpenFile("path/to/db", o)
 
-	count:=100000000
-    t:=time.Now()
-	for i:=0;i<count;i++ {
-		name:=fmt.Sprintf("%d",i)
-		md5:=util.MD5(name)
-		info:=FileInfo{
+	count := 100000000
+	t := time.Now()
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("%d", i)
+		md5 := util.MD5(name)
+		info := FileInfo{
 			Name:      name,
 			ReName:    name,
 			Path:      "files/default/20191015/26/45/23",
 			Md5:       md5,
 			Size:      0,
-			Peers:     []string{"http://10.1.50.90:8080","http://10.1.50.91:8080","http://10.1.50.92:8080"},
+			Peers:     []string{"http://10.1.50.90:8080", "http://10.1.50.91:8080", "http://10.1.50.92:8080"},
 			Scene:     "default",
 			TimeStamp: time.Now().Unix(),
 			OffSet:    0,
 			retry:     0,
 			op:        "",
 		}
-		data,_:=json.Marshal(info)
-		err=db.Put([]byte(md5),data,nil)
-		if err!=nil {
+		data, _ := json.Marshal(info)
+		err = db.Put([]byte(md5), data, nil)
+		if err != nil {
 			fmt.Println(err)
 		}
-		if i%100000==0 {
-			fmt.Println(time.Since(t), " ",i)
+		if i%100000 == 0 {
+			fmt.Println(time.Since(t), " ", i)
 		}
 	}
 
-
-	for i:=0;i<1000;i++ {
-		t:=time.Now()
-		k:=fmt.Sprintf("%d",util.RandInt(0,count))
-		md5:=util.MD5(k)
-		db.Get([]byte(md5),nil)
+	for i := 0; i < 1000; i++ {
+		t := time.Now()
+		k := fmt.Sprintf("%d", util.RandInt(0, count))
+		md5 := util.MD5(k)
+		db.Get([]byte(md5), nil)
 		fmt.Println(time.Since(t))
 	}
 
-
-
-
-
-	if err!=nil {
+	if err != nil {
 		fmt.Println(err)
 	}
 
