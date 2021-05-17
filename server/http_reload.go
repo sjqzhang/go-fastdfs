@@ -1,9 +1,10 @@
 package server
 
 import (
-	log "github.com/sjqzhang/seelog"
 	"io/ioutil"
 	"net/http"
+
+	log "github.com/sjqzhang/seelog"
 )
 
 func (c *Server) Reload(w http.ResponseWriter, r *http.Request) {
