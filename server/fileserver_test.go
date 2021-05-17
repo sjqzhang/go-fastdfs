@@ -372,8 +372,8 @@ func Test_main(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			testCommonMap(t)
-
-			go main()
+			InitServer()
+			go Start()
 
 			time.Sleep(time.Second * 1)
 			testConfig(t)
