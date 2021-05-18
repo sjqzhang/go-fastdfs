@@ -35,4 +35,4 @@ WORKDIR $INSTALL_DIR
 
 VOLUME $GO_FASTDFS_DIR
 
-CMD ["fileserver" , "${OPTS}"]
+CMD ["fileserver server" , "${OPTS}"]
