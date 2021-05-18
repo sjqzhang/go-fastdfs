@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-
 	"io/ioutil"
 	"net/http"
 	"os"
