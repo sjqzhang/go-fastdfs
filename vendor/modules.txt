@@ -1,0 +1,91 @@
+# github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46
+## explicit
+github.com/StackExchange/wmi
+# github.com/astaxie/beego v1.12.3
+## explicit
+github.com/astaxie/beego/httplib
+# github.com/bmizerany/pat v0.0.0-20170815010413-6226ea591a40
+github.com/bmizerany/pat
+# github.com/busyfree/tusd v1.6.1
+## explicit
+github.com/busyfree/tusd/internal/uid
+github.com/busyfree/tusd/pkg/filestore
+github.com/busyfree/tusd/pkg/handler
+# github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575
+## explicit
+github.com/cihub/seelog/archive
+github.com/cihub/seelog/archive/gzip
+github.com/cihub/seelog/archive/tar
+github.com/cihub/seelog/archive/zip
+# github.com/deckarep/golang-set v1.7.1
+## explicit
+github.com/deckarep/golang-set
+# github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
+## explicit
+github.com/eventials/go-tus
+# github.com/go-ole/go-ole v1.2.5
+## explicit
+github.com/go-ole/go-ole
+github.com/go-ole/go-ole/oleutil
+# github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
+github.com/golang/snappy
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/json-iterator/go v1.1.11
+## explicit
+github.com/json-iterator/go
+# github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
+github.com/modern-go/concurrent
+# github.com/modern-go/reflect2 v1.0.1
+github.com/modern-go/reflect2
+# github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
+## explicit
+github.com/nfnt/resize
+# github.com/radovskyb/watcher v1.0.7
+## explicit
+github.com/radovskyb/watcher
+# github.com/shirou/gopsutil/v3 v3.21.4
+## explicit
+github.com/shirou/gopsutil/v3/disk
+github.com/shirou/gopsutil/v3/internal/common
+github.com/shirou/gopsutil/v3/mem
+# github.com/sjqzhang/googleAuthenticator v0.0.0-20160926062737-f198f070e0b1
+## explicit
+github.com/sjqzhang/googleAuthenticator
+# github.com/sjqzhang/goutil v0.0.0-20200618044433-2319148e0a46
+## explicit
+github.com/sjqzhang/goutil
+# github.com/sjqzhang/seelog v0.0.0-20180104061743-556439109558
+## explicit
+github.com/sjqzhang/seelog
+# github.com/spf13/cobra v1.1.3
+## explicit
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.5
+github.com/spf13/pflag
+# github.com/syndtr/goleveldb v1.0.0
+## explicit
+github.com/syndtr/goleveldb/leveldb
+github.com/syndtr/goleveldb/leveldb/cache
+github.com/syndtr/goleveldb/leveldb/comparer
+github.com/syndtr/goleveldb/leveldb/errors
+github.com/syndtr/goleveldb/leveldb/filter
+github.com/syndtr/goleveldb/leveldb/iterator
+github.com/syndtr/goleveldb/leveldb/journal
+github.com/syndtr/goleveldb/leveldb/memdb
+github.com/syndtr/goleveldb/leveldb/opt
+github.com/syndtr/goleveldb/leveldb/storage
+github.com/syndtr/goleveldb/leveldb/table
+github.com/syndtr/goleveldb/leveldb/util
+# go.uber.org/automaxprocs v1.4.0
+## explicit
+go.uber.org/automaxprocs
+go.uber.org/automaxprocs/internal/cgroups
+go.uber.org/automaxprocs/internal/runtime
+go.uber.org/automaxprocs/maxprocs
+# golang.org/x/sys v0.0.0-20210217105451-b926d437f341
+golang.org/x/sys/internal/unsafeheader
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# gopkg.in/yaml.v2 v2.4.0
+gopkg.in/yaml.v2
