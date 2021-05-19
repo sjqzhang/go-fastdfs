@@ -1,0 +1,74 @@
+package handler
+
+#define USE_FUNC(TYPE) \
+func (store *StoreComposer) Use ## TYPE(ext TYPE ## DataStore) { \
+  store.Uses ## TYPE = ext != nil; \
+  store.TYPE = ext; \
+}
+
+#define USE_FIELD(TYPE) Uses ## TYPE bool; \
+  TYPE TYPE ## DataStore
+
+#define USE_FROM(TYPE) if mod, ok := store.(TYPE ## DataStore); ok { \
+  composer.Use ## TYPE (mod) \
+}
+
+#define USE_CAP(TYPE) str += ` TYPE: `; \
+if store.Uses ## TYPE { \
+  str += "✓" \
+} else { \
+  str += "✗" \
+}
+
+// StoreComposer represents a composable data store. It consists of the core
+// data store and optional extensions. Please consult the package's overview
+// for a more detailed introduction in how to use this structure.
+type StoreComposer struct {
+  Core DataStore
+
+  USE_FIELD(Terminater)
+  USE_FIELD(Finisher)
+  USE_FIELD(Locker)
+  USE_FIELD(GetReader)
+  USE_FIELD(Concater)
+  USE_FIELD(LengthDeferrer)
+}
+
+// NewStoreComposer creates a new and empty store composer.
+func NewStoreComposer() *StoreComposer {
+  return &StoreComposer{}
+}
+
+// Capabilities returns a string representing the provided extensions in a
+// human-readable format meant for debugging.
+func (store *StoreComposer) Capabilities() string {
+  str := "Core: "
+
+  if store.Core != nil {
+    str += "✓"
+  } else {
+    str += "✗"
+  }
+
+  USE_CAP(Terminater)
+  USE_CAP(Finisher)
+  USE_CAP(Locker)
+  USE_CAP(GetReader)
+  USE_CAP(Concater)
+  USE_CAP(LengthDeferrer)
+
+  return str
+}
+
+// UseCore will set the used core data store. If the argument is nil, the
+// property will be unset.
+func (store *StoreComposer) UseCore(core DataStore) {
+  store.Core = core
+}
+
+USE_FUNC(Terminater)
+USE_FUNC(Finisher)
+USE_FUNC(Locker)
+USE_FUNC(GetReader)
+USE_FUNC(Concater)
+USE_FUNC(LengthDeferrer)
