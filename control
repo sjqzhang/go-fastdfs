@@ -11,7 +11,7 @@ appname=$(basename $WORKSPACE)
 ## 启动命令必须在前端运行(即不需要nohup)运行，
 ## 系统会自动加上nohup运行 
 ## 例如：run_cmd=java -jar spring-hello.jar
-run_cmd=./fileserver
+run_cmd=./fileserver server
 conf=conf/cfg.json
 pidfile=conf/app.pid
 logfile=log/app.log

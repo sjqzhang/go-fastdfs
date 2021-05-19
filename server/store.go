@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/astaxie/beego/httplib"
-	log "github.com/sjqzhang/seelog"
 	"github.com/busyfree/tusd/pkg/handler"
+	log "github.com/sjqzhang/seelog"
 )
 
 type hookDataStore struct {

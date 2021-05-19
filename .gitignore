@@ -1,5 +1,4 @@
 .idea
-vendor/*
 data/*
 files/*
 conf/*

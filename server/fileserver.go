@@ -261,60 +261,6 @@ func (c *Server) ParseSmallFile(filename string) (string, int64, int, error) {
 	return pos[0], offset, length, nil
 }
 
-func (c *Server) GetFilePathFromRequest(w http.ResponseWriter, r *http.Request) (string, string) {
-	var (
-		err       error
-		fullpath  string
-		smallPath string
-		prefix    string
-	)
-	fullpath = r.RequestURI[1:]
-	if strings.HasPrefix(r.RequestURI, "/"+Config().Group+"/") {
-		fullpath = r.RequestURI[len(Config().Group)+2 : len(r.RequestURI)]
-	}
-	fullpath = strings.Split(fullpath, "?")[0] // just path
-	fullpath = DOCKER_DIR + STORE_DIR_NAME + "/" + fullpath
-	prefix = "/" + LARGE_DIR_NAME + "/"
-	if Config().SupportGroupManage {
-		prefix = "/" + Config().Group + "/" + LARGE_DIR_NAME + "/"
-	}
-	if strings.HasPrefix(r.RequestURI, prefix) {
-		smallPath = fullpath //notice order
-		fullpath = strings.Split(fullpath, ",")[0]
-	}
-	if fullpath, err = url.PathUnescape(fullpath); err != nil {
-		log.Error(err)
-	}
-	return fullpath, smallPath
-}
-
-func (c *Server) GetSmallFileByURI(w http.ResponseWriter, r *http.Request) ([]byte, bool, error) {
-	var (
-		err      error
-		data     []byte
-		offset   int64
-		length   int
-		fullpath string
-		info     os.FileInfo
-	)
-	fullpath, _ = c.GetFilePathFromRequest(w, r)
-	if _, offset, length, err = c.ParseSmallFile(r.RequestURI); err != nil {
-		return nil, false, err
-	}
-	if info, err = os.Stat(fullpath); err != nil {
-		return nil, false, err
-	}
-	if info.Size() < offset+int64(length) {
-		return nil, true, errors.New("noFound")
-	} else {
-		data, err = c.util.ReadFileByOffSet(fullpath, offset, length)
-		if err != nil {
-			return nil, false, err
-		}
-		return data, false, err
-	}
-}
-
 func (c *Server) GetServerURI(r *http.Request) string {
 	return fmt.Sprintf("http://%s/", r.Host)
 }
@@ -695,6 +641,14 @@ func (c *Server) IsPeer(r *http.Request) bool {
 		}
 	}
 	return bflag
+}
+
+func (c *Server) GetClusterNotPermitMessage(r *http.Request) string {
+	var (
+		message string
+	)
+	message = fmt.Sprintf(CONST_MESSAGE_CLUSTER_IP, c.util.GetClientIp(r))
+	return message
 }
 
 func (c *Server) GetMd5sMapByDate(date string, filename string) (*goutil.CommonMap, error) {
