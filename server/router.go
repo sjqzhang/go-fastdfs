@@ -7,7 +7,7 @@ import (
 
 func (c *Server) initRouter() {
 	groupRoute := ""
-	if Config().SupportGroupManage {
+	if Config().SupportGroupManage && Config().Group!="" {
 		groupRoute = "/" + Config().Group
 	}
 	uploadPage := "upload.html"
