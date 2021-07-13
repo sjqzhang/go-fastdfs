@@ -1,0 +1,7 @@
+.idea
+vendor/*
+data/*
+files/*
+conf/*
+build/*
+log/*

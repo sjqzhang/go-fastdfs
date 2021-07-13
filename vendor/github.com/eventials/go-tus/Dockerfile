@@ -1,4 +1,4 @@
-FROM golang:1.9
+FROM golang:1.13
 
 RUN mkdir -p /go/src/github.com/eventials/go-tus
 

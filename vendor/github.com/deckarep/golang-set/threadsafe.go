@@ -226,9 +226,21 @@ func (set *threadSafeSet) String() string {
 
 func (set *threadSafeSet) PowerSet() Set {
 	set.RLock()
-	ret := set.s.PowerSet()
+	unsafePowerSet := set.s.PowerSet().(*threadUnsafeSet)
 	set.RUnlock()
+
+	ret := &threadSafeSet{s: newThreadUnsafeSet()}
+	for subset := range unsafePowerSet.Iter() {
+		unsafeSubset := subset.(*threadUnsafeSet)
+		ret.Add(&threadSafeSet{s: *unsafeSubset})
+	}
 	return ret
+}
+
+func (set *threadSafeSet) Pop() interface{} {
+	set.Lock()
+	defer set.Unlock()
+	return set.s.Pop()
 }
 
 func (set *threadSafeSet) CartesianProduct(other Set) Set {
