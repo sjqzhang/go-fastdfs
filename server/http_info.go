@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 
-	"path/filepath"
 	"runtime"
 
 	"io/ioutil"
@@ -330,7 +329,6 @@ func (c *Server) Status(w http.ResponseWriter, r *http.Request) {
 		ok       bool
 		v        interface{}
 		err      error
-		appDir   string
 		diskInfo *disk.UsageStat
 		memInfo  *mem.VirtualMemoryStat
 	)
@@ -374,11 +372,7 @@ func (c *Server) Status(w http.ResponseWriter, r *http.Request) {
 	sts["Sys.GCCPUFraction"] = memStat.GCCPUFraction
 	sts["Sys.GCSys"] = memStat.GCSys
 	//sts["Sys.MemInfo"] = memStat
-	appDir, err = filepath.Abs(".")
-	if err != nil {
-		log.Error(err)
-	}
-	diskInfo, err = disk.Usage(appDir)
+	diskInfo, err = disk.Usage(STORE_DIR)
 	if err != nil {
 		log.Error(err)
 	}
