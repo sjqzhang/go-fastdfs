@@ -651,6 +651,8 @@ func (c *Server) IsPeer(r *http.Request) bool {
 				return false
 			case ip4[0] == 192 && ip4[1] == 168:
 				return false
+			case ip4[0] == 100:
+				return false
 			default:
 				return true
 			}
