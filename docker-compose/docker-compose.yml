@@ -1,4 +1,4 @@
-version: '3.2'
+version: '3.4'
 services:
   fastdfs:
     build:
@@ -8,8 +8,9 @@ services:
     container_name: land-fastdfs
     privileged: true
     restart: always
-    networks:
-      - extnetwork
+    network_mode: "host"
+    #networks:
+    #  - extnetwork
     volumes:
       - type: bind
         source: ./fastdfs/data
@@ -23,13 +24,14 @@ services:
     container_name: land-nginx
     privileged: true
     restart: always
-    networks:
-      - extnetwork
+    network_mode: "host"
+    #networks:
+    #  - extnetwork
     ports:
       - "9528:80"
     volumes:
       - type: bind
-        source: ./nginx/conf/nginx.conf
+        source: ./nginx/nginx.conf
         target: /etc/nginx/nginx.conf
       - type: bind
         source: ./nginx/static
@@ -52,11 +54,12 @@ services:
         target: /logs
     privileged: true
     restart: always
-    networks:
-      extnetwork:
-        ipv4_address: 172.19.0.20
+    network_mode: "host"
+    #networks:
+    #  extnetwork:
+    #    ipv4_address: 172.19.0.20
     ports:
-      - "8099:8099"
+      - "8099:8088"
     depends_on:
       - fastdfs
 networks:
