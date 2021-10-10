@@ -37,7 +37,8 @@ type Server struct {
 func InitServer() {
 	appDir, e1 := filepath.Abs(filepath.Dir(os.Args[0]))
 	curDir, e2 := filepath.Abs(".")
-	if e1 == nil && e2 == nil && appDir != curDir && !strings.Contains(appDir, "go-build") {
+	if e1 == nil && e2 == nil && appDir != curDir && !strings.Contains(appDir, "go-build") &&
+		!strings.Contains(appDir, "GoLand") {
 		msg := fmt.Sprintf("please change directory to '%s' start fileserver\n", appDir)
 		msg = msg + fmt.Sprintf("请切换到 '%s' 目录启动 fileserver ", appDir)
 		log.Warn(msg)
