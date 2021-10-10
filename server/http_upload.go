@@ -344,7 +344,7 @@ func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeade
 	defer file.Close()
 	_, fileInfo.Name = filepath.Split(header.Filename)
 	// bugfix for ie upload file contain fullpath
-	if len(Config().Extensions) > 0 && !c.util.Contains(path.Ext(fileInfo.Name), Config().Extensions) {
+	if len(Config().Extensions) > 0 && !c.util.Contains(path.Ext(strings.ToLower(fileInfo.Name)), Config().Extensions) {
 		return fileInfo, errors.New("(error)file extension mismatch")
 	}
 	if Config().RenameFile {
