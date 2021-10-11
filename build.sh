@@ -9,6 +9,8 @@ cp -r vendor src
 fi
 
 
+export GO111MODULE="off"
+
 mkdir -p src/github.com/sjqzhang/go-fastdfs
 cp -rf cmd doc server main.go  src/github.com/sjqzhang/go-fastdfs
 
