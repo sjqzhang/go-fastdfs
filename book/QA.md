@@ -15,6 +15,16 @@
 ```
 
 
+## 配置文件在哪里？
+
+```
+1)go-fastdfs采用自动生成配置文件的方式进行设计，所以要想修改配置必须运行一次，让go-fastdfs帮你生成配置文件
+2）配置文件存放在 conf/cfg.json 下
+3）注意：由于conf/cfg.json 采用json格式，什么格式的错误都会引起go-fastdfs无法启动，所以修改完后最好用json格式工具进行检查。
+```
+
+
+
 ## 有管理后台么？
 
 ```
@@ -244,10 +254,10 @@ GO111MODULE="off" GOPATH=$pwd go build -o fileserver main.go
 
 
 
-## 自定义路径上传？
+## 如何实现自定义路径上传？
 
 ```
-自定义路径上传需启用：
+自定义路径上传需在配置中设定如下信息：
 enable_distinct_file:false,
 enable_custom_path:true,
 

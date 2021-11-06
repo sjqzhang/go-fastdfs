@@ -1,6 +1,8 @@
 #!/bin/bash
 cd book
 
+git add *.md
+
 gitbook build 
 
 cp -f  _book/*.html ../
