@@ -230,6 +230,8 @@ sts["Fs.ErrorSetSize"] = this.errorset.Cardinality()  这个会导致内存增�
 ```
 
 
+
+
 ## 如何编译(go1.9.2+)？
 
 ```
@@ -237,17 +239,17 @@ git clone https://github.com/sjqzhang/go-fastdfs.git
 cd go-fastdfs
 mv vendor src
 pwd=`pwd`
-GOPATH=$pwd go build -o fileserver fileserver.go
+GO111MODULE="off" GOPATH=$pwd go build -o fileserver main.go
 ```
 
-## 如何跑单元测试 (尽量在linux下进行)？
+
+
+## 自定义路径上传？
 
 ```
-git clone https://github.com/sjqzhang/go-fastdfs.git
-cd go-fastdfs
-mv vendor src
-pwd=`pwd`
-GOPATH=$pwd go test -v fileserver.go fileserver_test.go
+自定义路径上传需启用：
+enable_distinct_file:false,
+enable_custom_path:true,
 
 ```
 
