@@ -731,11 +731,7 @@ http://172.16.70.123:7080/repair?force=1
 &#x672C;&#x673A;&#x4E3A; Fs.Local
 sts[&quot;Fs.ErrorSetSize&quot;] = this.errorset.Cardinality()  &#x8FD9;&#x4E2A;&#x4F1A;&#x5BFC;&#x81F4;&#x5185;&#x5B58;&#x589E;&#x52A0;
 </code></pre><h2 id="&#x5982;&#x4F55;&#x7F16;&#x8BD1;go192&#xFF1F;">&#x5982;&#x4F55;&#x7F16;&#x8BD1;(go1.9.2+)&#xFF1F;</h2>
-<pre><code>git clone https://github.com/sjqzhang/go-fastdfs.git
-cd go-fastdfs
-mv vendor src
-pwd=`pwd`
-GO111MODULE=&quot;off&quot; GOPATH=$pwd go build -o fileserver main.go
+<pre><code>sh build.sh
 </code></pre><h2 id="&#x5982;&#x4F55;&#x5B9E;&#x73B0;&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#xFF1F;">&#x5982;&#x4F55;&#x5B9E;&#x73B0;&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#xFF1F;</h2>
 <pre><code>&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#x9700;&#x5728;&#x914D;&#x7F6E;&#x4E2D;&#x8BBE;&#x5B9A;&#x5982;&#x4E0B;&#x4FE1;&#x606F;&#xFF1A;
 enable_distinct_file:false,
@@ -871,7 +867,7 @@ https://github.com/sjqzhang/go-fastdfs/wiki
     <script>
         var gitbook = gitbook || [];
         gitbook.push(function() {
-            gitbook.page.hasChanged({"page":{"title":"问题汇总","level":"1.9","depth":1,"next":{"title":"常见问题","level":"1.9.1","depth":2,"path":"QA.md","ref":"QA.md","articles":[]},"previous":{"title":"管理API","level":"1.8","depth":1,"path":"api.md","ref":"api.md","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"QA.md","mtime":"2021-11-06T08:10:49.375Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2021-11-06T08:18:31.357Z"},"basePath":".","book":{"language":""}});
+            gitbook.page.hasChanged({"page":{"title":"问题汇总","level":"1.9","depth":1,"next":{"title":"常见问题","level":"1.9.1","depth":2,"path":"QA.md","ref":"QA.md","articles":[]},"previous":{"title":"管理API","level":"1.8","depth":1,"path":"api.md","ref":"api.md","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"QA.md","mtime":"2021-11-06T08:38:16.565Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2021-11-06T08:40:16.392Z"},"basePath":".","book":{"language":""}});
         });
     </script>
 </div>

@@ -245,11 +245,7 @@ sts["Fs.ErrorSetSize"] = this.errorset.Cardinality()  这个会导致内存增�
 ## 如何编译(go1.9.2+)？
 
 ```
-git clone https://github.com/sjqzhang/go-fastdfs.git
-cd go-fastdfs
-mv vendor src
-pwd=`pwd`
-GO111MODULE="off" GOPATH=$pwd go build -o fileserver main.go
+sh build.sh
 ```
 
 
