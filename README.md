@@ -86,6 +86,9 @@ http://yourserver ip:8080 注意：不要使用127.0.0.1上传
 
 ### [使用文档](https://sjqzhang.github.io/go-fastdfs/#character)
 
+### [最佳实践（必读）](https://sjqzhang.gitee.io/go-fastdfs/QA.html)
+
+
 ### [视频教程](https://www.bilibili.com/video/av92526484)
 
 
