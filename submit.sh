@@ -1,11 +1,13 @@
 #!/bin/bash
+
+git add submit.sh
 cd book
 
 git add *.md
 
 gitbook build 
 
-cp -f  _book/*.html ../
+cp -f  _book/*.html _book/search_index.json ../
 
 
 cd ..
