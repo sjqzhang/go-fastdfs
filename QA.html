@@ -610,6 +610,10 @@
 &#x91CD;&#x8981;&#x63D0;&#x9192;&#xFF1A;&#x5982;&#x679C;&#x5F00;&#x542F;&#x5C0F;&#x6587;&#x4EF6;&#x5408;&#x5E76;&#x529F;&#x80FD;&#xFF0C;&#x540E;&#x671F;&#x662F;&#x65E0;&#x6CD5;&#x5220;&#x9664;&#x5C0F;&#x6587;&#x4EF6;&#x7684;&#x3002;
 &#x4E0A;&#x4F20;&#x7ED3;&#x679C;&#x8BF4;&#x660E;
 &#x8BF7;&#x4F7F;&#x7528;md5,path,scene&#x5B57;&#x6BB5;&#xFF0C;&#x5176;&#x5B83;&#x662F;&#x4E3A;&#x4E86;&#x517C;&#x5BB9;&#x8001;&#x7684;&#x7EBF;&#x4E0A;&#x7CFB;&#x7EDF;&#x6DFB;&#x52A0;&#x7684;&#xFF0C;&#x4EE5;&#x540E;&#x6709;&#x53EF;&#x80FD;&#x53BB;&#x6389;&#x3002;
+</code></pre><h2 id="&#x914D;&#x7F6E;&#x6587;&#x4EF6;&#x5728;&#x54EA;&#x91CC;&#xFF1F;">&#x914D;&#x7F6E;&#x6587;&#x4EF6;&#x5728;&#x54EA;&#x91CC;&#xFF1F;</h2>
+<pre><code>1)go-fastdfs&#x91C7;&#x7528;&#x81EA;&#x52A8;&#x751F;&#x6210;&#x914D;&#x7F6E;&#x6587;&#x4EF6;&#x7684;&#x65B9;&#x5F0F;&#x8FDB;&#x884C;&#x8BBE;&#x8BA1;&#xFF0C;&#x6240;&#x4EE5;&#x8981;&#x60F3;&#x4FEE;&#x6539;&#x914D;&#x7F6E;&#x5FC5;&#x987B;&#x8FD0;&#x884C;&#x4E00;&#x6B21;&#xFF0C;&#x8BA9;go-fastdfs&#x5E2E;&#x4F60;&#x751F;&#x6210;&#x914D;&#x7F6E;&#x6587;&#x4EF6;
+2&#xFF09;&#x914D;&#x7F6E;&#x6587;&#x4EF6;&#x5B58;&#x653E;&#x5728; conf/cfg.json &#x4E0B;
+3&#xFF09;&#x6CE8;&#x610F;&#xFF1A;&#x7531;&#x4E8E;conf/cfg.json &#x91C7;&#x7528;json&#x683C;&#x5F0F;&#xFF0C;&#x4EC0;&#x4E48;&#x683C;&#x5F0F;&#x7684;&#x9519;&#x8BEF;&#x90FD;&#x4F1A;&#x5F15;&#x8D77;go-fastdfs&#x65E0;&#x6CD5;&#x542F;&#x52A8;&#xFF0C;&#x6240;&#x4EE5;&#x4FEE;&#x6539;&#x5B8C;&#x540E;&#x6700;&#x597D;&#x7528;json&#x683C;&#x5F0F;&#x5DE5;&#x5177;&#x8FDB;&#x884C;&#x68C0;&#x67E5;&#x3002;
 </code></pre><h2 id="&#x6709;&#x7BA1;&#x7406;&#x540E;&#x53F0;&#x4E48;&#xFF1F;">&#x6709;&#x7BA1;&#x7406;&#x540E;&#x53F0;&#x4E48;&#xFF1F;</h2>
 <pre><code>https://github.com/perfree/go-fastdfs-web
 </code></pre><h2 id="&#x65AD;&#x70B9;&#x4E0A;&#x4F20;&#x6709;&#x4F7F;&#x7528;&#x8BF4;&#x660E;&#x4E48;&#xFF1F;">&#x65AD;&#x70B9;&#x4E0A;&#x4F20;&#x6709;&#x4F7F;&#x7528;&#x8BF4;&#x660E;&#x4E48;&#xFF1F;</h2>
@@ -732,8 +736,8 @@ cd go-fastdfs
 mv vendor src
 pwd=`pwd`
 GO111MODULE=&quot;off&quot; GOPATH=$pwd go build -o fileserver main.go
-</code></pre><h2 id="&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#xFF1F;">&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#xFF1F;</h2>
-<pre><code>&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#x9700;&#x542F;&#x7528;&#xFF1A;
+</code></pre><h2 id="&#x5982;&#x4F55;&#x5B9E;&#x73B0;&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#xFF1F;">&#x5982;&#x4F55;&#x5B9E;&#x73B0;&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#xFF1F;</h2>
+<pre><code>&#x81EA;&#x5B9A;&#x4E49;&#x8DEF;&#x5F84;&#x4E0A;&#x4F20;&#x9700;&#x5728;&#x914D;&#x7F6E;&#x4E2D;&#x8BBE;&#x5B9A;&#x5982;&#x4E0B;&#x4FE1;&#x606F;&#xFF1A;
 enable_distinct_file:false,
 enable_custom_path:true,
 </code></pre><h2 id="&#x5982;&#x4F55;&#x538B;&#x6D4B;&#xFF1F;">&#x5982;&#x4F55;&#x538B;&#x6D4B;&#xFF1F;</h2>
@@ -867,7 +871,7 @@ https://github.com/sjqzhang/go-fastdfs/wiki
     <script>
         var gitbook = gitbook || [];
         gitbook.push(function() {
-            gitbook.page.hasChanged({"page":{"title":"问题汇总","level":"1.9","depth":1,"next":{"title":"常见问题","level":"1.9.1","depth":2,"path":"QA.md","ref":"QA.md","articles":[]},"previous":{"title":"管理API","level":"1.8","depth":1,"path":"api.md","ref":"api.md","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"QA.md","mtime":"2021-11-06T03:48:11.621Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2021-11-06T07:45:29.467Z"},"basePath":".","book":{"language":""}});
+            gitbook.page.hasChanged({"page":{"title":"问题汇总","level":"1.9","depth":1,"next":{"title":"常见问题","level":"1.9.1","depth":2,"path":"QA.md","ref":"QA.md","articles":[]},"previous":{"title":"管理API","level":"1.8","depth":1,"path":"api.md","ref":"api.md","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"sharing":{"facebook":true,"twitter":true,"google":false,"weibo":false,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56}},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"QA.md","mtime":"2021-11-06T08:10:49.375Z","type":"markdown"},"gitbook":{"version":"3.2.3","time":"2021-11-06T08:11:18.512Z"},"basePath":".","book":{"language":""}});
         });
     </script>
 </div>
