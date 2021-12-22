@@ -128,6 +128,10 @@ const (
 		"password": "abc",
 		"host": "smtp.163.com:25"
 	},
+	"反向代理缓存内容":"目前只支持pypi ex:  pip install -i http://127.0.0.1:9000/simple pandas",
+	"proxies":[
+		{"dir":"pypi","origin":"https://pypi.douban.com","addr":":9000"}
+	],
 	"告警接收邮件列表": "接收人数组",
 	"alarm_receivers": [],
 	"告警接收URL": "方法post,参数:subject,message",
@@ -218,6 +222,13 @@ type GlobalConfig struct {
 	WatchChanSize        int      `json:"watch_chan_size"`
 	ImageMaxWidth        int      `json:"image_max_width"`
 	ImageMaxHeight       int      `json:"image_max_height"`
+	Proxies              []Proxy  `json:"proxies"`
+}
+
+type Proxy struct {
+	Dir    string `json:"dir"`
+	Addr   string    `json:"addr"`
+	Origin string `json:"origin"`
 }
 
 func Config() *GlobalConfig {
