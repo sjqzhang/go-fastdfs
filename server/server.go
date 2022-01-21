@@ -245,7 +245,7 @@ func (c *Server) Start() {
 					Handler:      &handler,
 					TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 				}
-				server.ListenAndServe()
+				fmt.Println(server.ListenAndServe())
 
 			}(proxy)
 		}

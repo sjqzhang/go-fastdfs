@@ -123,52 +123,52 @@ func (h *HttpProxyHandler) ServeHTTP(res http.ResponseWriter, req *http.Request)
 	//if Config().EnableCrossOrigin {
 	//	server.CrossOrigin(res, req)
 	//}
-	if req.Method == http.MethodConnect {
-		h.handleTunneling(res, req)
-		return
-	}
-	href := strings.TrimRight(h.Proxy.Origin, "/") + req.RequestURI
-	md5 := server.util.MD5(href)
-	fpath := STORE_DIR + "/" + h.Proxy.Dir + "/" + md5[0:2] + "/" + md5[2:4] + "/" + md5
-	_, err := os.Stat(fpath)
-	if err == nil {
-		fp, err := os.Open(fpath)
-		if err != nil {
-			log.Error(err)
+	if req.Method==http.MethodGet {
+		href := strings.TrimRight(h.Proxy.Origin, "/") + req.RequestURI
+		md5 := server.util.MD5(href)
+		fpath := STORE_DIR + "/" + h.Proxy.Dir + "/" + md5[0:2] + "/" + md5[2:4] + "/" + md5
+		_, err := os.Stat(fpath)
+		if err == nil {
+			fp, err := os.Open(fpath)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+			defer fp.Close()
+			io.Copy(res, fp)
 			return
 		}
-		defer fp.Close()
-		io.Copy(res, fp)
-		return
-	}
-	go func(href string) {
-		os.MkdirAll(path.Dir(fpath), 0755)
-		err := httplib.Get(href).ToFile(fpath)
-		if err == nil {
-			fi, err := os.Stat(fpath)
+		go func(href string) {
+			os.MkdirAll(path.Dir(fpath), 0755)
+			err := httplib.Get(href).ToFile(fpath)
 			if err == nil {
-				fileInfo := FileInfo{
-					Name: fi.Name(),
-					Size: fi.Size(),
-					Path: path.Dir(fpath),//  files/default/20211222/15/57/1
-					TimeStamp: fi.ModTime().Unix(),
-					Scene: Config().DefaultScene,
-					Peers: []string{Config().Host},  // ["http://10.12.188.85:8080"]
+				fi, err := os.Stat(fpath)
+				if err == nil {
+					fileInfo := FileInfo{
+						Name:      fi.Name(),
+						Size:      fi.Size(),
+						Path:      path.Dir(fpath), //  files/default/20211222/15/57/1
+						TimeStamp: fi.ModTime().Unix(),
+						Scene:     Config().DefaultScene,
+						Peers:     []string{Config().Host}, // ["http://10.12.188.85:8080"]
+					}
+					server.postFileToPeer(&fileInfo)
 				}
-				server.postFileToPeer(&fileInfo)
 			}
+		}(href)
+		r := httplib.Get(href)
+		r.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+		if err != nil {
+			log.Error(err)
 		}
-	}(href)
-	r := httplib.Get(href)
-	r.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	if err != nil {
-		log.Error(err)
+		response, err := r.DoRequest()
+		if err != nil {
+			return
+		}
+		defer response.Body.Close()
+		io.Copy(res, response.Body)
+	} else {
+		h.handleTunneling(res, req)
 	}
-	response, err := r.DoRequest()
-	if err != nil {
-		return
-	}
-	defer response.Body.Close()
-	io.Copy(res, response.Body)
 
 }
