@@ -6,7 +6,7 @@ import (
 	"github.com/sjqzhang/go-fastdfs/cmd/version"
 	dfs "github.com/sjqzhang/go-fastdfs/server"
 	"github.com/spf13/cobra"
-	_ "go.uber.org/automaxprocs" // 根据容器配额设置 maxprocs
+	//_ "go.uber.org/automaxprocs" // 根据容器配额设置 maxprocs
 	_ "net/http/pprof"           // 注册 pprof 接口
 )
 

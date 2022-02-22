@@ -112,6 +112,7 @@ const (
 	"rename_file": false,
 	"是否支持web上传,方便调试": "默认支持web上传",
 	"enable_web_upload": true,
+	"enable_pprof_debug": false,
 	"是否支持非日期路径": "默认支持非日期路径,也即支持自定义路径,需要上传文件时指定path",
 	"enable_custom_path": true,
 	"下载域名": "用于外网下载文件的域名",
@@ -223,11 +224,12 @@ type GlobalConfig struct {
 	ImageMaxWidth        int      `json:"image_max_width"`
 	ImageMaxHeight       int      `json:"image_max_height"`
 	Proxies              []Proxy  `json:"proxies"`
+	EnablePprofDebug     bool     `json:"enable_pprof_debug"`
 }
 
 type Proxy struct {
 	Dir    string `json:"dir"`
-	Addr   string    `json:"addr"`
+	Addr   string `json:"addr"`
 	Origin string `json:"origin"`
 }
 
