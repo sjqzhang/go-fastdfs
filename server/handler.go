@@ -45,7 +45,8 @@ func (HttpHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	if Config().EnableCrossOrigin {
 		server.CrossOrigin(res, req)
 	}
-	http.DefaultServeMux.ServeHTTP(res, req)
+	//http.DefaultServeMux.ServeHTTP(res, req)
+	mux.ServeHTTP(res,req)
 }
 
 type HttpProxyHandler struct {

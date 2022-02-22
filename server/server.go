@@ -1,7 +1,6 @@
 package server
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -233,23 +232,23 @@ func (c *Server) Start() {
 
 	c.initRouter()
 
-	if Config().Proxies != nil && len(Config().Proxies) > 0 {
-		for _, proxy := range Config().Proxies {
-			go func(proxy Proxy) {
-				handler := HttpProxyHandler{
-					Proxy: proxy,
-				}
-				fmt.Println("Proxy on " + proxy.Addr)
-				server := &http.Server{
-					Addr:         proxy.Addr,
-					Handler:      &handler,
-					TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
-				}
-				server.ListenAndServe()
-
-			}(proxy)
-		}
-	}
+	//if Config().Proxies != nil && len(Config().Proxies) > 0 {
+	//	for _, proxy := range Config().Proxies {
+	//		go func(proxy Proxy) {
+	//			handler := HttpProxyHandler{
+	//				Proxy: proxy,
+	//			}
+	//			fmt.Println("Proxy on " + proxy.Addr)
+	//			server := &http.Server{
+	//				Addr:         proxy.Addr,
+	//				Handler:      &handler,
+	//				TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
+	//			}
+	//			server.ListenAndServe()
+	//
+	//		}(proxy)
+	//	}
+	//}
 
 	fmt.Println("Listen on " + Config().Addr)
 	if Config().EnableHttps {
