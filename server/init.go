@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/astaxie/beego/httplib"
-	"github.com/sjqzhang/tusd/filestore"
-	"github.com/sjqzhang/tusd"
 	log "github.com/sjqzhang/seelog"
+	"github.com/sjqzhang/tusd"
+	"github.com/sjqzhang/tusd/filestore"
 )
 
 func (c *Server) initTus() {
@@ -235,7 +235,8 @@ func (c *Server) initTus() {
 	if err != nil {
 		log.Error(err)
 	}
-	http.Handle(bigDir, http.StripPrefix(bigDir, h))
+	//http.Handle(bigDir, http.StripPrefix(bigDir, h))
+	mux.Handle(bigDir, http.StripPrefix(bigDir, h))
 }
 
 func (c *Server) initComponent(isReload bool) {
@@ -271,6 +272,11 @@ func (c *Server) initComponent(isReload bool) {
 		}
 	}
 	Config().Peers = peers
+	if Config().EnablePprofDebug {
+		mux = http.DefaultServeMux
+	} else {
+		mux = http.NewServeMux()
+	}
 	if !isReload {
 		c.FormatStatInfo()
 		if Config().EnableTus {
