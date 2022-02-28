@@ -8,11 +8,6 @@ import (
 var mux *http.ServeMux
 
 func (c *Server) initRouter() {
-	if Config().EnablePprofDebug {
-		mux = http.DefaultServeMux
-	} else {
-		mux = http.NewServeMux()
-	}
 	groupRoute := ""
 	if Config().SupportGroupManage && Config().Group != "" {
 		groupRoute = "/" + Config().Group
