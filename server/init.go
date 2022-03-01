@@ -272,12 +272,13 @@ func (c *Server) initComponent(isReload bool) {
 		}
 	}
 	Config().Peers = peers
-	if Config().EnablePprofDebug {
-		mux = http.DefaultServeMux
-	} else {
-		mux = http.NewServeMux()
-	}
+
 	if !isReload {
+		if Config().EnablePprofDebug {
+			mux = http.DefaultServeMux
+		} else {
+			mux = http.NewServeMux()
+		}
 		c.FormatStatInfo()
 		if Config().EnableTus {
 			c.initTus()
