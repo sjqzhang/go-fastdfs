@@ -59,6 +59,7 @@ func (c *Server) initTus() {
 		bigDir = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
 	}
 	composer := tusd.NewStoreComposer()
+	composer.UsesTerminater = true
 	// support raw tus upload and download
 	store.GetReaderExt = func(id string) (io.Reader, error) {
 		var (
@@ -231,6 +232,18 @@ func (c *Server) initTus() {
 			}
 		}
 	}
+	h.AddMiddleWare(func() http.HandlerFunc {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost {
+				meta := tusd.ParseMetadataHeader(r.Header.Get("Upload-Metadata"))
+				if name, ok := meta["filename"]; ok {
+					if len(Config().Extensions) > 0 && !c.util.Contains(path.Ext(strings.ToLower(name)), Config().Extensions) {
+						r.Header.Set("Suspend", "True")
+					}
+				}
+			}
+		})
+	}())
 	go notify(h)
 	if err != nil {
 		log.Error(err)
