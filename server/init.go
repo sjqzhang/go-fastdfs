@@ -232,7 +232,7 @@ func (c *Server) initTus() {
 			}
 		}
 	}
-	h.AddMiddleWare(func() http.HandlerFunc {
+	h.Middleware(func() http.HandlerFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost {
 				meta := tusd.ParseMetadataHeader(r.Header.Get("Upload-Metadata"))

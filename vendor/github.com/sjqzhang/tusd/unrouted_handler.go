@@ -112,8 +112,7 @@ type UnroutedHandler struct {
 	// true in the Config structure.
 	CreatedUploads chan FileInfo
 	// Metrics provides numbers of the usage for this handler.
-	Metrics  Metrics
-	Handlers []http.HandlerFunc
+	Metrics Metrics
 }
 
 // NewUnroutedHandler creates a new handler without routing using the given
@@ -149,7 +148,6 @@ func NewUnroutedHandler(config Config) (*UnroutedHandler, error) {
 		logger:            config.Logger,
 		extensions:        extensions,
 		Metrics:           newMetrics(),
-		Handlers:          make([]http.HandlerFunc, 10),
 	}
 
 	return handler, nil
@@ -160,29 +158,8 @@ func NewUnroutedHandler(config Config) (*UnroutedHandler, error) {
 // cannot make PATCH AND DELETE requests. If you are using the tusd handlers
 // directly you will need to wrap at least the POST and PATCH endpoints in
 // this middleware.
-
-func (handler *UnroutedHandler) AddMiddleWare(h http.HandlerFunc) {
-
-	handler.Handlers = append(handler.Handlers, h)
-
-}
 func (handler *UnroutedHandler) Middleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		if len(handler.Handlers) > 0 {
-
-			for i := 0; i < len(handler.Handlers); i++ {
-				if handler.Handlers[i] != nil {
-					handler.Handlers[i].ServeHTTP(w, r)
-					if r.Header.Get("Suspend") != "" {
-						//handler.log("Suspend", "被用户中止")
-						w.WriteHeader(http.StatusForbidden)
-						return
-					}
-				}
-			}
-		}
-
 		// Allow overriding the HTTP method. The reason for this is
 		// that some libraries/environments to not support PATCH and
 		// DELETE requests, e.g. Flash in a browser and parts of Java
@@ -613,11 +590,12 @@ func (handler *UnroutedHandler) finishUploadIfComplete(info FileInfo) error {
 func (handler *UnroutedHandler) GetFile(w http.ResponseWriter, r *http.Request) {
 
 	var (
-		id   string
-		err  error
-		src  io.Reader
+		id string
+		err error
+		src io.Reader
 		info FileInfo
 	)
+
 
 	if !handler.composer.UsesGetReader {
 		handler.sendError(w, r, ErrNotImplemented)
@@ -632,6 +610,7 @@ func (handler *UnroutedHandler) GetFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+
 	//add by sjqzhang
 
 	src, err = handler.composer.GetReader.GetReader(id)
@@ -643,11 +622,14 @@ func (handler *UnroutedHandler) GetFile(w http.ResponseWriter, r *http.Request) 
 	handler.sendResp(w, r, http.StatusOK)
 	io.Copy(w, src)
 
+
 	if closer, ok := src.(io.Closer); ok {
 		closer.Close()
 	}
 	return
-	// end
+    // end
+
+
 
 	if handler.composer.UsesLocker {
 		locker := handler.composer.Locker
@@ -678,7 +660,7 @@ func (handler *UnroutedHandler) GetFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	src, err = handler.composer.GetReader.GetReader(id)
+	src, err= handler.composer.GetReader.GetReader(id)
 	if err != nil {
 		handler.sendError(w, r, err)
 		return
