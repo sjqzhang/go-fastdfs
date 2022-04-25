@@ -23,7 +23,7 @@ require (
 	github.com/sjqzhang/googleAuthenticator v0.0.0-20160926062737-f198f070e0b1
 	github.com/sjqzhang/goutil v0.0.0-20200618044433-2319148e0a46
 	github.com/sjqzhang/seelog v0.0.0-20180104061743-556439109558
-	github.com/sjqzhang/tusd v0.0.0-20190220031306-a6a9d78ef54a
+	github.com/sjqzhang/tusd v0.11.2
 	github.com/spf13/cobra v1.1.3
 	github.com/syndtr/goleveldb v1.0.0
 	go.uber.org/automaxprocs v1.4.0
