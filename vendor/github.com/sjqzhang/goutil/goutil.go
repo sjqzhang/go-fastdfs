@@ -508,10 +508,6 @@ func (this *Common) JsonEncodePretty(o interface{}) string {
 			resp = string(buf)
 		}
 	}
-	resp = strings.Replace(resp, "\\u003c", "<", -1)
-	resp = strings.Replace(resp, "\\u003e", ">", -1)
-	resp = strings.Replace(resp, "\\u0026", "&", -1)
-	return resp
 	return resp
 }
 func (this *Common) GetClientIp(r *http.Request) string {
