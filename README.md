@@ -1,18 +1,14 @@
-
 # [中文](README.md)  [English](README-en.md)
 
 ## 愿景：为用户提供最简单、可靠、高效的分布式文件系统。
 
 ![logo](doc/logo.png)
 
-
 # go-fastdfs是一个基于http协议的分布式文件系统，它基于大道至简的设计理念，一切从简设计，使得它的运维及扩展变得更加简单，它具有高性能、高可靠、无中心、免维护等优点。
 
 ### 大家担心的是这么简单的文件系统，靠不靠谱，可不可以用于生产环境？答案是肯定的，正因为简单所以高效，因为简单所以稳定。如果你担心功能，那就跑单元测试，如果担心性能，那就跑压力测试，项目都自带了，跑一跑更放心^_^。
 
 注意：使用前请认真阅读[使用文档](https://sjqzhang.github.io/go-fastdfs/#character) 或 [视频教程](https://www.bilibili.com/video/av92526484)。
-
-
 
 - 支持curl命令上传
 - 支持浏览器上传
@@ -71,32 +67,34 @@
 - 每个节点对等（简化运维）
 - 所有节点都可以同时读写
 
-
 # 极速体验，只需一分钟
 
 ### 启动服务器（已编译，[下载](https://github.com/sjqzhang/fastdfs/releases)）
+
 ./fileserver #注意：线上使用请使用项目的[control](https://github.com/sjqzhang/go-fastdfs/blob/master/control)文件进行管理,直接运行，关闭终端会退出。
 
-
 ### 命令上传
+
 curl -F file=@http-index-fs http://10.1.xx.60:8080/group1/upload
 
 ### WEB上传（浏览器打开）
+
 http://yourserver ip:8080 注意：不要使用127.0.0.1上传
 
 ### [使用文档](https://sjqzhang.github.io/go-fastdfs/#character)
 
 ### [最佳实践（必读）](https://sjqzhang.gitee.io/go-fastdfs/QA.html)
 
-
 ### [视频教程](https://www.bilibili.com/video/av92526484)
-
 
 #### 如果你觉得本项目不错，请点击项目顶部的 `star` 按钮关注本项目
 
 > QQ交流群：964274270(go-fastdfs技术交流群)已满
 >
-> QQ交流群：709218487(go-fastdfs技术交流群)
+> QQ交流群：709218487(go-fastdfs技术交流群)已满
+>
+> QQ交流群：749893275(go-fastdfs技术交流群）
+> 
+>  QQ交流群：579196810(go-fastdfs技术交流群）
 
 同时要说明的是，该群是一个学习交流群，如果是程序相关问题，请直接提交issues，不接受邮件求助、微信求助和QQ私信求助
-
