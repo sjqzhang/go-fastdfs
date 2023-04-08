@@ -434,6 +434,11 @@ func (c *Server) Download(w http.ResponseWriter, r *http.Request) {
 		smallPath string
 		fi        os.FileInfo
 	)
+	// check uri is contains ..
+	if strings.Contains(r.RequestURI, "..") {
+		c.NotPermit(w, r)
+		return
+	}
 	// redirect to upload
 	if r.RequestURI == "/" || r.RequestURI == "" ||
 		r.RequestURI == "/"+Config().Group ||

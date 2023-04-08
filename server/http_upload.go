@@ -169,6 +169,8 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 		}
 		if Config().EnableCustomPath {
 			fileInfo.Path = r.FormValue("path")
+			//replace . to ""
+			fileInfo.Path = strings.Replace(fileInfo.Path, ".", "", -1)
 			fileInfo.Path = strings.Trim(fileInfo.Path, "/")
 		}
 		scene = r.FormValue("scene")
