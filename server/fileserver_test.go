@@ -145,9 +145,10 @@ func testConfig(t *testing.T) {
 		cfgStr     string
 		result     string
 		jsonResult JsonResult
+		key string
 	)
-
-	req := httplib.Get(endPoint + "/reload?action=get")
+	key=Config().AdminKey
+	req := httplib.Get(endPoint + "/reload?action=get&key=" + key)
 	req.SetTimeout(time.Second*2, time.Second*3)
 	err = req.ToJSON(&jsonResult)
 
@@ -179,13 +180,14 @@ func testConfig(t *testing.T) {
 	cfgStr = testUtil.JsonEncodePretty(cfg)
 	req = httplib.Post(endPoint + "/reload?action=set")
 	req.Param("cfg", cfgStr)
+	req.Param("key", key)
 	result, err = req.String()
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	req = httplib.Get(endPoint + "/reload?action=reload")
+	req = httplib.Get(endPoint + "/reload?action=reload&key=" + key)
 
 	result, err = req.String()
 	if err != nil {
