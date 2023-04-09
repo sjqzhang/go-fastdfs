@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -336,6 +337,12 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (c *Server) TrimFileNameSpecialChar(str string) string {
+	// trim special char in filename for example: #@%$^&*()_+{}|:"<>?[];',./
+	reg := regexp.MustCompile(`[\/\\\:\*\?\"\<\>\|\(\)\[\]\{\}\,\;\'\#\@\%\&\$\^\~\=\+\-\!\~\s]`)
+	return strings.Replace(reg.ReplaceAllString(str, ""), "...", "", -1)
+}
+
 func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeader, fileInfo *FileInfo, r *http.Request) (*FileInfo, error) {
 	var (
 		err     error
@@ -345,6 +352,8 @@ func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeade
 	)
 	defer file.Close()
 	_, fileInfo.Name = filepath.Split(header.Filename)
+	// trim special char in filename for example: #@%$^&*()_+{}|:"<>?[];',./
+	fileInfo.Name = c.TrimFileNameSpecialChar(fileInfo.Name)
 	// bugfix for ie upload file contain fullpath
 	if len(Config().Extensions) > 0 && !c.util.Contains(path.Ext(strings.ToLower(fileInfo.Name)), Config().Extensions) {
 		return fileInfo, errors.New("(error)file extension mismatch")
@@ -379,8 +388,8 @@ func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeade
 	}
 	if c.util.FileExists(outPath) && Config().EnableDistinctFile {
 		for i := 0; i < 10000; i++ {
-			outPath = fmt.Sprintf(folder+"/%d_%s", i, filepath.Base(header.Filename))
-			fileInfo.Name = fmt.Sprintf("%d_%s", i, header.Filename)
+			outPath = fmt.Sprintf(folder+"/%d_%s", i, filepath.Base(fileInfo.Name))
+			fileInfo.Name = fmt.Sprintf("%d_%s", i, fileInfo.Name)
 			if !c.util.FileExists(outPath) {
 				break
 			}
