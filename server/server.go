@@ -87,7 +87,7 @@ func InitServer() {
 		if peers = os.Getenv("GO_FASTDFS_PEERS"); peers == "" {
 			peers = peer
 		}
-		cfg := fmt.Sprintf(cfgJson, peerId, peer, peers)
+		cfg := fmt.Sprintf(cfgJson, peerId, peer, peers,server.util.GetUUID())
 		server.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {

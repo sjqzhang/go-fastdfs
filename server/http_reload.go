@@ -15,6 +15,7 @@ func (c *Server) Reload(w http.ResponseWriter, r *http.Request) {
 		action  string
 		cfgjson string
 		result  JsonResult
+		key     string
 	)
 	result.Status = "fail"
 	r.ParseForm()
@@ -24,6 +25,18 @@ func (c *Server) Reload(w http.ResponseWriter, r *http.Request) {
 	}
 	cfgjson = r.FormValue("cfg")
 	action = r.FormValue("action")
+	key = r.FormValue("key")
+	if key == "" {
+		result.Message = "(error)parameter key require"
+		w.Write([]byte(c.util.JsonEncodePretty(result)))
+		return
+	}
+	if key != Config().AdminKey {
+		result.Message = "(error)key is not correct"
+		w.Write([]byte(c.util.JsonEncodePretty(result)))
+		return
+	}
+
 	_ = cfgjson
 	if action == "get" {
 		result.Data = Config()

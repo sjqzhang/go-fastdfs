@@ -145,6 +145,8 @@ const (
 	"auto_repair": true,
 	"文件去重算法md5可能存在冲突，默认md5": "sha1|md5",
 	"file_sum_arithmetic": "md5",
+	"管理Key": "用于管理集的key",
+	"admin_key": "%s",
 	"管理ip列表": "用于管理集的ip白名单,如果放开所有内网则可以用 0.0.0.0 ,注意为了安全，不对外网开放",
 	"admin_ips": ["127.0.0.1"],
 	"是否启用迁移": "默认不启用",
@@ -197,6 +199,7 @@ type GlobalConfig struct {
 	PeerId               string   `json:"peer_id"`
 	SupportGroupManage   bool     `json:"support_group_manage"`
 	AdminIps             []string `json:"admin_ips"`
+	AdminKey 		     string   `json:"admin_key"`
 	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
 	EnableMigrate        bool     `json:"enable_migrate"`
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
