@@ -1,4 +1,4 @@
-FROM registry.cn-hangzhou.aliyuncs.com/prince/alpine-golang:1.16 as builder
+FROM registry.cn-hangzhou.aliyuncs.com/prince/alpine-golang:1.18 as builder
 MAINTAINER s_jqzhang <s_jqzhang@163.com>
 ARG VERSION=1.1.7
 RUN set -xe; \
