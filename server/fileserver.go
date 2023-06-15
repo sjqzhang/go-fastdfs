@@ -631,6 +631,13 @@ func (c *Server) SaveFileInfoToLevelDB(key string, fileInfo *FileInfo, db *level
 	return fileInfo, nil
 }
 
+func (c *Server) GetRealIp(r *http.Request) string {
+	client_ip := ""
+	clients := strings.Split(r.RemoteAddr, ":")
+	client_ip = clients[0]
+	return client_ip
+}
+
 func (c *Server) IsPeer(r *http.Request) bool {
 	var (
 		ip    string
@@ -639,6 +646,7 @@ func (c *Server) IsPeer(r *http.Request) bool {
 		cidr  *net.IPNet
 		err   error
 	)
+
 	IsPublicIP := func(IP net.IP) bool {
 		if IP.IsLoopback() || IP.IsLinkLocalMulticast() || IP.IsLinkLocalUnicast() {
 			return false
@@ -658,7 +666,7 @@ func (c *Server) IsPeer(r *http.Request) bool {
 		return false
 	}
 	//return true
-	ip = c.util.GetClientIp(r)
+	ip = c.GetRealIp(r)
 	if c.util.Contains("0.0.0.0", Config().AdminIps) {
 		if IsPublicIP(net.ParseIP(ip)) {
 			return false
