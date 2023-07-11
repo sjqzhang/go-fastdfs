@@ -723,7 +723,7 @@ func (c *Server) GetMd5sMapByDate(date string, filename string) (*goutil.CommonM
 		fpath = DATA_DIR + "/" + date + "/" + filename
 	}
 	if !c.util.FileExists(fpath) {
-		return result, errors.New(fmt.Sprintf("fpath %s not found", fpath))
+		return result, fmt.Errorf("fpath %s not found", fpath)
 	}
 	if data, err = ioutil.ReadFile(fpath); err != nil {
 		return result, err

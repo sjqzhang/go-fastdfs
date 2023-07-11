@@ -108,7 +108,7 @@ func (c *Server) initTus() {
 					return nil, errors.New(msg)
 				}
 			}
-			return nil, errors.New(fmt.Sprintf("%s not found", fp))
+			return nil, fmt.Errorf("%s not found", fp)
 		}
 	}
 	store.UseIn(composer)
