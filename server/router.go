@@ -14,11 +14,11 @@ func (c *Server) initRouter() {
 	}
 	uploadPage := "upload.html"
 	if groupRoute == "" {
-		mux.HandleFunc(fmt.Sprintf("%s", "/"), c.Download)
+		mux.HandleFunc("/", c.Download)
 		mux.HandleFunc(fmt.Sprintf("/%s", uploadPage), c.Index)
 	} else {
-		mux.HandleFunc(fmt.Sprintf("%s", "/"), c.Download)
-		mux.HandleFunc(fmt.Sprintf("%s", groupRoute), c.Download)
+		mux.HandleFunc("/", c.Download)
+		mux.HandleFunc(groupRoute, c.Download)
 		mux.HandleFunc(fmt.Sprintf("%s/%s", groupRoute, uploadPage), c.Index)
 	}
 	mux.HandleFunc(fmt.Sprintf("%s/check_files_exist", groupRoute), c.CheckFilesExist)
