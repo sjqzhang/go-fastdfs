@@ -24,7 +24,8 @@ PROTO_SRC_PATH =${ROOT_DIR}/rpc
 ALL_LINUX = linux-amd64 \
 	linux-386 \
 	linux-arm \
-	linux-arm64
+	linux-arm64 \
+	linux-loong64
 
 ALL = $(ALL_LINUX) \
 		darwin-amd64 \
