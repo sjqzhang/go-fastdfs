@@ -38,7 +38,7 @@ type FileInfo struct {
 	Peers     []string `json:"peers"`
 	Scene     string   `json:"scene"`
 	TimeStamp int64    `json:"timeStamp"`
-	OffSet    int64    `json:"offset"`
+	OffSet    int64    `json:"offset"` // -1未刚上传
 	retry     int
 	op        string
 }

@@ -51,6 +51,7 @@ func (c *Server) SyncFileInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(downloadUrl))
 }
 
+// CheckScene used to check scene is supported or not
 func (c *Server) CheckScene(scene string) (bool, error) {
 	var (
 		scenes []string
@@ -120,6 +121,7 @@ func (c *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// upload used to downlaod file with md5 info when request uses GET method
 func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
@@ -343,6 +345,7 @@ func (c *Server) TrimFileNameSpecialChar(str string) string {
 	return strings.Replace(reg.ReplaceAllString(str, ""), "...", "", -1)
 }
 
+// SaveUploadFile used to save upload file
 func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeader, fileInfo *FileInfo, r *http.Request) (*FileInfo, error) {
 	var (
 		err     error
@@ -351,6 +354,7 @@ func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeade
 		fi      os.FileInfo
 	)
 	defer file.Close()
+	// get upload filename
 	_, fileInfo.Name = filepath.Split(header.Filename)
 	// trim special char in filename for example: #@%$^&*()_+{}|:"<>?[];',./
 	fileInfo.Name = c.TrimFileNameSpecialChar(fileInfo.Name)
