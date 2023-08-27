@@ -22,6 +22,8 @@ func (c *Server) VerifyGoogleCode(secret string, code string, discrepancy int64)
 	}
 }
 
+// GenGoogleCode
+// FormValue can generate code without secret
 func (c *Server) GenGoogleCode(w http.ResponseWriter, r *http.Request) {
 	var (
 		err    error

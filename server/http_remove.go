@@ -76,7 +76,7 @@ func (c *Server) RemoveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if fpath != "" && md5sum == "" {
-		if Config().Group!="" && Config().SupportGroupManage {
+		if Config().Group != "" && Config().SupportGroupManage {
 			fpath = strings.Replace(fpath, "/"+Config().Group+"/", STORE_DIR_NAME+"/", 1)
 		} else {
 			fpath = strings.Replace(fpath, "/", STORE_DIR_NAME+"/", 1)

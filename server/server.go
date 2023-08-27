@@ -17,18 +17,18 @@ import (
 )
 
 type Server struct {
-	ldb            *leveldb.DB
-	logDB          *leveldb.DB
+	ldb            *leveldb.DB // sync data to stat.json; search slow
+	logDB          *leveldb.DB // key format: logKey = fmt.Sprintf("%s_%s_%s", logDate, filename, fileInfo.Md5)
 	util           *goutil.Common
-	statMap        *goutil.CommonMap
+	statMap        *goutil.CommonMap // note the count and size info of upload files in every day
 	sumMap         *goutil.CommonMap
 	rtMap          *goutil.CommonMap
-	queueToPeers   chan FileInfo
-	queueFromPeers chan FileInfo
-	queueFileLog   chan *FileLog
-	queueUpload    chan WrapReqResp
-	lockMap        *goutil.CommonMap
-	sceneMap       *goutil.CommonMap
+	queueToPeers   chan FileInfo     // sync to peers
+	queueFromPeers chan FileInfo     // sync from peers
+	queueFileLog   chan *FileLog     // record file log including add or del
+	queueUpload    chan WrapReqResp  // client call upload api when upload file
+	lockMap        *goutil.CommonMap // AutoRepair
+	sceneMap       *goutil.CommonMap // key is scene, value is scret which used to validate googleAuth
 	searchMap      *goutil.CommonMap
 	curDate        string
 	host           string
@@ -87,7 +87,7 @@ func InitServer() {
 		if peers = os.Getenv("GO_FASTDFS_PEERS"); peers == "" {
 			peers = peer
 		}
-		cfg := fmt.Sprintf(cfgJson, peerId, peer, peers,server.util.GetUUID())
+		cfg := fmt.Sprintf(cfgJson, peerId, peer, peers, server.util.GetUUID())
 		server.util.WriteFile(CONST_CONF_FILE_NAME, cfg)
 	}
 	if logger, err := log.LoggerFromConfigAsBytes([]byte(logConfigStr)); err != nil {

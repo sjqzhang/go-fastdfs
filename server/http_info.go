@@ -238,6 +238,7 @@ func (c *Server) GetFileInfo(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// ReceiveMd5s used to received md5 for finding out this file, then send it to peers
 func (c *Server) ReceiveMd5s(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
