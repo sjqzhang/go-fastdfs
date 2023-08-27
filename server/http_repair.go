@@ -153,6 +153,7 @@ func (c *Server) RepairStatByDate(date string) StatDateFileInfo {
 	return stat
 }
 
+// AutoRepair repair file data
 func (c *Server) AutoRepair(forceRepair bool) {
 	if c.lockMap.IsLock("AutoRepair") {
 		log.Warn("Lock AutoRepair")

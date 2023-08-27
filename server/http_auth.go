@@ -9,6 +9,7 @@ import (
 	log "github.com/sjqzhang/seelog"
 )
 
+// CheckAuth used to check request is satisfy auth or not with the request header and body
 func (c *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 	var (
 		err        error
