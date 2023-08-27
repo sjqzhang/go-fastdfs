@@ -12,6 +12,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+// BackUpMetaDataByDate used to traverse server.logDb to find out md5 and fileInfo; then write down
 func (c *Server) BackUpMetaDataByDate(date string) {
 	defer func() {
 		if re := recover(); re != nil {
