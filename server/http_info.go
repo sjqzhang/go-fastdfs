@@ -518,7 +518,7 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Notice: performance is poor,just for low capacity,but low memory , if you want to high performance,use searchMap for search,but memory ....
+// Search Notice: performance is poor,just for low capacity,but low memory , if you want to high performance,use searchMap for search,but memory ....
 func (c *Server) Search(w http.ResponseWriter, r *http.Request) {
 	var (
 		result    JsonResult
@@ -577,7 +577,7 @@ func (c *Server) Sync(w http.ResponseWriter, r *http.Request) {
 	force := ""
 	inner := ""
 	isForceUpload := false
-	force = r.FormValue("force")
+	force = r.FormValue("force") // force -> 1 is sync normal file to peers
 	date = r.FormValue("date")
 	inner = r.FormValue("inner")
 	if force == "1" {
