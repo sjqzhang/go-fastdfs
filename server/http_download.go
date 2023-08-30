@@ -51,6 +51,7 @@ func (c *Server) ConsumerDownLoad() {
 	}
 }
 
+// DownloadFromPeer important func
 func (c *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	var (
 		err         error
@@ -76,18 +77,20 @@ func (c *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
 	}
+	// check only file and exist or not
 	if fileInfo.OffSet != -2 && Config().EnableDistinctFile && c.CheckFileExistByInfo(fileInfo.Md5, fileInfo) {
 		// ignore migrate file
 		log.Info(fmt.Sprintf("DownloadFromPeer file Exist, path:%s", fileInfo.Path+"/"+fileInfo.Name))
 		return
 	}
+	// if local file is newer than peer, post it to peer
 	if (!Config().EnableDistinctFile || fileInfo.OffSet == -2) && c.util.FileExists(c.GetFilePathByInfo(fileInfo, true)) {
 		// ignore migrate file
 		if fi, err = os.Stat(c.GetFilePathByInfo(fileInfo, true)); err == nil {
 			if fi.ModTime().Unix() > fileInfo.TimeStamp {
 				log.Info(fmt.Sprintf("ignore file sync path:%s", c.GetFilePathByInfo(fileInfo, false)))
 				fileInfo.TimeStamp = fi.ModTime().Unix()
-				c.postFileToPeer(fileInfo) // keep newer
+				c.postFileToPeer(fileInfo) // keep newer, local file newer
 				return
 			}
 			os.Remove(c.GetFilePathByInfo(fileInfo, true))
@@ -118,6 +121,7 @@ func (c *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	defer func() {
 		c.ldb.Delete([]byte(download_key), nil)
 	}()
+	// download file when offset is -2
 	if fileInfo.OffSet == -2 {
 		//migrate file
 		if fi, err = os.Stat(fpath); err == nil && fi.Size() == fileInfo.Size {
@@ -150,6 +154,7 @@ func (c *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 	}
 	req := httplib.Get(downloadUrl)
 	req.SetTimeout(time.Second*30, time.Second*time.Duration(timeout))
+	// download file when file is small
 	if fileInfo.OffSet >= 0 {
 		//small file download
 		data, err = req.Bytes()
@@ -177,6 +182,8 @@ func (c *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		c.SaveFileMd5Log(fileInfo, CONST_FILE_Md5_FILE_NAME)
 		return
 	}
+
+	// other case download file
 	if err = req.ToFile(fpathTmp); err != nil {
 		c.AppendToDownloadQueue(fileInfo) //retry
 		os.Remove(fpathTmp)

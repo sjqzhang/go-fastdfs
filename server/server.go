@@ -25,8 +25,8 @@ type Server struct {
 	rtMap          *goutil.CommonMap
 	queueToPeers   chan FileInfo     // sync to peers
 	queueFromPeers chan FileInfo     // sync from peers
-	queueFileLog   chan *FileLog     // record file log including add or del
-	queueUpload    chan WrapReqResp  // client call upload api when upload file
+	queueFileLog   chan *FileLog     // record file log including add or del or operate error
+	queueUpload    chan WrapReqResp  // client call upload api when upload file, 上传队列
 	lockMap        *goutil.CommonMap // AutoRepair
 	sceneMap       *goutil.CommonMap // key is scene, value is scret which used to validate googleAuth
 	searchMap      *goutil.CommonMap
@@ -200,7 +200,7 @@ func (c *Server) Start() {
 	go c.LoadQueueSendToPeer()
 	go c.ConsumerPostToPeer()
 	go c.ConsumerLog()
-	go c.ConsumerDownLoad()
+	go c.ConsumerDownLoad() // read at this place
 	go c.ConsumerUpload()
 	go c.RemoveDownloading()
 

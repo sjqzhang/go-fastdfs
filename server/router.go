@@ -38,7 +38,7 @@ func (c *Server) initRouter() {
 	mux.HandleFunc(fmt.Sprintf("%s/remove_empty_dir", groupRoute), c.RemoveEmptyDir)
 	mux.HandleFunc(fmt.Sprintf("%s/repair_fileinfo", groupRoute), c.RepairFileInfo)
 	mux.HandleFunc(fmt.Sprintf("%s/reload", groupRoute), c.Reload)
-	mux.HandleFunc(fmt.Sprintf("%s/syncfile_info", groupRoute), c.SyncFileInfo)
+	mux.HandleFunc(fmt.Sprintf("%s/syncfile_info", groupRoute), c.SyncFileInfo) // how to download from peer
 	mux.HandleFunc(fmt.Sprintf("%s/get_md5s_by_date", groupRoute), c.GetMd5sForWeb)
 	mux.HandleFunc(fmt.Sprintf("%s/receive_md5s", groupRoute), c.ReceiveMd5s)
 	mux.HandleFunc(fmt.Sprintf("%s/gen_google_secret", groupRoute), c.GenGoogleSecret)

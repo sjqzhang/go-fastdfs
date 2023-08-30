@@ -60,7 +60,8 @@ func (c *Server) initTus() {
 	}
 	composer := tusd.NewStoreComposer()
 	composer.UsesTerminater = true
-	// support raw tus upload and download
+	// support raw tus upload and download; will be called when download
+	// http://172.16.240.6:8080/group1/big/upload/6dce0ac29653b56f763c4ddb3ea3096b
 	store.GetReaderExt = func(id string) (io.Reader, error) {
 		var (
 			offset int64

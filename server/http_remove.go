@@ -16,6 +16,7 @@ import (
 func (c *Server) RemoveDownloading() {
 	RemoveDownloadFunc := func() {
 		for {
+			// download_key := fmt.Sprintf("downloading_%d_%s", time.Now().Unix(), fpath)
 			iter := c.ldb.NewIterator(util.BytesPrefix([]byte("downloading_")), nil)
 			for iter.Next() {
 				key := iter.Key()
