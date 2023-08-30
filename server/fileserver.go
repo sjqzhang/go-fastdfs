@@ -38,7 +38,7 @@ type FileInfo struct {
 	Peers     []string `json:"peers"`
 	Scene     string   `json:"scene"`
 	TimeStamp int64    `json:"timeStamp"`
-	OffSet    int64    `json:"offset"` //
+	OffSet    int64    `json:"offset"` // >=0 is small file
 	retry     int
 	op        string
 }
@@ -1005,6 +1005,7 @@ func (c *Server) ConsumerUpload() {
 	}
 }
 
+// CleanLogLevelDBByDate used to clean key which create in yesterday in c.logDB
 func (c *Server) CleanLogLevelDBByDate(date string, filename string) {
 	defer func() {
 		if re := recover(); re != nil {
