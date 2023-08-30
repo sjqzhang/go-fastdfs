@@ -76,7 +76,7 @@ const (
 	CONST_BIG_UPLOAD_PATH_SUFFIX   = "/big/upload/"
 	CONST_STAT_FILE_TOTAL_SIZE_KEY = "totalSize"
 	CONST_Md5_ERROR_FILE_NAME      = "errors.md5"
-	CONST_Md5_QUEUE_FILE_NAME      = "queue.md5"
+	CONST_Md5_QUEUE_FILE_NAME      = "queue.md5" // download from peer
 	CONST_FILE_Md5_FILE_NAME       = "files.md5"
 	CONST_REMOME_Md5_FILE_NAME     = "removes.md5"
 	CONST_SMALL_FILE_SIZE          = 1024 * 1024
@@ -199,7 +199,7 @@ type GlobalConfig struct {
 	PeerId               string   `json:"peer_id"`
 	SupportGroupManage   bool     `json:"support_group_manage"`
 	AdminIps             []string `json:"admin_ips"`
-	AdminKey 		     string   `json:"admin_key"`
+	AdminKey             string   `json:"admin_key"`
 	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
 	EnableMigrate        bool     `json:"enable_migrate"`
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
