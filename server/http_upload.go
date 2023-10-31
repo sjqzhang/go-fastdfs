@@ -237,8 +237,9 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 		if Config().EnableDistinctFile {
 			if v, _ := c.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
 				fileResult = c.BuildFileResult(v, r)
-				if c.GetFilePathByInfo(&fileInfo, false) != c.GetFilePathByInfo(v, false) {
-					os.Remove(c.GetFilePathByInfo(&fileInfo, false))
+				withDocker:= DOCKER_DIR!=""
+				if c.GetFilePathByInfo(&fileInfo, withDocker) != c.GetFilePathByInfo(v, withDocker) {
+					os.Remove(c.GetFilePathByInfo(&fileInfo, withDocker))
 				}
 				if output == "json" || output == "json2" {
 					if output == "json2" {
