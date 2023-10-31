@@ -203,6 +203,7 @@ func (c *Server) Start() {
 	go c.ConsumerDownLoad()
 	go c.ConsumerUpload()
 	go c.RemoveDownloading()
+	go c.CleanEmptyFolders()
 
 	if Config().EnableFsNotify {
 		go c.WatchFilesChange()

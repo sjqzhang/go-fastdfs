@@ -120,6 +120,59 @@ func (c *Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (c *Server) CleanEmptyFolders() {
+	go func() {
+		clear := func() {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Error(err)
+				}
+			}()
+			cleanEmptyFolders(STORE_DIR)
+		}
+		for {
+			clear()
+			time.Sleep(time.Hour * 24)
+		}
+	}()
+}
+
+func cleanEmptyFolders(dirPath string) error {
+	return filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && isEmptyDir(path) {
+			err := os.RemoveAll(path)
+			if err != nil {
+				return log.Errorf("failed to remove empty folder: %s", err)
+			}
+			log.Info("Removed empty folder: %s\n", path)
+		}
+
+		return nil
+	})
+}
+
+func isEmptyDir(dirPath string) bool {
+	isEmpty := true
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			isEmpty = false
+			return filepath.SkipDir
+		}
+		return nil
+	})
+
+	if err != nil {
+		return false
+	}
+	return isEmpty
+}
+
 func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
@@ -237,7 +290,7 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 		if Config().EnableDistinctFile {
 			if v, _ := c.GetFileInfoFromLevelDB(fileInfo.Md5); v != nil && v.Md5 != "" {
 				fileResult = c.BuildFileResult(v, r)
-				withDocker:= DOCKER_DIR!=""
+				withDocker := DOCKER_DIR != ""
 				if c.GetFilePathByInfo(&fileInfo, withDocker) != c.GetFilePathByInfo(v, withDocker) {
 					os.Remove(c.GetFilePathByInfo(&fileInfo, withDocker))
 				}
