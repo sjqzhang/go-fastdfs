@@ -39,8 +39,8 @@ func (c *Server) RemoveEmptyDir(w http.ResponseWriter, r *http.Request) {
 	)
 	result.Status = "ok"
 	if c.IsPeer(r) {
-		go c.util.RemoveEmptyDir(DATA_DIR)
-		go c.util.RemoveEmptyDir(STORE_DIR)
+		//go c.util.RemoveEmptyDir(DATA_DIR)
+		go cleanEmptyFolders(STORE_DIR)
 		result.Message = "clean job start ..,don't try again!!!"
 		w.Write([]byte(c.util.JsonEncodePretty(result)))
 	} else {
