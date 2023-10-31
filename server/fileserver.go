@@ -305,7 +305,7 @@ func (c *Server) GetSmallFileByURI(w http.ResponseWriter, r *http.Request) ([]by
 		return nil, false, err
 	}
 	if info.Size() < offset+int64(length) {
-		return nil, true, errors.New("noFound")
+		return nil, true, errors.New("Not found")
 	} else {
 		data, err = c.util.ReadFileByOffSet(fullpath, offset, length)
 		if err != nil {
