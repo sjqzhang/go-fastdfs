@@ -821,7 +821,7 @@ func (c *Server) BuildFileResult(fileInfo *FileInfo, r *http.Request) FileResult
 	}
 	fileResult.Url = downloadUrl
 	if Config().DefaultDownload {
-		fileResult.Url = fmt.Sprintf("%s?name=%s&download=1", downloadUrl, url.PathEscape(outname))
+		fileResult.Url = fmt.Sprintf("%s?name=%s&download=1", downloadUrl, url.PathEscape(fileInfo.Name))
 	}
 	fileResult.Md5 = fileInfo.Md5
 	fileResult.Path = "/" + p

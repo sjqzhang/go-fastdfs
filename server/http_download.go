@@ -17,12 +17,13 @@ import (
 
 func (c *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", "attachment")
 	if name, ok := r.URL.Query()["name"]; ok {
 		if v, err := url.QueryUnescape(name[0]); err == nil {
-			name[0] = v
+			name[0] = c.TrimFileNameSpecialChar(v)
 		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment;filename=%s", name[0]))
+	} else {
+		w.Header().Set("Content-Disposition", "attachment")
 	}
 }
 
