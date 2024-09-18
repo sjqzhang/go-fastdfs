@@ -199,7 +199,7 @@ type GlobalConfig struct {
 	PeerId               string   `json:"peer_id"`
 	SupportGroupManage   bool     `json:"support_group_manage"`
 	AdminIps             []string `json:"admin_ips"`
-	AdminKey 		     string   `json:"admin_key"`
+	AdminKey             string   `json:"admin_key"`
 	EnableMergeSmallFile bool     `json:"enable_merge_small_file"`
 	EnableMigrate        bool     `json:"enable_migrate"`
 	EnableDistinctFile   bool     `json:"enable_distinct_file"`
@@ -261,6 +261,12 @@ func ParseConfig(filePath string) {
 	var c GlobalConfig
 	if err := json.Unmarshal(data, &c); err != nil {
 		panic(fmt.Sprintln("file path:", filePath, "json unmarshal error:", err))
+	}
+	//归一化后的扩展名，必须以 . 开头
+	for i := 0; i < len(c.Extensions); i++ {
+		if !strings.HasPrefix(c.Extensions[i], ".") {
+			c.Extensions[i] = "." + c.Extensions[i]
+		}
 	}
 	log.Info(c)
 	atomic.StorePointer(&ptr, unsafe.Pointer(&c))
