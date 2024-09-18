@@ -1,0 +1,11 @@
+language: go
+go:
+  - 1.13
+  - tip
+script: go test -v ./...
+notifications:
+  email:
+    recipients:
+      - devs@eventials.com
+    on_success: never
+    on_failure: always
