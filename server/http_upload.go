@@ -142,7 +142,8 @@ func cleanEmptyFolders(dirPath string) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() && isEmptyDir(path) {
+		//对于临时目录与大文件目录不进行删除
+		if info.IsDir() && !strings.Contains(path, STORE_DIR_NAME+"/_big") && !strings.Contains(path, STORE_DIR_NAME+"/_tmp") && isEmptyDir(path) {
 			err := os.RemoveAll(path)
 			if err != nil {
 				return log.Errorf("failed to remove empty folder: %s", err)

@@ -17,7 +17,7 @@ mkdir -p src/github.com/sjqzhang/go-fastdfs
 cp -rf cmd doc server main.go  src/github.com/sjqzhang/go-fastdfs
 
 
-GOPATH=`pwd`  GOARCH=amd64 go test -v server/*.go
+GOPATH=`pwd`  go test -v server/*.go
 
 if [[ $? -ne 0 ]];then
   echo "test fail"
