@@ -1,14 +1,14 @@
 #!/bin/bash
 
+rm -rf src
 
+git pull
 
 BIN_VERSION="go-fastdfs:${1-$(git describe  --tags `git rev-parse HEAD`)}"
 
-if [[ ! -d src ]];then
 
-cp -r vendor src
+cp -rf vendor src
 
-fi
 
 
 export GO111MODULE="off"
@@ -19,6 +19,7 @@ cp -rf cmd doc server main.go  src/github.com/sjqzhang/go-fastdfs
 
 GOPATH=`pwd`  go test -v server/*.go
 
+echo $?
 if [[ $? -ne 0 ]];then
   echo "test fail"
   exit 1

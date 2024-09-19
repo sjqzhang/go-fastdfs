@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -14,18 +13,6 @@ import (
 	"github.com/astaxie/beego/httplib"
 	log "github.com/sjqzhang/seelog"
 )
-
-func (c *Server) SetDownloadHeader(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if name, ok := r.URL.Query()["name"]; ok {
-		if v, err := url.QueryUnescape(name[0]); err == nil {
-			name[0] = c.TrimFileNameSpecialChar(v)
-		}
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment;filename=%s", name[0]))
-	} else {
-		w.Header().Set("Content-Disposition", "attachment")
-	}
-}
 
 func (c *Server) ConsumerDownLoad() {
 	ConsumerFunc := func() {
@@ -324,7 +311,7 @@ func (c *Server) DownloadSmallFileByURI(w http.ResponseWriter, r *http.Request) 
 	_ = notFound
 	if data != nil && string(data[0]) == "1" {
 		if isDownload {
-			c.SetDownloadHeader(w, r)
+			c.SetDownloadHeader(w, r, true)
 		}
 		if imgWidth != 0 || imgHeight != 0 {
 			c.ResizeImageByBytes(w, data[1:], uint(imgWidth), uint(imgHeight))
@@ -374,7 +361,7 @@ func (c *Server) DownloadNormalFileByURI(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	if isDownload {
-		c.SetDownloadHeader(w, r)
+		c.SetDownloadHeader(w, r, false)
 	}
 	fullpath, _ := c.GetFilePathFromRequest(w, r)
 	if imgWidth != 0 || imgHeight != 0 {
@@ -417,7 +404,7 @@ func (c *Server) DownloadNotFound(w http.ResponseWriter, r *http.Request) {
 			go c.DownloadFromPeer(peer, fileInfo)
 			//http.Redirect(w, r, peer+r.RequestURI, 302)
 			if isDownload {
-				c.SetDownloadHeader(w, r)
+				c.SetDownloadHeader(w, r, false)
 			}
 			c.DownloadFileToResponse(peer+r.RequestURI, w, r)
 			return
