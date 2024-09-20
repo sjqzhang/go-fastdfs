@@ -137,12 +137,21 @@ func (c *Server) RepairStatByDate(date string) StatDateFileInfo {
 	keyPrefix = fmt.Sprintf(keyPrefix, date, CONST_FILE_Md5_FILE_NAME)
 	iter := server.logDB.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
 	defer iter.Release()
+	filePathSet := mapset.NewSet()
+	withDocker := DOCKER_DIR != ""
 	for iter.Next() {
 		if err = json.Unmarshal(iter.Value(), &fileInfo); err != nil {
 			continue
 		}
-		fileCount = fileCount + 1
-		fileSize = fileSize + fileInfo.Size
+		filePath := c.GetFilePathByInfo(&fileInfo, withDocker)
+		if _, err := os.Stat(filePath); err != nil { //TODO 在海量文件情况下存在性能问题
+			continue
+		}
+		if !filePathSet.Contains(filePath) {
+			fileCount = fileCount + 1
+			fileSize = fileSize + fileInfo.Size
+			filePathSet.Add(filePath)
+		}
 	}
 	c.statMap.Put(date+"_"+CONST_STAT_FILE_COUNT_KEY, fileCount)
 	c.statMap.Put(date+"_"+CONST_STAT_FILE_TOTAL_SIZE_KEY, fileSize)
