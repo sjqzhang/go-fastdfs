@@ -14,6 +14,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Log in to GitHub Container Registry
+      # 使用GITHUB_TOKEN登录，它允许操作推送容器镜像
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Build and push
       uses: docker/build-push-action@v3
       with:
