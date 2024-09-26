@@ -14,6 +14,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+      with:
+        platforms: all  # 启用所有支持的平台的模拟
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      with:
+        buildkitd-flags: --allow-insecure-entitlement security.insecure
+        builder: default
+        use: true
     - name: Log in to GitHub Container Registry
       # 使用GITHUB_TOKEN登录，它允许操作推送容器镜像
       uses: docker/login-action@v2
@@ -25,6 +35,7 @@ jobs:
       uses: docker/build-push-action@v3
       with:
         context: .
-        file: ./Dockerfile
+        file: ./DockerfileForGitAction
+        platforms: linux/amd64,linux/arm64
         tags: ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:latest
         push: true
