@@ -93,7 +93,7 @@ http://yourserver ip:8080 注意：不要使用127.0.0.1上传
 >
 > QQ交流群：709218487(go-fastdfs技术交流群)已满
 >
-> QQ交流群：749893275(go-fastdfs技术交流群）
+> QQ交流群：749893275(go-fastdfs技术交流群)已满
 > 
 >  QQ交流群：579196810(go-fastdfs技术交流群）
 
