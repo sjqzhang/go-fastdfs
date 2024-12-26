@@ -478,7 +478,7 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 					  <input type="text" id="code" name="code" value="" /></span>
 					 <span class="form-line">自定义认证(auth_token):
 					  <input type="text" id="auth_token" name="auth_token" value="" /></span>
-					<input type="submit" name="submit" value="upload" />
+					<button type="button" id="submit" value="upload" >上传</button>
                 </form>
 				</div>
                  <div>断点续传（如果文件很大时可以考虑）</div>
@@ -486,6 +486,7 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 				 
 				  <div id="drag-drop-area"></div>
 				  <script src="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.js"></script>
+				  <script src="/%s/static/js/jquery.min.js"></script>
 				  <script>var uppy = Uppy.Core().use(Uppy.Dashboard, {
 					  inline: true,
 					  target: '#drag-drop-area'
@@ -499,6 +500,33 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 					uppy.setMeta({ auth_token: '9ee60e59-cb0f-4578-aaba-29b9fc2919ca',callback_url:'http://127.0.0.1/callback'})//自定义参数与普通上传类似（虽然支持自定义，建议不要自定义，海量文件情况下，自定义很可能给自已给埋坑）
                 </script>
 				</div>
+				<script>
+				$(document).ready(function() {
+					$("#submit").click(function(e) {
+						e.preventDefault(); // 阻止表单默认提交
+						
+						var formData = new FormData($("form").get(0));
+						var authToken = $("#auth_token").val(); // 获取 auth_token 输入框的值
+						
+						$.ajax({
+							url: $("form").attr('action'),
+							type: 'POST',
+							data: formData,
+							headers: {
+								'auth-token': authToken // 将 auth_token 放入请求头
+							},
+							processData: false,
+							contentType: false,
+							success: function(response) {
+								alert("上传成功"+response);
+							},
+							error: function(xhr, status, error) {
+								alert("上传失败: " + error);
+							}
+						});
+					});
+				});
+				</script>
 			  </body>
 			</html>`
 		uppyFileName := STATIC_DIR + "/uppy.html"
@@ -512,7 +540,7 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 			c.util.WriteFile(uppyFileName, uppy)
 		}
 		fmt.Fprintf(w,
-			fmt.Sprintf(uppy, uploadUrl, Config().DefaultScene, uploadBigUrl))
+			fmt.Sprintf(uppy, uploadUrl, Config().DefaultScene, Config().Group, uploadBigUrl))
 	} else {
 		w.Write([]byte("web upload deny"))
 	}

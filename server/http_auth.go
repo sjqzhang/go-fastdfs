@@ -16,14 +16,18 @@ func (c *Server) CheckAuth(w http.ResponseWriter, r *http.Request) bool {
 		result     string
 		jsonResult JsonResult
 	)
-	if err = r.ParseForm(); err != nil {
-		log.Error(err)
+
+	// 直接从请求头中获取认证信息（例如 auth_token）
+	authToken := r.Header.Get("Auth-Token")
+	if authToken == "" {
+		log.Warn("auth_token is missing")
+		// w.WriteHeader(http.StatusUnauthorized)
 		return false
 	}
 	req = httplib.Post(Config().AuthUrl)
 	req.SetTimeout(time.Second*10, time.Second*10)
-	req.Param("__path__", r.URL.Path)
-	req.Param("__query__", r.URL.RawQuery)
+	// req.Param("__path__", r.URL.Path)
+	// req.Param("__query__", r.URL.RawQuery)
 	for k, _ := range r.Form {
 		req.Param(k, r.FormValue(k))
 	}

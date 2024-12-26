@@ -74,7 +74,18 @@ func (c *Server) Upload(w http.ResponseWriter, r *http.Request) {
 		folder string
 		fpTmp  *os.File
 		fpBody *os.File
+		result JsonResult
 	)
+	if Config().AuthUrl != "" {
+		if !c.CheckAuth(w, r) {
+			msg:= "auth fail"
+			// log.Warn(msg, r.Form)
+			c.NotPermit(w, r)
+			result.Message = msg
+			w.Write([]byte(c.util.JsonEncodePretty(result)))
+			return
+		}
+	}
 	if r.Method == http.MethodGet {
 		c.upload(w, r)
 		return
@@ -201,16 +212,7 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	result.Status = "fail"
-	if Config().AuthUrl != "" {
-		if !c.CheckAuth(w, r) {
-			msg = "auth fail"
-			log.Warn(msg, r.Form)
-			c.NotPermit(w, r)
-			result.Message = msg
-			w.Write([]byte(c.util.JsonEncodePretty(result)))
-			return
-		}
-	}
+
 	if r.Method == http.MethodPost {
 		md5sum = r.FormValue("md5")
 		fileName = r.FormValue("filename")
