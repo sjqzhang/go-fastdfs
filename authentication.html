@@ -637,7 +637,7 @@ token=6d70bf9607b692f00d27a3c554bb64d0
 app = Flask(__name__)
 <span class="hljs-meta">@app.route(&apos;/&apos;,methods=[&quot;GET&quot;, &quot;POST&quot;])</span>
 <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">index</span><span class="hljs-params">()</span>:</span>
-    auth_token = request.form.get(<span class="hljs-string">&quot;auth_token&quot;</span>) <span class="hljs-comment"># check auth_token here</span>
+    auth_token = request.headers.get(<span class="hljs-string">&quot;auth_token&quot;</span>) <span class="hljs-comment"># check auth_token here</span>
     print(auth_token)
     <span class="hljs-keyword">if</span> auth_token==<span class="hljs-string">&apos;abc&apos;</span>:
         <span class="hljs-keyword">return</span> <span class="hljs-string">&apos;ok&apos;</span> <span class="hljs-comment">#success</span>
