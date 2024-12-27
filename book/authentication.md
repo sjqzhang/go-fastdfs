@@ -56,7 +56,7 @@ from flask import  Flask,request
 app = Flask(__name__)
 @app.route('/',methods=["GET", "POST"])
 def index():
-    auth_token = request.form.get("auth_token") # check auth_token here
+    auth_token = request.headers.get("auth_token") # check auth_token here
     print(auth_token)
     if auth_token=='abc':
         return 'ok' #success
@@ -76,8 +76,9 @@ python app.py
 import requests
 url = 'http://10.1.5.9:8080/group1/upload'
 files = {'file': open('report.xls', 'rb')}
-options={'output':'json','path':'','scene':'','auth_token':'abc'} #参阅浏览器上传的选项
-r = requests.post(url,data=options, files=files)
+options={'output':'json','path':'','scene':''} #参阅浏览器上传的选项
+headers={'auth_token':'abc'}
+r = requests.post(url,data=options, files=files,headers=headers)
 print(r.text)
 ```
 `注意：conf/cfg.json   "auth_url": "http://127.0.0.1:5000"  `
