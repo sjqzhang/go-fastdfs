@@ -78,7 +78,7 @@ func (c *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	)
 	if Config().AuthUrl != "" {
 		if !c.CheckAuth(w, r) {
-			msg:= "auth fail"
+			msg := "auth fail"
 			// log.Warn(msg, r.Form)
 			c.NotPermit(w, r)
 			result.Message = msg
@@ -397,7 +397,7 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 func (c *Server) TrimFileNameSpecialChar(str string) string {
 	// trim special char in filename for example: #@%$^&*()_+{}|:"<>?[];',./
 	reg := regexp.MustCompile(`[\/\\\:\*\?\"\<\>\|\(\)\[\]\{\}\,\;\'\#\@\%\&\$\^\~\=\+\-\!\~\s]`)
-	return strings.Replace(reg.ReplaceAllString(str, ""), "...", "", -1)
+	return strings.Replace(strings.Replace(reg.ReplaceAllString(str, ""), "...", "", -1), "..", "", -1)
 }
 
 func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeader, fileInfo *FileInfo, r *http.Request) (*FileInfo, error) {
