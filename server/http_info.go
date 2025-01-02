@@ -443,12 +443,18 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 		uploadUrl    string
 		uploadBigUrl string
 		uppy         string
+		staticJsUrl  string
+		staticCssUrl string
 	)
 	uploadUrl = "/upload"
+	staticJsUrl = "/static/js"
+	staticCssUrl = "/static/css"
 	uploadBigUrl = CONST_BIG_UPLOAD_PATH_SUFFIX
 	if Config().EnableWebUpload {
 		if Config().SupportGroupManage {
 			uploadUrl = fmt.Sprintf("/%s/upload", Config().Group)
+			staticJsUrl = fmt.Sprintf("/%s/static/js", Config().Group)
+			staticCssUrl = fmt.Sprintf("/%s/static/css", Config().Group)
 			uploadBigUrl = fmt.Sprintf("/%s%s", Config().Group, CONST_BIG_UPLOAD_PATH_SUFFIX)
 		}
 		uppy = `<html>
@@ -457,7 +463,7 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 				<meta charset="utf-8" />
 				<title>go-fastdfs</title>
 				<style>form { bargin } .form-line { display:block;height: 30px;margin:8px; } #stdUpload {background: #fafafa;border-radius: 10px;width: 745px; }</style>
-				<link href="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.css" rel="stylesheet"></head>
+				<link href="%s/uppy.min.css" rel="stylesheet"></head>
 			  
 			  <body>
                 <div>标准上传(强列建议使用这种方式)</div>
@@ -485,8 +491,8 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 				<div>
 				 
 				  <div id="drag-drop-area"></div>
-				  <script src="https://transloadit.edgly.net/releases/uppy/v0.30.0/dist/uppy.min.js"></script>
-				  <script src="/%s/static/js/jquery.min.js"></script>
+				  <script src="%s/uppy.min.js"></script>
+				  <script src="%s/jquery.min.js"></script>
 				  <script>var uppy = Uppy.Core().use(Uppy.Dashboard, {
 					  inline: true,
 					  target: '#drag-drop-area'
@@ -540,7 +546,7 @@ func (c *Server) Index(w http.ResponseWriter, r *http.Request) {
 			c.util.WriteFile(uppyFileName, uppy)
 		}
 		fmt.Fprintf(w,
-			fmt.Sprintf(uppy, uploadUrl, Config().DefaultScene, Config().Group, uploadBigUrl))
+			fmt.Sprintf(uppy, staticCssUrl, uploadUrl, Config().DefaultScene, staticJsUrl, staticJsUrl, uploadBigUrl))
 	} else {
 		w.Write([]byte("web upload deny"))
 	}
