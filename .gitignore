@@ -5,3 +5,6 @@ files/*
 conf/*
 build/*
 log/*
+server/log
+server/files
+server/data

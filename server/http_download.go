@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +15,46 @@ import (
 	"github.com/astaxie/beego/httplib"
 	log "github.com/sjqzhang/seelog"
 )
+
+// isSafePath checks if the requested path is safe from path traversal attacks
+func (c *Server) isSafePath(requestedPath string) bool {
+	// 1. URL decode (handle double encoding)
+	decoded := requestedPath
+	for i := 0; i < 3; i++ { // Handle up to triple encoding
+		unescaped, err := url.QueryUnescape(decoded)
+		if err != nil {
+			return false
+		}
+		if unescaped == decoded {
+			break
+		}
+		decoded = unescaped
+	}
+
+	// 2. Check for dangerous patterns in decoded path BEFORE cleaning
+	dangerousPatterns := []string{"..", "~", "\x00"}
+	for _, pattern := range dangerousPatterns {
+		if strings.Contains(decoded, pattern) {
+			return false
+		}
+	}
+
+	// 3. Clean the path
+	cleaned := filepath.Clean(decoded)
+
+	// 4. Ensure path is within allowed directory
+	absPath, err := filepath.Abs(STORE_DIR + cleaned)
+	if err != nil {
+		return false
+	}
+
+	absStoreDir, err := filepath.Abs(STORE_DIR)
+	if err != nil {
+		return false
+	}
+
+	return strings.HasPrefix(absPath, absStoreDir)
+}
 
 func (c *Server) ConsumerDownLoad() {
 	ConsumerFunc := func() {
@@ -422,8 +464,8 @@ func (c *Server) Download(w http.ResponseWriter, r *http.Request) {
 		smallPath string
 		fi        os.FileInfo
 	)
-	// check uri is contains ..
-	if strings.Contains(r.RequestURI, "..") {
+	// Enhanced path traversal protection
+	if !c.isSafePath(r.RequestURI) {
 		c.NotPermit(w, r)
 		return
 	}

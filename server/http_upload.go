@@ -92,12 +92,12 @@ func (c *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	folder = STORE_DIR + "/_tmp/" + time.Now().Format("20060102")
 	if !c.util.FileExists(folder) {
-		if err = os.MkdirAll(folder, 0777); err != nil {
+		if err = os.MkdirAll(folder, DEFAULT_DIR_PERM); err != nil {
 			log.Error(err)
 		}
 	}
 	fn = folder + "/" + c.util.GetUUID()
-	fpTmp, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0777)
+	fpTmp, err = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, DEFAULT_FILE_PERM)
 	if err != nil {
 		log.Error(err)
 		w.Write([]byte(err.Error()))
@@ -116,13 +116,11 @@ func (c *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = fpBody
 	defer func() {
-		err = fpBody.Close()
-		if err != nil {
-			log.Error(err)
+		if closeErr := fpBody.Close(); closeErr != nil {
+			log.Error(closeErr)
 		}
-		err = os.Remove(fn)
-		if err != nil {
-			log.Error(err)
+		if removeErr := os.Remove(fn); removeErr != nil {
+			log.Error(removeErr)
 		}
 	}()
 	done := make(chan bool, 1)

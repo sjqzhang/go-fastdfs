@@ -886,7 +886,7 @@ func (c *Server) GetStat() []StatDateFileInfo {
 }
 
 func (c *Server) RegisterExit() {
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 1) // buffered channel to avoid missing signals
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
 		for s := range ch {
@@ -936,16 +936,21 @@ func (c *Server) LoadSearchDict() {
 			return
 		}
 		defer f.Close()
-		r := bufio.NewReader(f)
-		for {
-			line, isprefix, err := r.ReadLine()
-			for isprefix && err == nil {
-				kvs := strings.Split(string(line), "\t")
-				if len(kvs) == 2 {
-					c.searchMap.Put(kvs[0], kvs[1])
-				}
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := scanner.Text()
+			kvs := strings.Split(line, "\t")
+			if len(kvs) == 2 {
+				c.searchMap.Put(kvs[0], kvs[1])
 			}
 		}
+
+		if err := scanner.Err(); err != nil {
+			log.Error(err)
+			return
+		}
+
 		log.Info("finish load search dict")
 	}()
 }
@@ -1231,7 +1236,7 @@ func (c *Server) test() {
 			err error
 			f   *os.File
 		)
-		f, err = os.OpenFile("tt", os.O_CREATE|os.O_RDWR, 0777)
+		f, err = os.OpenFile("tt", os.O_CREATE|os.O_RDWR, DEFAULT_FILE_PERM)
 		if err != nil {
 			fmt.Println(err)
 		}

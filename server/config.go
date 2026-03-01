@@ -81,6 +81,9 @@ const (
 	CONST_REMOME_Md5_FILE_NAME     = "removes.md5"
 	CONST_SMALL_FILE_SIZE          = 1024 * 1024
 	CONST_MESSAGE_CLUSTER_IP       = "Can only be called by the cluster ip or 127.0.0.1 or admin_ips(cfg.json),current ip:%s"
+	// File permission constants for security
+	DEFAULT_DIR_PERM  = 0755 // rwxr-xr-x
+	DEFAULT_FILE_PERM = 0644 // rw-r--r--
 	cfgJson                        = `{
 	"绑定端号": "端口",
 	"addr": ":8080",
@@ -231,6 +234,7 @@ type GlobalConfig struct {
 	Proxies                       []Proxy  `json:"proxies"`
 	EnablePprofDebug              bool     `json:"enable_pprof_debug"`
 	EnableTrimFileNameSpecialChar bool     `json:"enable_trim_file_name_special_char"`
+	ProxyInsecureSkipVerify       bool     `json:"proxy_insecure_skip_verify"` // Skip TLS verification for proxy (not recommended)
 }
 
 type Proxy struct {

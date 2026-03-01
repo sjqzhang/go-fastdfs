@@ -161,7 +161,10 @@ func (h *HttpProxyHandler) ServeHTTP(res http.ResponseWriter, req *http.Request)
 		}
 	}(href)
 	r := httplib.Get(href)
-	r.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	// Only skip TLS verification if explicitly configured (security improvement)
+	if Config().ProxyInsecureSkipVerify {
+		r.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	}
 	if err != nil {
 		log.Error(err)
 	}
