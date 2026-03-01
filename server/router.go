@@ -43,6 +43,8 @@ func (c *Server) initRouter() {
 	mux.HandleFunc(fmt.Sprintf("%s/receive_md5s", groupRoute), c.ReceiveMd5s)
 	mux.HandleFunc(fmt.Sprintf("%s/gen_google_secret", groupRoute), c.GenGoogleSecret)
 	mux.HandleFunc(fmt.Sprintf("%s/gen_google_code", groupRoute), c.GenGoogleCode)
+	// HMAC signature API for server-to-server downloads
+	mux.HandleFunc(fmt.Sprintf("%s/sign_download", groupRoute), c.SignDownloadURL)
 	mux.Handle(fmt.Sprintf("%s/static/", groupRoute), http.StripPrefix(fmt.Sprintf("%s/static/", groupRoute), http.FileServer(http.Dir("./static"))))
 	mux.HandleFunc("/"+Config().Group+"/", c.Download)
 }

@@ -261,6 +261,17 @@ func (c *Server) CheckDownloadAuth(w http.ResponseWriter, r *http.Request) (bool
 		}
 		return true
 	}
+
+	// Priority 1: HMAC signature authentication (for server-to-server, most efficient)
+	if Config().EnableHmacAuth && Config().DownloadSecretKey != "" && !c.IsPeer(r) {
+		if r.FormValue("token") != "" && r.FormValue("ts") != "" {
+			if valid, err := c.VerifyHmacToken(r); err == nil && valid {
+				return true, nil
+			}
+		}
+	}
+
+	// Priority 2: auth_url authentication (for APP clients, with caching)
 	if Config().EnableDownloadAuth && Config().AuthUrl != "" && !c.IsPeer(r) && !c.CheckAuth(w, r) {
 		return false, errors.New("auth fail")
 	}

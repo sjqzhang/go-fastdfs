@@ -235,6 +235,9 @@ type GlobalConfig struct {
 	EnablePprofDebug              bool     `json:"enable_pprof_debug"`
 	EnableTrimFileNameSpecialChar bool     `json:"enable_trim_file_name_special_char"`
 	ProxyInsecureSkipVerify       bool     `json:"proxy_insecure_skip_verify"` // Skip TLS verification for proxy (not recommended)
+	// HMAC signature authentication for server-to-server downloads
+	DownloadSecretKey string `json:"download_secret_key"` // HMAC secret key for signed URLs
+	EnableHmacAuth    bool   `json:"enable_hmac_auth"`    // Enable HMAC signature authentication
 }
 
 type Proxy struct {
