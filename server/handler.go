@@ -162,11 +162,12 @@ func (h *HttpProxyHandler) ServeHTTP(res http.ResponseWriter, req *http.Request)
 	}(href)
 	r := httplib.Get(href)
 	r.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	if err != nil {
-		log.Error(err)
-	}
 	response, err := r.DoRequest()
 	if err != nil {
+		// 上游请求失败时必须向客户端返回错误响应，不能静默返回，
+		// 否则客户端会拿到空响应并一直等待。
+		status_code = "503"
+		http.Error(res, "upstream error: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	defer response.Body.Close()

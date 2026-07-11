@@ -38,13 +38,12 @@ func (c *Server) RepairFileInfoFromFile() {
 	c.lockMap.LockKey("RepairFileInfoFromFile")
 	defer c.lockMap.UnLockKey("RepairFileInfoFromFile")
 	handlefunc := func(file_path string, f os.FileInfo, err error) error {
-		var (
-			files    []os.FileInfo
-			fi       os.FileInfo
-			fileInfo FileInfo
-			sum      string
-			pathMd5  string
-		)
+			var (
+				files    []os.FileInfo
+				fi       os.FileInfo
+				fileInfo FileInfo
+				sum      string
+			)
 		if f.IsDir() {
 			files, err = ioutil.ReadDir(file_path)
 
@@ -66,13 +65,9 @@ func (c *Server) RepairFileInfoFromFile() {
 					log.Info(fmt.Sprintf("ignore small file file %s", file_path+"/"+fi.Name()))
 					continue
 				}
-				pathMd5 = c.util.MD5(file_path + "/" + fi.Name())
-				//if finfo, _ := c.GetFileInfoFromLevelDB(pathMd5); finfo != nil && finfo.Md5 != "" {
-				//	log.Info(fmt.Sprintf("exist ignore file %s", file_path+"/"+fi.Name()))
-				//	continue
-				//}
-				//sum, err = c.util.GetFileSumByName(file_path+"/"+fi.Name(), Config().FileSumArithmetic)
-				sum = pathMd5
+				// 修复：使用文件内容的 md5 作为索引键（与上传时一致），
+				// 而不是"路径 md5"，否则按内容去重/秒传失效。
+				sum, err = c.util.GetFileSumByName(DOCKER_DIR+file_path+"/"+fi.Name(), Config().FileSumArithmetic)
 				if err != nil {
 					log.Error(err)
 					continue

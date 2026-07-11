@@ -279,11 +279,6 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 			log.Error(err)
 			return
 		}
-		if err != nil {
-			log.Error(err)
-			http.Redirect(w, r, "/", http.StatusMovedPermanently)
-			return
-		}
 		if _, err = c.SaveUploadFile(uploadFile, uploadHeader, &fileInfo, r); err != nil {
 			result.Message = err.Error()
 			log.Error(err)
@@ -324,10 +319,6 @@ func (c *Server) upload(w http.ResponseWriter, r *http.Request) {
 			result.Message = msg
 			w.Write([]byte(c.util.JsonEncodePretty(result)))
 			return
-		}
-		if !Config().EnableDistinctFile {
-			// bugfix filecount stat
-			fileInfo.Md5 = c.util.MD5(c.GetFilePathByInfo(&fileInfo, false))
 		}
 		if Config().EnableMergeSmallFile && fileInfo.Size < CONST_SMALL_FILE_SIZE {
 			if err = c.SaveSmallFile(&fileInfo); err != nil {
@@ -477,12 +468,9 @@ func (c *Server) SaveUploadFile(file multipart.File, header *multipart.FileHeade
 	if fi.Size() != header.Size {
 		return fileInfo, errors.New("(error)file uncomplete")
 	}
-	v := "" // c.util.GetFileSum(outFile, Config().FileSumArithmetic)
-	if Config().EnableDistinctFile {
-		v = c.util.GetFileSum(outFile, Config().FileSumArithmetic)
-	} else {
-		v = c.util.MD5(c.GetFilePathByInfo(fileInfo, false))
-	}
+	// 始终基于文件内容计算 md5（开启/关闭去重都一致），
+	// 保证后续 md5 校验与秒传语义正确；不再在去重关闭时使用"路径 md5"。
+	v := c.util.GetFileSum(outFile, Config().FileSumArithmetic)
 	fileInfo.Md5 = v
 	//fileInfo.Path = folder //strings.Replace( folder,DOCKER_DIR,"",1)
 	fileInfo.Path = strings.Replace(folder, DOCKER_DIR, "", 1)

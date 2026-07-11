@@ -261,8 +261,8 @@ func ParseConfig(filePath string) {
 			panic(fmt.Sprintln("file path:", filePath, " read all error:", err))
 		}
 	}
-	var c GlobalConfig
-	if err := json.Unmarshal(data, &c); err != nil {
+	c := new(GlobalConfig)
+	if err := json.Unmarshal(data, c); err != nil {
 		panic(fmt.Sprintln("file path:", filePath, "json unmarshal error:", err))
 	}
 	//归一化后的扩展名，必须以 . 开头
@@ -272,6 +272,7 @@ func ParseConfig(filePath string) {
 		}
 	}
 	log.Info(c)
-	atomic.StorePointer(&ptr, unsafe.Pointer(&c))
+	// 显式在堆上分配配置并存入全局指针，避免把栈变量地址存入全局（依赖逃逸分析的脆弱写法）。
+	atomic.StorePointer(&ptr, unsafe.Pointer(c))
 	log.Info("config parse success")
 }

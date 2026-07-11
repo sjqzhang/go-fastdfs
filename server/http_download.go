@@ -54,12 +54,18 @@ func (c *Server) DownloadFromPeer(peer string, fileInfo *FileInfo) {
 		log.Warn("ReadOnly", fileInfo)
 		return
 	}
-	if Config().RetryCount > 0 && fileInfo.retry >= Config().RetryCount {
+	// 重试次数守卫：RetryCount=0 表示不重试（仍允许首次下载一次）；
+	// RetryCount>0 时，已重试次数达到上限则放弃，避免失败文件被无限重新入队。
+	if Config().RetryCount > 0 {
+		if fileInfo.retry >= Config().RetryCount {
+			log.Error("DownloadFromPeer Error ", fileInfo)
+			return
+		}
+	} else if fileInfo.retry > 0 {
 		log.Error("DownloadFromPeer Error ", fileInfo)
 		return
-	} else {
-		fileInfo.retry = fileInfo.retry + 1
 	}
+	fileInfo.retry = fileInfo.retry + 1
 	filename = fileInfo.Name
 	if fileInfo.ReName != "" {
 		filename = fileInfo.ReName
@@ -481,6 +487,8 @@ func (c *Server) DownloadFileToResponse(url string, w http.ResponseWriter, r *ht
 		return
 	}
 	defer resp.Body.Close()
+	// 转发上游状态码，避免上游 404/500 被透传成 200 返回给客户端。
+	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		log.Error(err)

@@ -988,15 +988,28 @@ func (c *Server) ConsumerUpload() {
 	ConsumerFunc := func() {
 		for {
 			wr := <-c.queueUpload
-			c.upload(*wr.w, wr.r)
-			c.rtMap.AddCountInt64(CONST_UPLOAD_COUNTER_KEY, wr.r.ContentLength)
-			if v, ok := c.rtMap.GetValue(CONST_UPLOAD_COUNTER_KEY); ok {
-				if v.(int64) > 1*1024*1024*1024 {
-					var _v int64
-					c.rtMap.Put(CONST_UPLOAD_COUNTER_KEY, _v)
-					debug.FreeOSMemory()
+			// 上传在独立 worker 协程中执行，必须在此处 recover，
+			// 否则 upload 中的 panic 无法被 HttpHandler.ServeHTTP 的 recover 捕获，会直接 crash 进程。
+			func() {
+				defer func() {
+					if re := recover(); re != nil {
+						buffer := debug.Stack()
+						log.Error("ConsumerUpload")
+						log.Error(re)
+						log.Error(string(buffer))
+					}
+				}()
+				c.upload(*wr.w, wr.r)
+				c.rtMap.AddCountInt64(CONST_UPLOAD_COUNTER_KEY, wr.r.ContentLength)
+				if v, ok := c.rtMap.GetValue(CONST_UPLOAD_COUNTER_KEY); ok {
+					if v.(int64) > 1*1024*1024*1024 {
+						var _v int64
+						c.rtMap.Put(CONST_UPLOAD_COUNTER_KEY, _v)
+						debug.FreeOSMemory()
+					}
 				}
-			}
+			}()
+			// 无论是否 panic，都必须通知等待的 Upload 协程，避免客户端一直阻塞。
 			wr.done <- true
 		}
 	}
