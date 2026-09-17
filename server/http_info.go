@@ -29,6 +29,10 @@ func (c *Server) CheckFileExist(w http.ResponseWriter, r *http.Request) {
 		fpath    string
 		fi       os.FileInfo
 	)
+	if !c.IsPeer(r) {
+		w.Write([]byte(c.GetClusterNotPermitMessage(r)))
+		return
+	}
 	r.ParseForm()
 	md5sum := ""
 	md5sum = r.FormValue("md5")
@@ -97,6 +101,10 @@ func (c *Server) CheckFilesExist(w http.ResponseWriter, r *http.Request) {
 		fpath     string
 		result    JsonResult
 	)
+	if !c.IsPeer(r) {
+		w.Write([]byte(c.GetClusterNotPermitMessage(r)))
+		return
+	}
 	r.ParseForm()
 	md5sum := ""
 	md5sum = r.FormValue("md5s")
